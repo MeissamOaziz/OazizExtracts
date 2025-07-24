@@ -63,7 +63,7 @@ body {
 }
 
 .nav-center .logo {
-    max-height: 100px; /* Adjust as needed */
+    max-height: 100px;
     width: auto;
 }
 
@@ -109,7 +109,7 @@ body {
 .hero-collage {
     display: flex;
     width: 100%;
-    height: 60vh; /* Adjust height as needed */
+    height: 60vh;
     overflow: hidden;
 }
 
@@ -121,7 +121,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    border-right: 2px solid var(--primary-white); /* Thin divider */
+    border-right: 2px solid var(--primary-white);
 }
 
 .collage-panel:last-child {
@@ -204,7 +204,7 @@ body {
 /* !!! IMPORTANT: Replace these placeholder filenames with your own !!! */
 .bulk-bg { background-image: url('../images/placeholder-bulk.jpg'); }
 .whitelabel-bg { background-image: url('../images/placeholder-whitelabel.jpg'); }
-.brokering-bg { background-image: url('../images/placeholder-brokering.jpg'); }
+.export-bg { background-image: url('../images/placeholder-export.jpg'); }
 
 
 .service-title {
@@ -217,17 +217,16 @@ body {
     padding: 20px;
 }
 
-
-/* --- General Page Content (For About, Services, Brands pages) --- */
+/* --- General Page Content (For About, Services pages) --- */
 .page-container {
     max-width: 1200px;
-    margin: 40px auto;
+    margin: 0 auto;
     padding: 20px;
 }
 
 .page-header {
     text-align: center;
-    margin-bottom: 40px;
+    margin: 40px 0;
     font-size: 3rem;
     color: var(--primary-black);
     border-bottom: 3px solid var(--primary-orange);
@@ -288,60 +287,54 @@ body {
     object-fit: cover;
 }
 
-/* --- Brand One-Pager --- */
-.brand-page-wrapper {
-    position: relative;
-    color: white;
-    min-height: calc(100vh - 141px); /* Full viewport height minus header/footer */
+/* --- New Brand Page Design --- */
+.brand-hero {
+    height: 70vh;
+    background-size: cover;
+    background-position: center;
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
+    position: relative;
+    border-bottom: 5px solid var(--primary-orange);
 }
 
-.brand-background-collage {
+.brand-hero::after {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 5px;
-    z-index: 1;
+    background: rgba(0,0,0,0.3);
 }
 
-.brand-bg-img {
-    background-size: cover;
-    background-position: center;
-}
-/* You will create 5 unique classes for the 5 images, e.g. .bg-1, .bg-2 */
-
-
-.brand-content-overlay {
+.brand-hero-logo {
+    max-width: 450px;
+    width: 80%;
     position: relative;
     z-index: 2;
-    background: rgba(30, 30, 30, 0.85); /* Semi-transparent black overlay */
-    padding: 50px;
-    border-radius: 10px;
-    max-width: 900px;
+}
+
+.brand-details-section {
+    padding-top: 60px;
+    padding-bottom: 60px;
     text-align: center;
 }
 
-.brand-content-overlay h1 {
-    font-size: 4rem;
-    color: var(--primary-orange);
-    margin-bottom: 20px;
-}
-
-.brand-content-overlay p {
-    font-size: 1.2rem;
-    margin-bottom: 40px;
+.brand-tagline {
+    font-size: 1.8rem;
+    color: var(--dark-gray);
+    margin-bottom: 60px;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .available-section h3 {
     margin-bottom: 20px;
-    font-weight: 400;
+    font-weight: 700;
+    font-size: 1.2rem;
 }
 
 .retailer-logos {
@@ -353,7 +346,7 @@ body {
 
 .retailer-logos img {
     max-height: 50px;
-    filter: grayscale(100%) brightness(3); /* Makes logos white */
+    filter: none;
 }
 
 
@@ -363,7 +356,7 @@ body {
     padding: 20px;
     background-color: var(--primary-black);
     color: var(--primary-white);
-    margin-top: auto; /* Pushes footer to bottom */
+    margin-top: auto;
 }
 
 
@@ -388,19 +381,6 @@ body {
     .nav-left, .nav-right {
         justify-content: center;
     }
-}
-
-/* --- Brand Logo Page --- */
-.brand-logo-container {
-    text-align: center;
-    padding: 80px 20px;
-}
-
-.brand-logo-page {
-    max-width: 400px;
-    width: 100%;
-    height: auto;
-    margin-bottom: 20px;
 }
 
 @media (max-width: 768px) {
@@ -428,5 +408,11 @@ body {
         width: 100%;
         text-align: center;
         margin-bottom: 20px;
+    }
+    .brand-hero {
+        height: 50vh;
+    }
+    .brand-tagline {
+        font-size: 1.4rem;
     }
 }
