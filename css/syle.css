@@ -390,6 +390,19 @@ body {
     }
 }
 
+/* --- Brand Logo Page --- */
+.brand-logo-container {
+    text-align: center;
+    padding: 80px 20px;
+}
+
+.brand-logo-page {
+    max-width: 400px;
+    width: 100%;
+    height: auto;
+    margin-bottom: 20px;
+}
+
 @media (max-width: 768px) {
     .hero-collage {
         flex-direction: column;
