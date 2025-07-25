@@ -128,10 +128,10 @@ body {
     border-right: none;
 }
 
-/* !!! IMPORTANT: Replace these placeholder filenames with your own !!! */
-.rinse { background-image: url('../images/placeholder-rinse.jpg'); }
-.refine { background-image: url('../images/placeholder-refine.jpg'); }
-.repeat { background-image: url('../images/placeholder-repeat.jpg'); }
+/* === RINSE/REFINE/REPEAT IMAGES UPDATED HERE === */
+.rinse { background-image: url('../images/RINSE.png'); }
+.refine { background-image: url('../images/REFINE.png'); }
+.repeat { background-image: url('../images/REPEAT.png'); }
 
 .motto-text {
     font-size: 5rem;
@@ -193,7 +193,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.4); /* Dark overlay */
+    background: rgba(0,0,0,0.4);
     transition: background 0.3s ease;
 }
 
@@ -201,7 +201,6 @@ body {
     background: rgba(0,0,0,0.2);
 }
 
-/* !!! IMPORTANT: Replace these placeholder filenames with your own !!! */
 .bulk-bg { background-image: url('../images/placeholder-bulk.jpg'); }
 .whitelabel-bg { background-image: url('../images/placeholder-whitelabel.jpg'); }
 .export-bg { background-image: url('../images/placeholder-export.jpg'); }
@@ -213,7 +212,7 @@ body {
     font-weight: 900;
     text-transform: uppercase;
     text-align: center;
-    z-index: 2; /* Puts text above the overlay */
+    z-index: 2;
     padding: 20px;
 }
 
@@ -349,6 +348,45 @@ body {
     filter: none;
 }
 
+/* === NEW PARTNER CAROUSEL STYLES ADDED HERE === */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%); /* Moves the track by one full set of logos */
+  }
+}
+
+.partner-carousel {
+    background-color: var(--primary-white);
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    padding: 25px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+}
+
+.carousel-track {
+    display: flex;
+    /* Adjust the duration (40s) to make the scroll faster or slower */
+    animation: scroll 40s linear infinite;
+    width: fit-content;
+}
+
+.partner-carousel img {
+    height: 50px; /* Controls the height of the banner */
+    margin: 0 40px;
+    filter: grayscale(100%);
+    opacity: 0.7;
+    transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.partner-carousel img:hover {
+    filter: grayscale(0%);
+    opacity: 1;
+}
 
 /* --- Footer --- */
 .main-footer {
@@ -414,5 +452,9 @@ body {
     }
     .brand-tagline {
         font-size: 1.4rem;
+    }
+    .partner-carousel img {
+        height: 40px;
+        margin: 0 25px;
     }
 }
