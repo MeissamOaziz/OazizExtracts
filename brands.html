@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Our Brands - Oaziz Extracts</title>
     <link rel="stylesheet" href="/OazizExtracts/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
 <body class="brands-page-background">
 
@@ -12,7 +15,7 @@
         <nav class="main-nav">
             <div class="nav-left">
                 <a href="/OazizExtracts/about.html">About Us</a>
-                <a href="/OazizExtracts/brands.html">Brands</a>
+                <a href="/OazizExtracts/brands.html">BRANDS</a>
             </div>
             <div class="nav-center">
                 <a href="/OazizExtracts/index.html">
@@ -20,10 +23,7 @@
                 </a>
             </div>
             <div class="nav-right">
-                <a href="/OazizExtracts/export.html">Export</a>
-                <select name="language" id="language-selector">
-                    <option value="fr">Français</option>
-                    </select>
+                <div id="google_translate_element"></div>
             </div>
         </nav>
     </header>
@@ -75,9 +75,16 @@
         </div>
     </main>
 
-    <footer class="main-footer" style="background-color: transparent; border-top: 1px solid rgba(255,255,255,0.2);">
+    <footer class="main-footer" style="background-color: transparent;">
         <p>&copy; 2025 Oaziz Extracts. All Rights Reserved.</p>
     </footer>
+
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+          new google.translate.TranslateElement({pageLanguage: 'fr', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
 </body>
 </html>
