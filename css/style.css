@@ -53,20 +53,38 @@ body {
     color: var(--primary-black);
     font-weight: 700;
     font-size: 1rem;
-    transition: color 0.3s ease, background-color 0.3s ease;
+    transition: color 0.3s ease;
 }
 .main-nav a:hover { color: var(--primary-orange); }
 .nav-center .logo { max-height: 100px; width: auto; }
 
-/* New Language Link Style */
-.lang-link {
-    border: 2px solid var(--dark-gray);
-    padding: 6px 12px;
-    border-radius: 20px;
+/* --- Google Translate Widget Styles --- */
+.nav-right #google_translate_element {
+    margin-left: 20px;
 }
-.lang-link:hover {
-    background-color: var(--dark-gray);
-    color: var(--primary-white);
+.goog-te-gadget {
+    font-family: 'Montserrat', sans-serif !important;
+}
+.goog-te-gadget-simple {
+    background-color: transparent !important;
+    border: 2px solid var(--dark-gray) !important;
+    padding: 4px 6px !important;
+    border-radius: 20px !important;
+}
+.goog-te-gadget-simple .goog-te-menu-value span {
+    color: var(--primary-black) !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    text-transform: uppercase;
+}
+.goog-logo-link, .goog-te-gadget-icon {
+    display: none !important;
+}
+.goog-te-banner-frame {
+    display: none !important;
+}
+body {
+    top: 0px !important; 
 }
 
 
@@ -311,11 +329,11 @@ body.brands-page-background {
 
 .content-section.white-bg {
     background-color: var(--primary-white);
-    padding: 60px 0;
+    padding: 60px 20px;
 }
 .content-section.dark-bg {
     background-color: var(--primary-black);
-    padding: 60px 0;
+    padding: 60px 20px;
 }
 
 .content-section h2 {
