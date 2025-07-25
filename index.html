@@ -37,16 +37,7 @@
                 <select name="language" id="language-selector">
                     <option value="fr">Français</option>
                     <option value="en">English</option>
-                    <option value="de">Deutsch</option>
-                    <option value="pt">Português</option>
-                    <option value="es">Español</option>
-                    <option value="it">Italiano</option>
-                    <option value="fa">فارسی</option>
-                    <option value="el">Ελληνικά</option>
-                    <option value="th">ไทย</option>
-                    <option value="zh">中文</option>
-                    <option value="ar">العربية</option>
-                </select>
+                    </select>
             </div>
         </nav>
     </header>
@@ -82,29 +73,82 @@
                 <img src="/OazizExtracts/images/Truro.jpg" alt="Truro Cannabis Logo">
             </div>
         </section>
+
         <section class="intro-section">
-            <h2>Welcome to your extraction Oaziz.</h2>
+            <h2>Welcome to Oaziz Extracts.</h2>
             <p>Tell us what brings you here today.</p>
         </section>
 
         <section class="services-section">
             <div class="services-container">
-                <a href="/OazizExtracts/bulk.html" class="service-card bulk-bg">
-                    <span class="service-title">BULK B2B</span>
+
+                <a href="/OazizExtracts/bulk.html" class="service-card">
+                    <div class="card-collage-bg">
+                        <div class="bg-line bg-rosin"></div>
+                        <div class="bg-line bg-bulkhash"></div>
+                        <div class="bg-line bg-trim"></div>
+                    </div>
+                    <span class="service-title">Bulk Extracts & White Label</span>
                 </a>
-                <a href="/OazizExtracts/whitelabel.html" class="service-card whitelabel-bg">
-                    <span class="service-title">WHITE LABEL</span>
+
+                <a href="/OazizExtracts/whitelabel.html" class="service-card">
+                    <div class="card-collage-bg">
+                        <div class="bg-line bg-kief"></div>
+                        <div class="bg-line bg-topicals"></div>
+                        <div class="bg-line bg-vapefilling"></div>
+                    </div>
+                    <span class="service-title">B2B Services</span>
                 </a>
-                <a href="/OazizExtracts/export.html" class="service-card export-bg">
+
+                <a href="/OazizExtracts/export.html" class="service-card">
+                     <div class="card-collage-bg">
+                        <div class="bg-line bg-cannabisflowergmp"></div>
+                        <div class="bg-line bg-vapes"></div>
+                        <div class="bg-line bg-transport"></div>
+                    </div>
                     <span class="service-title">EXPORT</span>
                 </a>
+
             </div>
         </section>
+
+        <section id="contact-form" class="contact-section">
+            <div class="page-container">
+                <h2 class="section-title">Contact Us</h2>
+                <form action="#" method="POST"> <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="subject">I'm contacting you about...</label>
+                        <select id="subject" name="subject" required>
+                            <option value="General Inquiry">General Inquiry</option>
+                            <option value="Export">Export</option>
+                            <option value="Sales">Sales</option>
+                            <option value="QA">QA</option>
+                            <option value="Finance">Finance</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Message</label>
+                        <textarea id="message" name="message" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="submit-btn">Send Message</button>
+                </form>
+            </div>
+        </section>
+
     </main>
 
     <footer class="main-footer">
         <p>&copy; 2025 Oaziz Extracts. All Rights Reserved.</p>
     </footer>
+
+    <a href="#contact-form" class="contact-float-btn">Contact Us</a>
 
     <script src="/OazizExtracts/js/script.js"></script>
 </body>
