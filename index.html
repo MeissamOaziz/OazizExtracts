@@ -15,7 +15,7 @@
         <nav class="main-nav">
             <div class="nav-left">
                 <a href="/OazizExtracts/about.html">About Us</a>
-                <a href="/OazizExtracts/brands.html">Brands</a>
+                <a href="/OazizExtracts/brands.html">BRANDS</a>
             </div>
             <div class="nav-center">
                 <a href="/OazizExtracts/index.html">
@@ -23,20 +23,7 @@
                 </a>
             </div>
             <div class="nav-right">
-                <a href="/OazizExtracts/export.html">Export</a>
-                <select name="language" id="language-selector">
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                    <option value="de">Deutsch</option>
-                    <option value="pt">Português</option>
-                    <option value="es">Español</option>
-                    <option value="it">Italiano</option>
-                    <option value="fa">فارسی</option>
-                    <option value="el">Ελληνικά</option>
-                    <option value="th">ไทย</option>
-                    <option value="zh">中文</option>
-                    <option value="ar">العربية</option>
-                </select>
+                <div id="google_translate_element"></div>
             </div>
         </nav>
     </header>
@@ -81,7 +68,6 @@
 
         <section class="services-section">
             <div class="services-container">
-
                 <a href="/OazizExtracts/bulk.html" class="service-card">
                     <div class="card-collage-bg">
                         <div class="bg-line bg-rosin"></div>
@@ -90,7 +76,6 @@
                     </div>
                     <span class="service-title">Bulk Extracts & White Label</span>
                 </a>
-
                 <a href="/OazizExtracts/whitelabel.html" class="service-card">
                     <div class="card-collage-bg">
                         <div class="bg-line bg-kief"></div>
@@ -99,7 +84,6 @@
                     </div>
                     <span class="service-title">B2B Services</span>
                 </a>
-
                 <a href="/OazizExtracts/export.html" class="service-card">
                      <div class="card-collage-bg">
                         <div class="bg-line bg-cannabisflowergmp"></div>
@@ -108,14 +92,14 @@
                     </div>
                     <span class="service-title">EXPORT</span>
                 </a>
-
             </div>
         </section>
 
         <section id="contact-form" class="contact-section">
             <div class="page-container">
                 <h2 class="section-title">Contact Us</h2>
-                <form action="#" method="POST"> <div class="form-group">
+                <form action="#" method="POST">
+                    <div class="form-group">
                         <label for="name">Name</label>
                         <input type="text" id="name" name="name" required>
                     </div>
@@ -141,7 +125,6 @@
                 </form>
             </div>
         </section>
-
     </main>
 
     <footer class="main-footer">
@@ -150,6 +133,13 @@
 
     <a href="#contact-form" class="contact-float-btn">Contact Us</a>
 
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+          new google.translate.TranslateElement({pageLanguage: 'fr', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script src="/OazizExtracts/js/script.js"></script>
+
 </body>
 </html>
