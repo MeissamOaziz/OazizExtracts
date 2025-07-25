@@ -53,32 +53,20 @@ body {
     color: var(--primary-black);
     font-weight: 700;
     font-size: 1rem;
-    transition: color 0.3s ease;
+    transition: color 0.3s ease, background-color 0.3s ease;
 }
 .main-nav a:hover { color: var(--primary-orange); }
 .nav-center .logo { max-height: 100px; width: auto; }
 
-/* --- Google Translate Widget Styles --- */
-.nav-right #google_translate_element {
-    margin-left: 20px;
+/* New Language Link Style */
+.lang-link {
+    border: 2px solid var(--dark-gray);
+    padding: 6px 12px;
+    border-radius: 20px;
 }
-.goog-te-gadget {
-    font-family: 'Montserrat', sans-serif !important;
-    text-transform: uppercase;
-}
-.goog-te-gadget .goog-te-menu-value span {
-    color: var(--primary-black) !important;
-    font-weight: 700;
-    font-size: 1rem !important;
-}
-.goog-logo-link {
-    display: none !important;
-}
-.goog-te-banner-frame {
-    display: none !important;
-}
-body {
-    top: 0px !important; /* Fix for the gap Google Translate sometimes adds */
+.lang-link:hover {
+    background-color: var(--dark-gray);
+    color: var(--primary-white);
 }
 
 
@@ -298,7 +286,7 @@ body.brands-page-background {
 
 /* --- Individual Brand Page & Other Content Pages --- */
 .page-container { max-width: 1200px; margin: 0 auto; }
-.page-container.with-padding { padding: 0 20px; } /* for main page titles */
+.page-container.with-padding { padding: 0 20px; } 
 
 .brand-hero { height: 70vh; background-size: cover; background-position: center; display: flex; justify-content: center; align-items: center; position: relative; border-bottom: 5px solid var(--primary-orange); }
 .brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
