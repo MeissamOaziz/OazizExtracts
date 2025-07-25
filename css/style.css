@@ -18,7 +18,7 @@
 }
 
 html {
-    scroll-behavior: smooth; /* For smooth scrolling with the contact button */
+    scroll-behavior: smooth;
 }
 
 body {
@@ -80,6 +80,7 @@ body {
 body {
     top: 0px !important; /* Fix for the gap Google Translate sometimes adds */
 }
+
 
 /* --- Hero Collage Section --- */
 .hero-collage { display: flex; width: 100%; height: 60vh; overflow: hidden; }
@@ -205,11 +206,9 @@ body {
 .bg-rosin { background-image: url('../images/Rosin.png'); }
 .bg-bulkhash { background-image: url('../images/BulkHash.png'); }
 .bg-trim { background-image: url('../images/Trim.png'); }
-
 .bg-kief { background-image: url('../images/Kief.png'); }
 .bg-topicals { background-image: url('../images/Topicals.png'); }
 .bg-vapefilling { background-image: url('../images/Vapefilling.png'); }
-
 .bg-cannabisflowergmp { background-image: url('../images/cannabisflowerGMP.png'); }
 .bg-vapes { background-image: url('../images/vapes.png'); }
 .bg-transport { background-image: url('../images/transport.png'); }
@@ -298,7 +297,9 @@ body.brands-page-background {
 }
 
 /* --- Individual Brand Page & Other Content Pages --- */
-.page-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.page-container { max-width: 1200px; margin: 0 auto; }
+.page-container.with-padding { padding: 0 20px; } /* for main page titles */
+
 .brand-hero { height: 70vh; background-size: cover; background-position: center; display: flex; justify-content: center; align-items: center; position: relative; border-bottom: 5px solid var(--primary-orange); }
 .brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
 .brand-hero-logo { max-width: 450px; width: 80%; position: relative; z-index: 2; }
@@ -307,6 +308,62 @@ body.brands-page-background {
 .available-section h3 { margin-bottom: 20px; font-weight: 700; font-size: 1.2rem; }
 .retailer-logos { display: flex; justify-content: center; align-items: center; gap: 40px; }
 .retailer-logos img { max-height: 50px; filter: none; }
+
+
+/* --- About Us Page Styles --- */
+.page-header {
+    text-align: center;
+    margin: 40px 0;
+    font-size: 3rem;
+    color: var(--primary-black);
+    border-bottom: 3px solid var(--primary-orange);
+    display: inline-block;
+    padding-bottom: 10px;
+}
+
+.content-section.white-bg {
+    background-color: var(--primary-white);
+    padding: 60px 0;
+}
+.content-section.dark-bg {
+    background-color: var(--primary-black);
+    padding: 60px 0;
+}
+
+.content-section h2 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: var(--primary-black);
+    text-align: center;
+}
+.content-section .title-light {
+    color: var(--primary-white);
+}
+.content-section .text-light {
+    color: var(--light-gray);
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto 40px auto;
+}
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    color: var(--primary-white);
+}
+.team-member {
+    text-align: center;
+}
+.team-member h3 {
+    margin-bottom: 5px;
+    font-size: 1.4rem;
+}
+.team-member p {
+    font-style: italic;
+    color: var(--primary-orange);
+    font-size: 1rem;
+    font-weight: 700;
+}
 
 
 /* --- Contact Form & Floating Button Styles --- */
@@ -404,4 +461,6 @@ body.brands-page-background {
     .partner-carousel .carousel-track img { height: 40px; margin: 0 25px; }
     .contact-float-btn { padding: 12px 20px; font-size: 0.9rem; }
     .brands-grid { grid-template-columns: 1fr; }
+    .services-container { flex-direction: column; }
+    .service-card { width: 90%; }
 }
