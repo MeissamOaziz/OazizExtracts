@@ -57,13 +57,28 @@ body {
 }
 .main-nav a:hover { color: var(--primary-orange); }
 .nav-center .logo { max-height: 100px; width: auto; }
-#language-selector {
-    padding: 8px 12px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    background-color: var(--primary-white);
-    font-family: 'Montserrat', sans-serif;
+
+/* --- Google Translate Widget Styles --- */
+.nav-right #google_translate_element {
+    margin-left: 20px;
+}
+.goog-te-gadget {
+    font-family: 'Montserrat', sans-serif !important;
+    text-transform: uppercase;
+}
+.goog-te-gadget .goog-te-menu-value span {
+    color: var(--primary-black) !important;
     font-weight: 700;
+    font-size: 1rem !important;
+}
+.goog-logo-link {
+    display: none !important;
+}
+.goog-te-banner-frame {
+    display: none !important;
+}
+body {
+    top: 0px !important; /* Fix for the gap Google Translate sometimes adds */
 }
 
 /* --- Hero Collage Section --- */
@@ -174,7 +189,7 @@ body {
     background-size: cover;
     background-position: center;
 }
-.service-card::after { /* Overlay */
+.service-card::after {
     content: '';
     position: absolute;
     top: 0;
@@ -187,7 +202,6 @@ body {
 }
 .service-card:hover::after { background: rgba(0,0,0,0.2); }
 
-/* Service Card background image classes */
 .bg-rosin { background-image: url('../images/Rosin.png'); }
 .bg-bulkhash { background-image: url('../images/BulkHash.png'); }
 .bg-trim { background-image: url('../images/Trim.png'); }
@@ -206,7 +220,7 @@ body {
     font-weight: 900;
     text-transform: uppercase;
     text-align: center;
-    z-index: 3; /* Must be on top of collage and overlay */
+    z-index: 3;
     padding: 20px;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
@@ -222,8 +236,8 @@ body.brands-page-background {
 
 .brands-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 40px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
     padding: 60px 20px;
 }
 
@@ -233,22 +247,30 @@ body.brands-page-background {
     text-decoration: none;
     color: var(--primary-white);
     overflow: hidden;
-    padding-top: 40px; /* Space for the text to not overlap logo */
-    transition: transform 0.3s ease;
+    padding: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background-color: rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .brand-card:hover {
     transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(0,0,0,0.3);
 }
 
 .brand-card img {
-    max-width: 80%;
-    max-height: 150px; /* Adjust as needed */
-    height: auto;
-    margin-bottom: 100px; /* Space for the text box below */
+    max-height: 195px;
+    width: auto;
+    max-width: 90%;
     filter: grayscale(100%) brightness(0.9) contrast(1.2);
     opacity: 0.8;
     transition: all 0.4s ease;
+    margin-bottom: 15px;
 }
 
 .brand-card:hover img {
@@ -257,27 +279,23 @@ body.brands-page-background {
 }
 
 .brand-info {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 60px 10px 20px 10px; /* Extra top padding for the shade effect */
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+    padding: 10px;
 }
 
 .brand-info h3 {
-    font-size: 1.8rem;
+    font-size: 2rem;
     text-transform: uppercase;
     margin: 0;
+    text-shadow: 1px 1px 3px #000;
 }
 
 .brand-info p {
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--primary-orange);
     text-transform: uppercase;
+    text-shadow: 1px 1px 3px #000;
 }
-
 
 /* --- Individual Brand Page & Other Content Pages --- */
 .page-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
@@ -362,7 +380,6 @@ body.brands-page-background {
 
 /* --- Footer --- */
 .main-footer { text-align: center; padding: 20px; background-color: var(--primary-black); color: var(--primary-white); }
-/* Add transparent style for specific pages like the brands page */
 .main-footer[style*="transparent"] { border-top: 1px solid rgba(255,255,255,0.2); }
 
 
@@ -373,6 +390,7 @@ body.brands-page-background {
     .service-card { width: 80%; max-width: 500px; }
     .main-nav { flex-wrap: wrap; justify-content: center; gap: 20px; }
     .nav-left, .nav-right { justify-content: center; }
+    .brands-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 768px) {
     .hero-collage { flex-direction: column; height: auto; }
@@ -385,4 +403,5 @@ body.brands-page-background {
     .brand-tagline { font-size: 1.4rem; }
     .partner-carousel .carousel-track img { height: 40px; margin: 0 25px; }
     .contact-float-btn { padding: 12px 20px; font-size: 0.9rem; }
+    .brands-grid { grid-template-columns: 1fr; }
 }
