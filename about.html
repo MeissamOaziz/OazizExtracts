@@ -23,33 +23,19 @@
                 </a>
             </div>
             <div class="nav-right">
-                <select name="language" id="language-selector">
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                    <option value="de">Deutsch</option>
-                    <option value="pt">Português</option>
-                    <option value="es">Español</option>
-                    <option value="it">Italiano</option>
-                    <option value="fa">فارسی</option>
-                    <option value="el">Ελληνικά</option>
-                    <option value="th">ไทย</option>
-                    <option value="zh">中文</option>
-                    <option value="ar">العربية</option>
-                </select>
+                <div id="google_translate_element"></div>
             </div>
         </nav>
     </header>
 
-    <main class="about-us-content">
+    <main>
+        <div class="page-container with-padding">
+            <h1 class="page-header">Our Story</h1>
+        </div>
 
-        <section class="page-hero-banner">
-            <h1>ABOUT US</h1>
-            <p>The Refiner's Spirit</p>
-        </section>
-
-        <section class="content-section light-bg">
+        <section class="content-section white-bg">
             <div class="page-container">
-                <h2 class="section-title-light">Our Story</h2>
+                <h2>The Refiner's Spirit</h2>
                 <p>
                     Oaziz Extracts Inc. ("Oaziz") is a privately held cannabis refiner based in the vibrant Ahuntsic district of Montreal. Specializing in traditional and modern solvent-free refining methods, we are masters of techniques like water extraction, sieving, and heat pressing. Since receiving our license from Health Canada in 2022, we have dedicated ourselves to the craft of purification.
                 </p>
@@ -58,11 +44,13 @@
                 </p>
             </div>
         </section>
-        
+
         <section class="content-section dark-bg">
             <div class="page-container">
-                 <h2 class="section-title-dark">Our Team</h2>
-                 <p class="team-intro">The management of Oaziz consists of a diverse group of individuals with deep experience in branding, product formulation, quality assurance, and financing. Above all, we are united by a fundamental knowledge and expertise in the art and science of cannabis.</p>
+                <h2 class="title-light">Our Team</h2>
+                <p class="text-light">
+                    The management of Oaziz consists of a diverse group of individuals with deep experience in branding, product formulation, quality assurance, and financing. Above all, we are united by a fundamental knowledge and expertise in the art and science of cannabis.
+                </p>
                 <div class="team-grid">
                     <div class="team-member">
                         <h3>Jorge Sousa</h3>
@@ -91,12 +79,19 @@
                 </div>
             </div>
         </section>
-
     </main>
 
     <footer class="main-footer">
         <p>&copy; 2025 Oaziz Extracts. All Rights Reserved.</p>
     </footer>
+
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+          new google.translate.TranslateElement({pageLanguage: 'fr', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script src="/OazizExtracts/js/script.js"></script>
 
 </body>
 </html>
