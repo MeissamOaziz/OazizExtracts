@@ -26,7 +26,7 @@ body {
     color: var(--primary-black);
     background-color: var(--primary-white);
     line-height: 1.6;
-    /* Added padding to prevent fixed bottom banner from covering footer */
+    /* Prevents fixed bottom banner from covering footer */
     padding-bottom: 200px;
 }
 
@@ -61,12 +61,8 @@ body {
 .nav-center .logo { max-height: 100px; width: auto; }
 
 /* --- Google Translate Widget Styles --- */
-.nav-right #google_translate_element {
-    margin-left: 20px;
-}
-.goog-te-gadget {
-    font-family: 'Montserrat', sans-serif !important;
-}
+.nav-right #google_translate_element { margin-left: 20px; }
+.goog-te-gadget { font-family: 'Montserrat', sans-serif !important; }
 .goog-te-gadget-simple {
     background-color: transparent !important;
     border: 2px solid var(--dark-gray) !important;
@@ -79,15 +75,9 @@ body {
     font-size: 1rem !important;
     text-transform: uppercase;
 }
-.goog-logo-link, .goog-te-gadget-icon {
-    display: none !important;
-}
-.goog-te-banner-frame {
-    display: none !important;
-}
-body {
-    top: 0px !important; 
-}
+.goog-logo-link, .goog-te-gadget-icon { display: none !important; }
+.goog-te-banner-frame { display: none !important; }
+body { top: 0px !important; }
 
 
 /* --- Hero Collage Section --- */
@@ -103,7 +93,6 @@ body {
     border-right: 2px solid var(--primary-white);
 }
 .collage-panel:last-child { border-right: none; }
-/* Image paths updated to .webp */
 .rinse { background-image: url('../images/RINSE.webp'); }
 .refine { background-image: url('../images/REFINE.webp'); }
 .repeat { background-image: url('../images/REPEAT.webp'); }
@@ -212,7 +201,6 @@ body {
 }
 .service-card:hover::after { background: rgba(0,0,0,0.2); }
 
-/* Image paths updated to .webp */
 .bg-rosin { background-image: url('../images/Rosin.webp'); }
 .bg-bulkhash { background-image: url('../images/BulkHash.webp'); }
 .bg-trim { background-image: url('../images/Trim.webp'); }
@@ -375,6 +363,45 @@ body.brands-page-background {
     font-weight: 700;
 }
 
+/* --- Product Page Specific Styles --- */
+.product-description {
+    max-width: 800px;
+    margin: 0 auto 40px auto;
+    text-align: center;
+    font-size: 1.1rem;
+}
+.product-subsection {
+    margin-top: 50px;
+}
+.product-subsection h2 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--light-gray);
+    padding-bottom: 10px;
+    display: inline-block;
+}
+.product-subsection-container {
+    text-align: center;
+}
+.product-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+.gallery-item img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+.contact-lead-in {
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 0 auto 40px auto;
+    max-width: 800px;
+    color: var(--primary-white);
+}
 
 /* --- Contact Form & Floating Button Styles --- */
 .contact-section {
@@ -450,7 +477,8 @@ body.brands-page-background {
     bottom: 0;
     left: 0;
     width: 100%;
-    background-color: rgba(208, 88, 38, 0.85); 
+    /* Opacity adjusted to be more transparent */
+    background-color: rgba(208, 88, 38, 0.70); 
     backdrop-filter: blur(5px);
     padding: 20px;
     z-index: 1001;
@@ -525,7 +553,6 @@ body.brands-page-background {
 }
 @media (max-width: 768px) {
     body {
-        /* Increase padding on mobile to account for banner items wrapping */
         padding-bottom: 320px; 
     }
     .hero-collage { flex-direction: column; height: auto; }
@@ -543,4 +570,5 @@ body.brands-page-background {
     .service-card { width: 90%; }
     .banner-items-container { gap: 20px; }
     .banner-item img { width: 70px; height: 70px; }
+    .product-gallery { grid-template-columns: 1fr; }
 }
