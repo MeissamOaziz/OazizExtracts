@@ -26,7 +26,6 @@ body {
     color: var(--primary-black);
     background-color: var(--primary-white);
     line-height: 1.6;
-    /* Adjusted padding for the new, smaller banner */
     padding-bottom: 90px;
 }
 
@@ -391,7 +390,9 @@ body.brands-page-background {
 }
 .gallery-item img {
     width: 100%;
-    height: auto;
+    /* This creates uniform, symmetrical gallery images */
+    height: 300px;
+    object-fit: cover;
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
@@ -456,7 +457,7 @@ body.brands-page-background {
 /* --- Floating Buttons & Banners --- */
 .contact-float-btn {
     position: fixed;
-    bottom: 105px; /* Sits above the new banner */
+    bottom: 105px;
     right: 30px;
     background-color: var(--primary-orange);
     color: var(--primary-white);
@@ -477,15 +478,12 @@ body.brands-page-background {
     bottom: 0;
     left: 0;
     width: 100%;
-    /* Further reduced opacity */
     background-color: rgba(208, 88, 38, 0.35); 
-    backdrop-filter: blur(8px); /* Increased blur for readability */
-    /* Further reduced padding */
+    backdrop-filter: blur(8px);
     padding: 8px 15px;
     z-index: 1001;
     display: flex;
-    align-items: center; /* Vertically align items */
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    align-items: center;
 }
 
 .fixed-bottom-banner .banner-title {
@@ -493,18 +491,19 @@ body.brands-page-background {
     font-weight: 700;
     color: var(--primary-white);
     text-transform: uppercase;
-    margin: 0;
+    margin-right: 20px;
     letter-spacing: 1px;
-    display: none; /* Hide title on small screens */
+    white-space: nowrap;
 }
 
 .banner-items-container {
     display: flex;
-    justify-content: center;
-    align-items: center; /* Vertically align items */
+    justify-content: flex-start;
+    align-items: center;
     gap: 15px;
-    flex-wrap: nowrap; /* Prevent wrapping on desktop */
+    flex-wrap: nowrap;
     width: 100%;
+    overflow-x: auto; /* Allows scrolling on small screens */
 }
 
 .banner-item {
@@ -513,12 +512,11 @@ body.brands-page-background {
     align-items: center;
     text-decoration: none;
     color: var(--primary-white);
-    width: 60px; /* Further adjusted width */
-    text-align: center;
+    width: 65px;
+    flex-shrink: 0;
 }
 
 .banner-item img {
-    /* Further reduced image size */
     width: 40px; 
     height: 40px;
     border-radius: 50%;
@@ -533,11 +531,10 @@ body.brands-page-background {
 }
 
 .banner-item .item-title {
-    /* Further reduced font size and margin */
-    margin-top: 4px;
+    margin-top: 5px;
     font-weight: 700;
     font-size: 0.7rem;
-    white-space: nowrap; /* Prevent text wrapping */
+    white-space: nowrap;
 }
 
 
@@ -557,7 +554,7 @@ body.brands-page-background {
 }
 @media (max-width: 768px) {
     body {
-        padding-bottom: 80px;
+        padding-bottom: 90px;
     }
     .hero-collage { flex-direction: column; height: auto; }
     .collage-panel { min-height: 200px; border-right: none; border-bottom: 2px solid var(--primary-white); }
@@ -568,16 +565,10 @@ body.brands-page-background {
     .brand-hero { height: 50vh; }
     .brand-tagline { font-size: 1.4rem; }
     .partner-carousel .carousel-track img { height: 40px; margin: 0 25px; }
-    .contact-float-btn { padding: 10px 15px; font-size: 0.8rem; bottom: 85px; }
+    .contact-float-btn { padding: 10px 15px; font-size: 0.8rem; bottom: 95px; }
     .brands-grid { grid-template-columns: 1fr; }
     .services-container { flex-direction: column; }
     .service-card { width: 90%; }
-    .banner-items-container { gap: 10px; }
-    .banner-item { width: 45px; }
-    .banner-item img {
-        width: 35px;
-        height: 35px;
-    }
-    .banner-item .item-title { font-size: 0.6rem; }
     .product-gallery { grid-template-columns: 1fr; }
+    .fixed-bottom-banner .banner-title { display: none; } /* Hide title on mobile */
 }
