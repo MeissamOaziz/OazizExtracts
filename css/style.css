@@ -224,7 +224,7 @@ body { top: 0px !important; }
 
 /* --- Brands Showcase Page Styles --- */
 body.brands-page-background {
-    background-image: url('../images/oasis-1631145.jpg');
+    background-image: url('../images/oasis-1631145.webp'); 
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
