@@ -26,8 +26,8 @@ body {
     color: var(--primary-black);
     background-color: var(--primary-white);
     line-height: 1.6;
-    /* Prevents fixed bottom banner from covering footer */
-    padding-bottom: 200px;
+    /* HEIGHT REDUCED: Body padding adjusted for the new, smaller banner */
+    padding-bottom: 140px; 
 }
 
 /* --- Header & Navigation --- */
@@ -477,10 +477,9 @@ body.brands-page-background {
     bottom: 0;
     left: 0;
     width: 100%;
-    /* Opacity adjusted to be more transparent */
     background-color: rgba(208, 88, 38, 0.70); 
     backdrop-filter: blur(5px);
-    padding: 20px;
+    padding: 10px 20px; /* HEIGHT REDUCED */
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -489,11 +488,11 @@ body.brands-page-background {
 }
 
 .fixed-bottom-banner .banner-title {
-    font-size: 1.2rem;
+    font-size: 1.0rem; /* HEIGHT REDUCED */
     font-weight: 700;
     color: var(--primary-white);
     text-transform: uppercase;
-    margin-bottom: 20px;
+    margin-bottom: 10px; /* HEIGHT REDUCED */
     letter-spacing: 1px;
 }
 
@@ -501,7 +500,7 @@ body.brands-page-background {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    gap: 30px;
+    gap: 25px; /* HEIGHT REDUCED */
     flex-wrap: wrap;
 }
 
@@ -511,13 +510,13 @@ body.brands-page-background {
     align-items: center;
     text-decoration: none;
     color: var(--primary-white);
-    width: 100px;
+    width: 80px; /* HEIGHT REDUCED */
     text-align: center;
 }
 
 .banner-item img {
-    width: 80px;
-    height: 80px;
+    width: 55px; /* HEIGHT REDUCED */
+    height: 55px; /* HEIGHT REDUCED */
     border-radius: 50%;
     border: 2px solid var(--primary-white);
     object-fit: cover;
@@ -531,9 +530,9 @@ body.brands-page-background {
 }
 
 .banner-item .item-title {
-    margin-top: 10px;
+    margin-top: 5px; /* HEIGHT REDUCED */
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.8rem; /* HEIGHT REDUCED */
 }
 
 
@@ -553,7 +552,8 @@ body.brands-page-background {
 }
 @media (max-width: 768px) {
     body {
-        padding-bottom: 320px; 
+        /* HEIGHT REDUCED: Adjusted mobile padding */
+        padding-bottom: 230px; 
     }
     .hero-collage { flex-direction: column; height: auto; }
     .collage-panel { min-height: 200px; border-right: none; border-bottom: 2px solid var(--primary-white); }
@@ -568,7 +568,10 @@ body.brands-page-background {
     .brands-grid { grid-template-columns: 1fr; }
     .services-container { flex-direction: column; }
     .service-card { width: 90%; }
-    .banner-items-container { gap: 20px; }
-    .banner-item img { width: 70px; height: 70px; }
+    .banner-items-container { gap: 15px; }
+    .banner-item img { 
+        width: 50px; /* HEIGHT REDUCED */
+        height: 50px; /* HEIGHT REDUCED */
+    }
     .product-gallery { grid-template-columns: 1fr; }
 }
