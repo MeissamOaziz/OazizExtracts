@@ -26,6 +26,8 @@ body {
     color: var(--primary-black);
     background-color: var(--primary-white);
     line-height: 1.6;
+    /* Added padding to prevent fixed bottom banner from covering footer */
+    padding-bottom: 200px;
 }
 
 /* --- Header & Navigation --- */
@@ -101,9 +103,10 @@ body {
     border-right: 2px solid var(--primary-white);
 }
 .collage-panel:last-child { border-right: none; }
-.rinse { background-image: url('../images/RINSE.png'); }
-.refine { background-image: url('../images/REFINE.png'); }
-.repeat { background-image: url('../images/REPEAT.png'); }
+/* Image paths updated to .webp */
+.rinse { background-image: url('../images/RINSE.webp'); }
+.refine { background-image: url('../images/REFINE.webp'); }
+.repeat { background-image: url('../images/REPEAT.webp'); }
 .motto-text {
     font-size: 5rem;
     font-weight: 900;
@@ -209,15 +212,16 @@ body {
 }
 .service-card:hover::after { background: rgba(0,0,0,0.2); }
 
-.bg-rosin { background-image: url('../images/Rosin.png'); }
-.bg-bulkhash { background-image: url('../images/BulkHash.png'); }
-.bg-trim { background-image: url('../images/Trim.png'); }
-.bg-kief { background-image: url('../images/Kief.png'); }
-.bg-topicals { background-image: url('../images/Topicals.png'); }
-.bg-vapefilling { background-image: url('../images/Vapefilling.png'); }
-.bg-cannabisflowergmp { background-image: url('../images/cannabisflowerGMP.png'); }
-.bg-vapes { background-image: url('../images/vapes.png'); }
-.bg-transport { background-image: url('../images/transport.png'); }
+/* Image paths updated to .webp */
+.bg-rosin { background-image: url('../images/Rosin.webp'); }
+.bg-bulkhash { background-image: url('../images/BulkHash.webp'); }
+.bg-trim { background-image: url('../images/Trim.webp'); }
+.bg-kief { background-image: url('../images/Kief.webp'); }
+.bg-topicals { background-image: url('../images/Topicals.webp'); }
+.bg-vapefilling { background-image: url('../images/Vapefilling.webp'); }
+.bg-cannabisflowergmp { background-image: url('../images/cannabisflowerGMP.webp'); }
+.bg-vapes { background-image: url('../images/vapes.webp'); }
+.bg-transport { background-image: url('../images/transport.webp'); }
 
 .service-title {
     color: var(--primary-white);
@@ -440,6 +444,70 @@ body.brands-page-background {
     transform: scale(1.05);
 }
 
+/* --- Fixed Bottom Banner Styles --- */
+.fixed-bottom-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(208, 88, 38, 0.85); 
+    backdrop-filter: blur(5px);
+    padding: 20px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.fixed-bottom-banner .banner-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary-white);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.banner-items-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.banner-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--primary-white);
+    width: 100px;
+    text-align: center;
+}
+
+.banner-item img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--primary-white);
+    object-fit: cover;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.banner-item:hover img {
+    transform: scale(1.1);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+}
+
+.banner-item .item-title {
+    margin-top: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
 
 /* --- Footer --- */
 .main-footer { text-align: center; padding: 20px; background-color: var(--primary-black); color: var(--primary-white); }
@@ -456,6 +524,10 @@ body.brands-page-background {
     .brands-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 768px) {
+    body {
+        /* Increase padding on mobile to account for banner items wrapping */
+        padding-bottom: 320px; 
+    }
     .hero-collage { flex-direction: column; height: auto; }
     .collage-panel { min-height: 200px; border-right: none; border-bottom: 2px solid var(--primary-white); }
     .motto-text { font-size: 2.5rem; }
@@ -469,4 +541,6 @@ body.brands-page-background {
     .brands-grid { grid-template-columns: 1fr; }
     .services-container { flex-direction: column; }
     .service-card { width: 90%; }
+    .banner-items-container { gap: 20px; }
+    .banner-item img { width: 70px; height: 70px; }
 }
