@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aube - Distillat THC/CBD | Oaziz Extracts</title>
+    
+    <meta name="robots" content="noindex, nofollow">
+
+    <link rel="icon" href="/Aube/AUBE-LOGO.png" type="image/png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            'aube-orange': '#CD4D1A',
+                            'cannon-blue': '#799fc3',
+                            'base-light': '#f7f7f7',
+                            'base-dark': '#111111',
+                        },
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif'],
+                            display: ['Archivo Black', 'sans-serif'],
+                            mono: ['Courier Prime', 'monospace'],
+                        }
+                    }
+                }
+            };
+        }
+    </script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Courier+Prime:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; margin: 0; overflow-x: hidden; }
+        .font-bankster { font-family: 'Archivo Black', sans-serif; text-transform: uppercase; letter-spacing: -0.02em; line-height: 0.9; }
+        .split-section { display: flex; flex-direction: column; width: 100%; min-height: 100vh; }
+        .img-wrapper { position: relative; width: 100%; height: 50vh; overflow: hidden; }
+        /* CHANGE: For AUBESunrise.jpg in hero to contain and fill with orange */
+        .img-wrapper.hero-img { background-color: #CD4D1A; } 
+        .img-wrapper.hero-img .img-cover { object-fit: contain; }
+        /* Default for other images */
+        .img-wrapper:not(.hero-img) .img-cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        @media (min-width: 1024px) {
+            .split-section { flex-direction: row; }
+            .content-col { width: 50%; display: flex; align-items: center; justify-content: center; padding: 4rem; }
+            .img-wrapper { width: 50%; display: flex; align-items: center; justify-content: center; height: auto; min-height: 100vh; position: relative; }
+            .img-wrapper:not(.hero-img) .img-cover { position: absolute; inset: 0; }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="age-gate" class="fixed inset-0 bg-base-dark bg-opacity-95 z-[999] flex items-center justify-center p-8 text-center text-white">
+        <div class="max-w-lg bg-base-dark border-4 border-aube-orange p-10 shadow-2xl">
+            <h2 class="font-bankster text-4xl mb-6 text-aube-orange">Vérification d'Âge</h2>
+            <p class="text-xl mb-8 font-medium">
+                Afin d'accéder à ce contenu, veuillez confirmer que vous avez **21 ans ou plus**, soit l'âge légal pour consommer du cannabis au Québec.
+            </p>
+            <p class="text-sm text-gray-500 mb-8">
+                Ce site n'est pas indexé publiquement et est réservé aux clients ou visiteurs accédant directement à ce lien.
+            </p>
+
+            <button onclick="verifyAge(true)" class="bg-aube-orange text-white font-bankster text-lg py-3 px-8 mx-2 rounded hover:bg-[#b04216] transition duration-300">
+                Oui, j'ai 21+
+            </button>
+            <button onclick="verifyAge(false)" class="bg-gray-700 text-white font-bankster text-lg py-3 px-8 mx-2 rounded hover:bg-gray-800 transition duration-300">
+                Non, quitter
+            </button>
+        </div>
+        <div id="denial-message" class="absolute inset-0 bg-base-dark/95 flex items-center justify-center hidden opacity-0 transition-opacity duration-500">
+            <div class="p-10 bg-red-800 text-white rounded-lg shadow-2xl">
+                <p class="font-bankster text-2xl">Accès Refusé.</p>
+                <p class="mt-4">Vous devez avoir 21 ans ou plus pour continuer.</p>
+                <button onclick="window.location.href='https://www.sqdc.ca'" class="mt-6 bg-white text-red-800 font-bankster text-lg py-2 px-6 rounded-full hover:bg-gray-200">
+                    Redirection vers SQDC
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="language-switcher" class="fixed top-4 right-4 z-50">
+        <button onclick="toggleLanguage()" class="bg-white/90 text-base-dark border border-base-dark/20 text-sm font-semibold py-1 px-3 rounded-full shadow-lg hover:bg-base-dark hover:text-white transition duration-300">
+            EN
+        </button>
+    </div>
+
+    <div id="content-wrapper" class="hidden"> 
+
+        <div id="french-content" lang="fr">
+            <div id="hero" class="split-section bg-base-dark">
+                <div class="img-wrapper order-1 lg:order-1 hero-img"> 
+                    <img src="/Aube/AUBESunrise.jpg" alt="Aube Hero" class="img-cover opacity-90" onerror="this.src='https://placehold.co/1000x1000/222/CD4D1A?text=AUBESunrise.jpg'">
+                    <div class="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent"></div>
+                </div>
+
+                <div class="content-col order-2 lg:order-2 bg-base-dark text-white">
+                    <div class="max-w-lg relative z-10 p-8 lg:p-0">
+                        <img src="/Aube/Cannonfire-Logo-transparent.png" alt="Cannonfire Logo" class="h-20 w-auto mb-8" onerror="this.src='https://placehold.co/320x100/111/799fc3?text=Cannonfire+Logo'">
+                        <div class="mb-4 flex items-center space-x-2">
+                            <span class="bg-aube-orange/20 border border-aube-orange text-aube-orange text-xs font-bold px-2 py-1 rounded uppercase tracking-widest">Cartouche Vape 1mL</span>
+                            <span class="text-gray-500 text-xs font-bold uppercase tracking-widest">Format 510</span>
+                        </div>
+
+                        <h1 class="font-bankster text-6xl lg:text-8xl mb-6 leading-tight">
+                            <span class="inline-flex items-center justify-center bg-white px-4 rounded-lg transform translate-y-2 lg:translate-y-3 h-[1.4em] w-auto mr-2 align-baseline shadow-xl">
+                                <img src="/Aube/AUBE-LOGO.png" alt="Aube Logo" class="h-full w-auto object-contain py-2" onerror="this.style.display='none'">
+                            </span>
+                            distillat THC et CBD <span class="text-transparent bg-clip-text bg-gradient-to-r from-aube-orange to-orange-400">1:1</span>
+                        </h1>
+
+                        <p class="text-lg lg:text-xl text-gray-400 font-medium mb-10 leading-relaxed">
+                            Conçu pour le vapotage le plus performant et une expérience authentique.
+                        </p>
+
+                        <a href="#launch" class="group inline-block border-2 border-aube-orange text-aube-orange font-bankster text-xl py-4 px-10 hover:bg-aube-orange hover:text-white transition-all duration-300">
+                            Découvrir Aube <span class="inline-block transition-transform group-hover:translate-x-2">&rarr;</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div id="launch" class="split-section">
+                <div class="img-wrapper order-1 lg:order-1 bg-gray-50">
+                    <img src="/Aube/JournalAUBE.jpg" alt="Aube STM Product" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/fff/CD4D1A?text=JournalAUBE.jpg'">
+                </div>
+
+                <div class="content-col order-2 lg:order-2 bg-white text-base-dark">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                            <span class="font-bold uppercase tracking-widest text-gray-400 text-sm">Status: Disponible Maintenant</span>
+                        </div>
+                        <h2 class="font-bankster text-6xl lg:text-8xl text-aube-orange mb-2 leading-none">26 NOV</h2>
+                        <h3 class="font-bankster text-4xl lg:text-5xl text-base-dark mb-8">Lancement SQDC</h3>
+                        <p class="text-lg text-gray-600 mb-10 font-medium">
+                            Soyez les premiers à découvrir le distillat Cannonfire AUBE avec notre cartouche à haute performance en céramique et verre.
+                        </p>
+                        <a href="https://www.sqdc.ca" target="_blank" class="block w-full text-center bg-base-dark text-white font-bankster text-xl py-5 hover:bg-aube-orange hover:scale-[1.02] transition-all duration-300 shadow-2xl">Trouver une succursale</a>
+                        <p class="mt-6 text-xs text-gray-400 text-center">21+ | Contient du Cannabis | Consommez de façon responsable</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="certified-formulation" class="split-section">
+                <div class="img-wrapper order-1 lg:order-1 bg-gray-800">
+                    <img src="/Aube/Sunrise-Aube-packaging-and-fullcart.jpg" alt="Aube Olympic" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/333/799fc3?text=Sunrise-Aube-packaging-and-fullcart.jpg'">
+                    <div class="absolute inset-0 bg-cannon-blue/20 mix-blend-multiply"></div>
+                </div>
+                <div class="content-col order-2 lg:order-2 bg-cannon-blue text-base-dark">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-white/60 font-bold text-sm mb-4 block">Formulation Certifiée</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-6 text-white">Un Profil Fidèle <br><span class="text-base-dark">En Toute Circonstance</span></h2>
+                        <p class="text-white/90 text-xl mb-8 leading-relaxed font-medium"></p>
+                        <div class="inline-block bg-white text-cannon-blue font-bankster text-lg px-6 py-3 shadow-lg transform rotate-2">Goût Authentique</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="quality-control" class="split-section">
+                <div class="content-col order-2 lg:order-1 bg-base-dark text-white">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-aube-orange/60 font-bold text-sm mb-4 block">Contrôle Qualité</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-6 text-white">Fabriqué à Montréal <br><span class="text-aube-orange">Avec Passion</span></h2>
+                        <p class="text-white/90 text-xl mb-8 leading-relaxed font-medium">Chaque cartouche est remplie à la main et emballée avec soin à Montréal par l'équipe passionnée d'Oaziz Extracts, garantissant une qualité artisanale irréprochable.</p>
+                        <div class="inline-block bg-aube-orange text-white font-bankster text-lg px-6 py-3 shadow-lg transform -rotate-2">Qualité Artisanale</div>
+                    </div>
+                </div>
+                <div class="img-wrapper order-1 lg:order-2 bg-gray-800">
+                    <img src="/Aube/Aube-laboratory.jpg" alt="Aube Laboratory" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/333/CD4D1A?text=Aube-laboratory.jpg'">
+                    <div class="absolute inset-0 bg-aube-orange/10 mix-blend-multiply"></div>
+                </div>
+            </div>
+
+            <div id="product" class="split-section">
+                <div class="content-col order-2 lg:order-1 bg-aube-orange text-white">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-black/40 font-bold text-sm mb-4 block">Matériel et Formulation</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-8 text-white">Précision <br><span class="text-base-dark">Assurée</span></h2>
+                        <div class="space-y-8">
+                            <div class="border-l-4 border-base-dark pl-6">
+                                <h3 class="font-bankster text-2xl text-base-dark mb-2">Matériel Céramique & Verre</h3>
+                                <p class="text-white/90 text-lg">Testé auprès de plusieurs cartouches pour garantir la meilleure performance d'inhalation et un profil de saveur fidèle.</p>
+                            </div>
+                            <div class="border-l-4 border-base-dark pl-6">
+                                <h3 class="font-bankster text-2xl text-base-dark mb-2">Micro-Lots (Max 20kg)</h3>
+                                <p class="text-white/90 text-lg">Production en petits lots assurant une variation contrôlée et reflétant la richesse unique de chaque distillat.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="img-wrapper order-1 lg:order-2 bg-gray-100">
+                    <img src="/Aube/CannonfireAUBE.png" alt="Cannonfire Aube Product" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/eee/CD4D1A?text=CannonfireAUBE.jpg'">
+                </div>
+            </div>
+
+            <div id="lots" class="bg-gray-200 py-20 border-t border-gray-300 text-base-dark">
+                <div class="max-w-6xl mx-auto px-6">
+                    <h2 class="font-bankster text-3xl md:text-4xl mb-12 text-center text-base-dark/80">Information des Lots</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-aube-orange rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 1</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #68781</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">25.55%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">32.21%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Terpènes Totaux</p><p class="font-bold text-xl text-aube-orange">9.968%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Unités:</span><span class="font-bold text-base-dark">11,088</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Emballé le:</span><span class="font-bold text-base-dark">10 Nov 2025</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-cannon-blue rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 2</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #71382</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">27.39%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">33.90%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Terpènes Totaux</p><p class="font-bold text-xl text-cannon-blue">8.374%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Unités:</span><span class="font-bold text-base-dark">9,336</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Emballé le:</span><span class="font-bold text-base-dark">10 Nov 2025</span></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-base-dark rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 3</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #71628</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">26.45%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">32.22%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Terpènes Totaux</p><p class="font-bold text-xl text-base-dark">9.855%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Unités:</span><span class="font-bold text-base-dark">18,960</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Emballé le:</span><span class="font-bold text-base-dark">03 Déc 2025</span></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <footer class="bg-base-dark text-white py-10 text-center border-t border-white/10">
+                <div class="max-w-4xl mx-auto px-4">
+                    <a href="https://www.oaziz.ca" target="_blank" rel="noopener noreferrer" class="inline-block mb-6 opacity-80 hover:opacity-100 transition-opacity duration-300">
+                        <img src="/Aube/Oaziz-Logo.webp" alt="Oaziz Extracts Logo" class="h-12 w-auto mx-auto" onerror="this.src='https://placehold.co/150x50/333/eee?text=OAZIZ+EXTRACTS'">
+                    </a>
+                    <p class="text-sm text-gray-500 font-mono uppercase tracking-widest mb-2">&copy; <span id="year-fr"></span> Oaziz Extracts Inc. Tous droits réservés.</p>
+                    <p class="text-xs text-gray-600">Produit réservé aux consommateurs de 21 ans et plus.</p>
+                </div>
+            </footer>
+        </div>
+
+
+        <div id="english-content" lang="en" class="hidden">
+            
+            <div id="hero-en" class="split-section bg-base-dark">
+                <div class="img-wrapper order-1 lg:order-1 hero-img">
+                    <img src="/Aube/AUBESunrise.jpg" alt="Aube Hero" class="img-cover opacity-90" onerror="this.src='https://placehold.co/1000x1000/222/CD4D1A?text=AUBESunrise.jpg'">
+                    <div class="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent"></div>
+                </div>
+
+                <div class="content-col order-2 lg:order-2 bg-base-dark text-white">
+                    <div class="max-w-lg relative z-10 p-8 lg:p-0">
+                        <img src="/Aube/Cannonfire-Logo-transparent.png" alt="Cannonfire Logo" class="h-20 w-auto mb-8" onerror="this.src='https://placehold.co/320x100/111/799fc3?text=Cannonfire+Logo'">
+                        <div class="mb-4 flex items-center space-x-2">
+                            <span class="bg-aube-orange/20 border border-aube-orange text-aube-orange text-xs font-bold px-2 py-1 rounded uppercase tracking-widest">1mL Vape Cartridge</span>
+                            <span class="text-gray-500 text-xs font-bold uppercase tracking-widest">510 Thread Format</span>
+                        </div>
+
+                        <h1 class="font-bankster text-6xl lg:text-8xl mb-6 leading-tight">
+                            <span class="inline-flex items-center justify-center bg-white px-4 rounded-lg transform translate-y-2 lg:translate-y-3 h-[1.4em] w-auto mr-2 align-baseline shadow-xl">
+                                <img src="/Aube/AUBE-LOGO.png" alt="Aube Logo" class="h-full w-auto object-contain py-2" onerror="this.style.display='none'">
+                            </span>
+                            THC and CBD <span class="text-transparent bg-clip-text bg-gradient-to-r from-aube-orange to-orange-400">1:1</span> distillate
+                        </h1>
+
+                        <p class="text-lg lg:text-xl text-gray-400 font-medium mb-10 leading-relaxed">
+                            AUBE is engineered for the highest level of vaping performance and an authentic experience.
+                        </p>
+
+                        <a href="#launch-en" class="group inline-block border-2 border-aube-orange text-aube-orange font-bankster text-xl py-4 px-10 hover:bg-aube-orange hover:text-white transition-all duration-300">
+                            Discover Aube <span class="inline-block transition-transform group-hover:translate-x-2">&rarr;</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div id="launch-en" class="split-section">
+                <div class="img-wrapper order-1 lg:order-1 bg-gray-50">
+                    <img src="/Aube/JournalAUBE.jpg" alt="Aube STM Product" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/fff/CD4D1A?text=JournalAUBE.jpg'">
+                </div>
+
+                <div class="content-col order-2 lg:order-2 bg-white text-base-dark">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                            <span class="font-bold uppercase tracking-widest text-gray-400 text-sm">Status: Available Now</span>
+                        </div>
+                        <h2 class="font-bankster text-6xl lg:text-8xl text-aube-orange mb-2 leading-none">NOV 26</h2>
+                        <h3 class="font-bankster text-4xl lg:text-5xl text-base-dark mb-8">SQDC Launch</h3>
+                        <p class="text-lg text-gray-600 mb-10 font-medium">
+                            Be the first to discover the Cannonfire AUBE distillate with our high-end ceramic and glass cartridge.
+                        </p>
+                        <a href="https://www.sqdc.ca" target="_blank" class="block w-full text-center bg-base-dark text-white font-bankster text-xl py-5 hover:bg-aube-orange hover:scale-[1.02] transition-all duration-300 shadow-2xl">Find a Store</a>
+                        <p class="mt-6 text-xs text-gray-400 text-center">21+ | Contains Cannabis | Consume responsibly</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="certified-formulation-en" class="split-section">
+                <div class="img-wrapper order-1 lg:order-1 bg-gray-800">
+                    <img src="/Aube/Sunrise-Aube-packaging-and-fullcart.jpg" alt="Aube Olympic" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/333/799fc3?text=Sunrise-Aube-packaging-and-fullcart.jpg'">
+                    <div class="absolute inset-0 bg-cannon-blue/20 mix-blend-multiply"></div>
+                </div>
+                <div class="content-col order-2 lg:order-2 bg-cannon-blue text-base-dark">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-white/60 font-bold text-sm mb-4 block">Certified Formulation</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-6 text-white">A True Profile <br><span class="text-base-dark">In Any Circumstance</span></h2>
+                        <p class="text-white/90 text-xl mb-8 leading-relaxed font-medium"></p>
+                        <div class="inline-block bg-white text-cannon-blue font-bankster text-lg px-6 py-3 shadow-lg transform rotate-2">Authentic Taste</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="quality-control-en" class="split-section">
+                <div class="content-col order-2 lg:order-1 bg-base-dark text-white">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-aube-orange/60 font-bold text-sm mb-4 block">Quality Control</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-6 text-white">Crafted in Montreal <br><span class="text-aube-orange">With Passion</span></h2>
+                        <p class="text-white/90 text-xl mb-8 leading-relaxed font-medium">Each cartridge is hand-filled and packaged with care in Montreal by Oaziz Extracts' passionate team, ensuring impeccable artisanal quality.</p>
+                        <div class="inline-block bg-aube-orange text-white font-bankster text-lg px-6 py-3 shadow-lg transform -rotate-2">Artisanal Quality</div>
+                    </div>
+                </div>
+                <div class="img-wrapper order-1 lg:order-2 bg-gray-800">
+                    <img src="/Aube/Aube-laboratory.jpg" alt="Aube Laboratory" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/333/CD4D1A?text=Aube-laboratory.jpg'">
+                    <div class="absolute inset-0 bg-aube-orange/10 mix-blend-multiply"></div>
+                </div>
+            </div>
+
+            <div id="product-en" class="split-section">
+                <div class="content-col order-2 lg:order-1 bg-aube-orange text-white">
+                    <div class="max-w-lg p-8 lg:p-0">
+                        <span class="font-mono uppercase tracking-widest text-black/40 font-bold text-sm mb-4 block">Hardware and Formulation</span>
+                        <h2 class="font-bankster text-5xl lg:text-7xl mb-8 text-white">Precision <br><span class="text-base-dark">Guaranteed</span></h2>
+                        <div class="space-y-8">
+                            <div class="border-l-4 border-base-dark pl-6">
+                                <h3 class="font-bankster text-2xl text-base-dark mb-2">Ceramic & Glass Hardware</h3>
+                                <p class="text-white/90 text-lg">Tested across several cartridges to guarantee the best pull performance and true flavor reflection.</p>
+                            </div>
+                            <div class="border-l-4 border-base-dark pl-6">
+                                <h3 class="font-bankster text-2xl text-base-dark mb-2">Micro-Batches (Max 20kg)</h3>
+                                <p class="text-white/90 text-lg">Small batch production ensures controlled variation and reflects the unique richness of each distillate.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="img-wrapper order-1 lg:order-2 bg-gray-100">
+                    <img src="/Aube/CannonfireAUBE.jpg" alt="Cannonfire Aube Product" class="img-cover" onerror="this.src='https://placehold.co/1000x1000/eee/CD4D1A?text=CannonfireAUBE.jpg'">
+                </div>
+            </div>
+
+            <div id="lots-en" class="bg-gray-200 py-20 border-t border-gray-300 text-base-dark">
+                <div class="max-w-6xl mx-auto px-6">
+                    <h2 class="font-bankster text-3xl md:text-4xl mb-12 text-center text-base-dark/80">Lot Information</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-aube-orange rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 1</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #68781</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">25.55%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">32.21%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Total Terpenes</p><p class="font-bold text-xl text-aube-orange">9.968%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Units:</span><span class="font-bold text-base-dark">11,088</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Packaged On:</span><span class="font-bold text-base-dark">November 10th, 2025</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-cannon-blue rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 2</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #71382</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">27.39%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">33.90%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Total Terpenes</p><p class="font-bold text-xl text-cannon-blue">8.374%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Units:</span><span class="font-bold text-base-dark">9,336</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Packaged On:</span><span class="font-bold text-base-dark">November 10th, 2025</span></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-8 shadow-lg border-t-8 border-base-dark rounded-sm hover:shadow-xl transition-shadow">
+                            <div class="flex justify-between items-start mb-6">
+                                <h3 class="font-bankster text-2xl text-base-dark">AUBE 3</h3>
+                                <span class="font-mono bg-gray-100 px-2 py-1 text-sm font-bold text-gray-600">LOT #71628</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-y-4 mb-6 text-sm md:text-base">
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">THC</p><p class="font-bold text-xl">26.45%</p></div>
+                                <div><p class="text-gray-500 text-xs uppercase tracking-widest">CBD</p><p class="font-bold text-xl">32.22%</p></div>
+                                <div class="col-span-2"><p class="text-gray-500 text-xs uppercase tracking-widest">Total Terpenes</p><p class="font-bold text-xl text-base-dark">9.855%</p></div>
+                            </div>
+                            <div class="border-t border-gray-100 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Units:</span><span class="font-bold text-base-dark">18,960</span></div>
+                                <div class="flex justify-between text-sm font-mono text-gray-600"><span>Packaged On:</span><span class="font-bold text-base-dark">December 3rd, 2025</span></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <footer class="bg-base-dark text-white py-10 text-center border-t border-white/10">
+                <div class="max-w-4xl mx-auto px-4">
+                    <a href="https://www.oaziz.ca" target="_blank" rel="noopener noreferrer" class="inline-block mb-6 opacity-80 hover:opacity-100 transition-opacity duration-300">
+                        <img src="/Aube/Oaziz-Logo.webp" alt="Oaziz Extracts Logo" class="h-12 w-auto mx-auto" onerror="this.src='https://placehold.co/150x50/333/eee?text=OAZIZ+EXTRACTS'">
+                    </a>
+                    <p class="text-sm text-gray-500 font-mono uppercase tracking-widest mb-2">&copy; <span id="year-en"></span> Oaziz Extracts Inc. All rights reserved.</p>
+                    <p class="text-xs text-gray-600">Product reserved for consumers 21 years and older.</p>
+                </div>
+            </footer>
+        </div>
+
+    </div>
+    <script>
+        const currentYear = new Date().getFullYear();
+        document.getElementById('year-fr').textContent = currentYear;
+        document.getElementById('year-en').textContent = currentYear;
+
+        // AGE VERIFICATION LOGIC (Attached to window for guaranteed global access)
+        window.checkAgeVerification = function() {
+            const isVerified = localStorage.getItem('ageVerified');
+            const ageGate = document.getElementById('age-gate');
+            const contentWrapper = document.getElementById('content-wrapper');
+
+            if (isVerified === 'true') {
+                ageGate.classList.add('hidden');
+                contentWrapper.classList.remove('hidden'); // SHOW CONTENT
+            } else {
+                ageGate.classList.remove('hidden'); // SHOW GATE
+                contentWrapper.classList.add('hidden'); // HIDE CONTENT
+            }
+        }
+
+        window.verifyAge = function(isAdult) {
+            const ageGate = document.getElementById('age-gate');
+            const contentWrapper = document.getElementById('content-wrapper');
+            const denialMessage = document.getElementById('denial-message');
+            
+            if (isAdult) {
+                localStorage.setItem('ageVerified', 'true');
+                ageGate.classList.add('hidden');
+                contentWrapper.classList.remove('hidden'); // SHOW CONTENT
+            } else {
+                // Shows denial message and redirects
+                denialMessage.classList.remove('hidden');
+                setTimeout(() => { denialMessage.style.opacity = '1'; }, 10); // Fade in
+                
+                setTimeout(() => {
+                    window.location.href = 'https://www.sqdc.ca'; // Redirect after denial
+                }, 3000); // 3-second delay
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', window.checkAgeVerification);
+        
+        // LANGUAGE TOGGLE LOGIC (Attached to window for guaranteed global access)
+        window.toggleLanguage = function() {
+            const html = document.documentElement;
+            const button = document.querySelector('#language-switcher button');
+            const frenchContent = document.getElementById('french-content');
+            const englishContent = document.getElementById('english-content');
+
+            if (html.lang === 'fr') {
+                html.lang = 'en';
+                button.textContent = 'FR';
+                frenchContent.classList.add('hidden');
+                englishContent.classList.remove('hidden');
+            } else {
+                html.lang = 'fr';
+                button.textContent = 'EN';
+                englishContent.classList.add('hidden');
+                frenchContent.classList.remove('hidden');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
+
+
