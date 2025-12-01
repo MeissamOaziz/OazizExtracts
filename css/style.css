@@ -251,7 +251,6 @@ body.brands-page-background {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* FIX FOR ALIGNMENT: Pushes wrapper to top, info to bottom */
     justify-content: space-between; 
 }
 
@@ -309,6 +308,16 @@ body.brands-page-background {
 } 
 
 /* --- Redesigned Brand Page Showcase (e.g., cannonfire.html) --- */
+
+/* FIX: Solid white background for the hero section */
+.brand-hero.white-bg-hero {
+    background-image: none !important; /* Remove background image */
+    background-color: var(--primary-white); /* Set white background */
+    border-bottom: 5px solid var(--primary-black); /* Stronger separator */
+}
+.brand-hero.white-bg-hero::after {
+    content: none; /* Remove dark overlay */
+}
 .brand-hero { 
     height: 70vh; 
     background-size: cover; 
@@ -356,7 +365,6 @@ body.brands-page-background {
 
 .product-showcase-grid {
     display: grid;
-    /* On desktop, start with a large column for the feature item */
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
     gap: 40px;
     justify-content: center;
@@ -372,7 +380,7 @@ body.brands-page-background {
 }
 
 .product-image-container {
-    width: 45%; /* Image takes 45% of the space */
+    width: 45%; 
     height: auto;
     min-height: 400px;
     overflow: hidden;
@@ -390,13 +398,34 @@ body.brands-page-background {
 }
 
 .product-details {
-    width: 55%; /* Details take 55% of the space */
+    width: 55%; 
     padding: 30px;
     text-align: left;
     display: flex;
     flex-direction: column;
     justify-content: center;
 }
+
+/* NEW: Styles for the dark product details section (Black/Orange/White) */
+.product-details.dark-bg-details {
+    background-color: var(--primary-black);
+    color: var(--primary-white);
+}
+
+.product-details.dark-bg-details h3 {
+    color: var(--primary-orange);
+}
+.product-details.dark-bg-details ul li {
+    color: var(--light-gray);
+}
+.product-details.dark-bg-details ul li::before {
+    color: var(--primary-orange);
+}
+.cta-light {
+    background-color: var(--primary-orange) !important;
+    color: var(--primary-white) !important;
+}
+
 
 .product-details h3 {
     font-size: 1.8rem;
@@ -687,6 +716,13 @@ body.brands-page-background {
 
 /* --- Responsive Design --- */
 @media (max-width: 1024px) {
+    .product-grid-item {
+        flex-direction: column; /* Stack image and text vertically */
+    }
+    .product-image-container, .product-details {
+        width: 100%;
+        min-height: auto;
+    }
     .motto-text { font-size: 3rem; }
     .services-container { flex-direction: column; align-items: center; }
     .service-card { width: 80%; max-width: 500px; }
@@ -701,7 +737,7 @@ body.brands-page-background {
     }
     .product-image-container, .product-details {
         width: 100%;
-        min-height: 300px;
+        min-height: auto;
     }
     body {
         padding-bottom: 80px;
