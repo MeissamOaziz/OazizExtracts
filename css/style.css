@@ -309,12 +309,12 @@ body.brands-page-background {
 
 /* --- Redesigned CannonFire Page Showcase (cannonfire.html) --- */
 
-/* 1. Brand Hero Section - Make shorter and white */
+/* 1. Hero Section: Make shorter and solid BLACK */
 .brand-hero.white-bg-hero {
     background-image: none !important;
-    background-color: var(--primary-white);
-    border-bottom: 3px solid var(--primary-black); /* Subtler separator */
-    height: 25vh; /* SHORTER HEIGHT */
+    background-color: var(--primary-black); /* CHANGED to BLACK */
+    border-bottom: 3px solid var(--primary-orange); 
+    height: 35vh; 
 }
 .brand-hero.white-bg-hero::after {
     content: none;
@@ -328,14 +328,16 @@ body.brands-page-background {
     align-items: center; 
     border-bottom: 5px solid var(--primary-orange); 
 }
-/* FIX: Reduced Logo Size for brand detail pages to prevent overlap */
+.brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
+
+/* FIX 1: Reduced Logo Size and prevented it from being pushed up */
 .brand-hero-logo { 
-    max-width: 300px; /* Reduced from 450px */
+    max-width: 250px; /* Reduced from 300px */
     width: 80%; 
     position: relative; 
     z-index: 2; 
     height: auto;
-    margin-top: 10px;
+    margin-top: 50px; /* Pushes logo down from the top header */
 }
 
 /* 2. Brand CTA / Intro Area */
@@ -351,17 +353,21 @@ body.brands-page-background {
 .brand-intro-cta p {
     font-size: 1.2rem;
     color: var(--dark-gray);
-    margin-bottom: 20px;
+    margin-bottom: 20px; /* Keep margin */
+    padding-bottom: 20px; /* Separates text from the product section */
+    border-bottom: 1px solid #ccc; /* Decorative line */
 }
 .available-section { 
     display: none; 
 }
 
-/* 3. Product Showcase Grid */
+/* 3. Product Showcase Grid - Set background to Oaziz Orange */
 .product-showcase {
-    padding: 30px 20px; 
+    padding: 60px 20px; 
     max-width: 1300px;
     margin: 0 auto;
+    background-color: var(--primary-orange); /* CHANGED to ORANGE */
+    color: var(--primary-white);
 }
 
 .product-showcase-grid {
@@ -376,8 +382,9 @@ body.brands-page-background {
     flex-direction: row; 
     border-radius: 10px;
     overflow: hidden;
-    background-color: var(--light-gray);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    /* Changed background color for item contrast */
+    background-color: var(--primary-black); 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
 .product-image-container {
@@ -407,12 +414,12 @@ body.brands-page-background {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    color: var(--primary-white); /* Ensure text is white */
 }
 
-/* Styles for the dark product details section (Black/Orange/White) */
+/* Product Details Colors for this section */
 .product-details.dark-bg-details {
     background-color: var(--primary-black);
-    color: var(--primary-white);
 }
 
 .product-details.dark-bg-details h3 {
@@ -459,11 +466,11 @@ body.brands-page-background {
 /* NEW: Style for the availability badge inside the product card */
 .product-availability-badge {
     position: absolute;
-    top: 0;
-    right: 0;
+    bottom: 30px; /* Moved to the bottom, below the button */
+    right: 30px;
     background-color: rgba(255, 255, 255, 0.9);
     padding: 10px 15px;
-    border-bottom-left-radius: 10px;
+    border-radius: 5px;
     z-index: 10;
     text-align: center;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
