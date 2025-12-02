@@ -497,7 +497,9 @@ body.brands-page-background {
     box-shadow: none;
 }
 
-/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
+
+/* --- NEW: Medical Product Showcase Section --- */
+
 .product-showcase-medical {
     background-color: var(--primary-white); 
     padding: 60px 20px;
@@ -563,7 +565,6 @@ body.brands-page-background {
     font-weight: 600;
     color: var(--primary-black);
 }
-
 
 /* --- About Us Page Styles --- */
 .page-header {
