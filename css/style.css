@@ -332,12 +332,12 @@ body.brands-page-background {
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
 .brand-hero-logo { 
-    max-width: 180px; 
+    max-width: 180px; /* Reduced size to fix overlap */
     width: 80%; 
     position: relative; 
     z-index: 2; 
     height: auto;
-    margin-top: 20px; 
+    margin-top: 20px; /* Pushes logo down slightly */
 }
 
 /* 2. Brand CTA / Intro Area */
@@ -469,10 +469,10 @@ body.brands-page-background {
 /* FIX 2: Style for the availability badge (Centered Flow & White BG) */
 .product-availability-badge {
     position: relative; 
-    align-self: center; /* Centers the badge horizontally within the flex column */
-    margin-top: 20px; /* Space below the button */
+    align-self: center; 
+    margin-top: 20px; 
     
-    background-color: var(--primary-white); /* Solid White Background */
+    background-color: var(--primary-white); 
     padding: 10px 15px;
     border-radius: 5px;
     z-index: 10;
@@ -569,7 +569,6 @@ body.brands-page-background {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--primary-black);
-    /* Ensure product names are aligned at the bottom */
     margin-top: auto; 
 }
 
