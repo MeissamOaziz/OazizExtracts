@@ -309,7 +309,7 @@ body.brands-page-background {
 
 /* --- Redesigned CannonFire Page Showcase (cannonfire.html) --- */
 
-/* 1. Brand Hero Section - Make shorter and solid BLACK */
+/* 1. Hero Section: Make shorter and solid BLACK */
 .brand-hero.white-bg-hero {
     background-image: none !important;
     background-color: var(--primary-black); 
@@ -332,7 +332,7 @@ body.brands-page-background {
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
 .brand-hero-logo { 
-    max-width: 200px; /* Further Reduced size to ensure no overlap */
+    max-width: 180px; /* Further Reduced size to ensure no overlap */
     width: 80%; 
     position: relative; 
     z-index: 2; 
@@ -346,16 +346,21 @@ body.brands-page-background {
     padding: 30px 20px 0;
     max-width: 1200px;
     margin: 0 auto;
+    background-color: var(--primary-black); /* Black background */
+    color: var(--primary-white); /* White text */
 }
 .brand-intro-cta h1 {
     display: none; 
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
-    color: var(--dark-gray);
-    margin-bottom: 20px; 
+    color: var(--light-gray); /* Light text on black background */
+    margin-bottom: 0; 
     padding-bottom: 20px; 
-    border-bottom: 1px solid #ccc; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Light divider */
+}
+.available-section { 
+    display: none; 
 }
 
 /* 3. Product Showcase Grid - Set background to Oaziz Orange */
@@ -411,7 +416,7 @@ body.brands-page-background {
     flex-direction: column;
     justify-content: center;
     color: var(--primary-white); 
-    position: relative; /* CRITICAL: Allows badge to be positioned correctly */
+    position: relative; 
 }
 
 /* Styles for the dark product details section (Black/Orange/White) */
@@ -461,17 +466,21 @@ body.brands-page-background {
     left: 0;
 }
 
-/* NEW: Style for the availability badge inside the product card */
+/* FIX 2: Style for the availability badge (Centered Flow & White BG) */
 .product-availability-badge {
-    position: absolute;
-    bottom: 30px; /* Positioned below the button */
-    right: 30px;
-    background-color: rgba(255, 255, 255, 0.9);
+    /* Anchored relative to .product-details, centered horizontally */
+    align-self: center; /* Centers the badge horizontally within the flex column */
+    margin-top: 20px; /* Space below the button */
+    
+    background-color: var(--primary-white); /* Solid White Background */
     padding: 10px 15px;
     border-radius: 5px;
     z-index: 10;
     text-align: center;
     box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    text-decoration: none; 
+    color: var(--primary-black); 
+    flex-shrink: 0;
 }
 .product-availability-badge p {
     font-size: 0.8rem;
@@ -480,12 +489,80 @@ body.brands-page-background {
     margin-bottom: 5px;
 }
 .product-availability-badge img {
-    height: 25px; /* Size of retailer logo */
+    height: 25px; 
     width: auto;
     border-radius: 0;
     object-fit: contain;
     border: none;
     box-shadow: none;
+}
+
+
+/* --- NEW: Medical Product Showcase Section --- */
+
+.product-showcase-medical {
+    background-color: var(--primary-white); /* White background */
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.section-title-dark {
+    font-size: 2.5rem;
+    color: var(--primary-black);
+    margin-bottom: 40px;
+}
+
+/* Retailers Bar */
+.medical-retailers-bar {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+}
+
+.med-retailer-link img {
+    height: 40px; 
+    max-width: 150px;
+    filter: grayscale(100%);
+    opacity: 0.7;
+    transition: all 0.3s ease;
+}
+
+.med-retailer-link:hover img {
+    filter: none;
+    opacity: 1;
+}
+
+/* Medical Product Gallery */
+.medical-product-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+    max-width: 1100px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.med-card {
+    background-color: var(--light-gray);
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.med-card img {
+    width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.med-card p {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-black);
 }
 
 
