@@ -222,6 +222,14 @@ body { top: 0px !important; }
 }
 
 /* --- Brands Showcase Page Styles --- */
+body.brands-page-background {
+    background-image: url('../images/oasis-1631145.webp');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--primary-white);
+}
+
 .brands-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -324,12 +332,12 @@ body { top: 0px !important; }
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
 .brand-hero-logo { 
-    max-width: 180px; 
+    max-width: 180px; /* Further Reduced size to ensure no overlap */
     width: 80%; 
     position: relative; 
     z-index: 2; 
     height: auto;
-    margin-top: 20px; 
+    margin-top: 20px; /* Pushes logo down slightly */
 }
 
 /* 2. Brand CTA / Intro Area */
@@ -338,18 +346,18 @@ body { top: 0px !important; }
     padding: 30px 20px 0;
     max-width: 1200px;
     margin: 0 auto;
-    background-color: var(--primary-black); 
-    color: var(--primary-white); 
+    background-color: var(--primary-black); /* Black background */
+    color: var(--primary-white); /* White text */
 }
 .brand-intro-cta h1 {
     display: none; 
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
-    color: var(--light-gray); 
+    color: var(--light-gray); /* Light text on black background */
     margin-bottom: 0; 
     padding-bottom: 20px; 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Light divider */
 }
 .available-section { 
     display: none; 
@@ -460,7 +468,7 @@ body { top: 0px !important; }
 
 /* FIX 2: Style for the availability badge (Centered Flow & White BG) */
 .product-availability-badge {
-    position: relative; 
+    /* Anchored relative to .product-details, centered horizontally */
     align-self: center; /* Centers the badge horizontally within the flex column */
     margin-top: 20px; /* Space below the button */
     
@@ -490,10 +498,10 @@ body { top: 0px !important; }
 }
 
 
-/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
+/* --- NEW: Medical Product Showcase Section --- */
 
 .product-showcase-medical {
-    background-color: var(--primary-white); 
+    background-color: var(--primary-white); /* White background */
     padding: 60px 20px;
     text-align: center;
 }
@@ -511,7 +519,6 @@ body { top: 0px !important; }
     gap: 30px;
     margin-bottom: 40px;
     flex-wrap: wrap;
-    align-items: center;
 }
 
 .med-retailer-link img {
@@ -535,7 +542,6 @@ body { top: 0px !important; }
     max-width: 1100px;
     margin: 0 auto;
     text-align: center;
-    align-items: flex-start;
 }
 
 .med-card {
@@ -543,10 +549,6 @@ body { top: 0px !important; }
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start; 
-    height: 100%;
 }
 
 .med-card img {
@@ -555,14 +557,12 @@ body { top: 0px !important; }
     object-fit: contain;
     border-radius: 5px;
     margin-bottom: 10px;
-    align-self: center;
 }
 
 .med-card p {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--primary-black);
-    margin-top: auto; 
 }
 
 
