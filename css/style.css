@@ -307,13 +307,14 @@ body.brands-page-background {
     text-align: center;
 } 
 
-/* --- Redesigned CannonFire Page Showcase --- */
-/* 1. Hero Section: Make shorter and solid white */
+/* --- Redesigned CannonFire Page Showcase (cannonfire.html) --- */
+
+/* 1. Brand Hero Section - Make shorter and white */
 .brand-hero.white-bg-hero {
     background-image: none !important;
     background-color: var(--primary-white);
-    border-bottom: 5px solid var(--primary-black);
-    height: 35vh; /* REDUCED HEIGHT */
+    border-bottom: 3px solid var(--primary-black); /* Subtler separator */
+    height: 25vh; /* SHORTER HEIGHT */
 }
 .brand-hero.white-bg-hero::after {
     content: none;
@@ -327,8 +328,15 @@ body.brands-page-background {
     align-items: center; 
     border-bottom: 5px solid var(--primary-orange); 
 }
-.brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
-.brand-hero-logo { max-width: 450px; width: 80%; position: relative; z-index: 2; }
+/* FIX: Reduced Logo Size for brand detail pages to prevent overlap */
+.brand-hero-logo { 
+    max-width: 300px; /* Reduced from 450px */
+    width: 80%; 
+    position: relative; 
+    z-index: 2; 
+    height: auto;
+    margin-top: 10px;
+}
 
 /* 2. Brand CTA / Intro Area */
 .brand-intro-cta {
@@ -338,20 +346,20 @@ body.brands-page-background {
     margin: 0 auto;
 }
 .brand-intro-cta h1 {
-    display: none; /* Hide H1 (CANNONFIRE) as requested */
+    display: none; 
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
     color: var(--dark-gray);
-    margin-bottom: 10px; /* Reduced margin */
+    margin-bottom: 20px;
 }
 .available-section { 
-    display: none; /* Hiding this standalone section, as it's moved inside the product card */
+    display: none; 
 }
 
 /* 3. Product Showcase Grid */
 .product-showcase {
-    padding: 30px 20px; /* Reduced vertical padding */
+    padding: 30px 20px; 
     max-width: 1300px;
     margin: 0 auto;
 }
@@ -377,7 +385,7 @@ body.brands-page-background {
     height: auto;
     min-height: 400px;
     overflow: hidden;
-    position: relative; /* Needed for availability badge */
+    position: relative;
 }
 
 .product-grid-item img {
@@ -385,6 +393,11 @@ body.brands-page-background {
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 0.4s ease;
+}
+
+.product-grid-item:hover img {
+    transform: scale(1.05);
 }
 
 .product-details {
@@ -756,7 +769,7 @@ body.brands-page-background {
         min-height: auto;
     }
     .product-grid-item img {
-        height: 300px; /* Ensure image height looks good on mobile */
+        height: 300px; 
     }
     body {
         padding-bottom: 80px;
