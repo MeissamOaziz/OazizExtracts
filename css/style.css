@@ -332,12 +332,12 @@ body.brands-page-background {
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
 .brand-hero-logo { 
-    max-width: 180px; /* Further Reduced size to ensure no overlap */
+    max-width: 180px; 
     width: 80%; 
     position: relative; 
     z-index: 2; 
     height: auto;
-    margin-top: 20px; /* Pushes logo down slightly */
+    margin-top: 20px; 
 }
 
 /* 2. Brand CTA / Intro Area */
@@ -346,8 +346,8 @@ body.brands-page-background {
     padding: 30px 20px 0;
     max-width: 1200px;
     margin: 0 auto;
-    background-color: var(--primary-black); /* Black background */
-    color: var(--primary-white); /* White text */
+    background-color: var(--primary-black); 
+    color: var(--primary-white); 
 }
 .brand-intro-cta h1 {
     display: none; 
@@ -498,7 +498,7 @@ body.brands-page-background {
 }
 
 
-/* --- NEW: Medical Product Showcase Section --- */
+/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
 
 .product-showcase-medical {
     background-color: var(--primary-white); 
@@ -550,6 +550,11 @@ body.brands-page-background {
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    /* For image and text alignment */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
 }
 
 .med-card img {
@@ -564,7 +569,10 @@ body.brands-page-background {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--primary-black);
+    /* Ensure product names are aligned at the bottom */
+    margin-top: auto; 
 }
+
 
 /* --- About Us Page Styles --- */
 .page-header {
