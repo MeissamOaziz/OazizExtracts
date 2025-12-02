@@ -354,10 +354,10 @@ body.brands-page-background {
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
-    color: var(--light-gray); /* Light text on black background */
+    color: var(--light-gray); 
     margin-bottom: 0; 
     padding-bottom: 20px; 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Light divider */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
 }
 .available-section { 
     display: none; 
@@ -468,7 +468,7 @@ body.brands-page-background {
 
 /* FIX 2: Style for the availability badge (Centered Flow & White BG) */
 .product-availability-badge {
-    /* Anchored relative to .product-details, centered horizontally */
+    position: relative; 
     align-self: center; /* Centers the badge horizontally within the flex column */
     margin-top: 20px; /* Space below the button */
     
@@ -497,11 +497,9 @@ body.brands-page-background {
     box-shadow: none;
 }
 
-
-/* --- NEW: Medical Product Showcase Section --- */
-
+/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
 .product-showcase-medical {
-    background-color: var(--primary-white); /* White background */
+    background-color: var(--primary-white); 
     padding: 60px 20px;
     text-align: center;
 }
@@ -519,6 +517,7 @@ body.brands-page-background {
     gap: 30px;
     margin-bottom: 40px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .med-retailer-link img {
