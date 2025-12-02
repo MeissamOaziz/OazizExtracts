@@ -222,14 +222,6 @@ body { top: 0px !important; }
 }
 
 /* --- Brands Showcase Page Styles --- */
-body.brands-page-background {
-    background-image: url('../images/oasis-1631145.webp');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: var(--primary-white);
-}
-
 .brands-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -332,12 +324,12 @@ body.brands-page-background {
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
 .brand-hero-logo { 
-    max-width: 180px; /* Reduced size to fix overlap */
+    max-width: 180px; 
     width: 80%; 
     position: relative; 
     z-index: 2; 
     height: auto;
-    margin-top: 20px; /* Pushes logo down slightly */
+    margin-top: 20px; 
 }
 
 /* 2. Brand CTA / Intro Area */
@@ -469,10 +461,10 @@ body.brands-page-background {
 /* FIX 2: Style for the availability badge (Centered Flow & White BG) */
 .product-availability-badge {
     position: relative; 
-    align-self: center; 
-    margin-top: 20px; 
+    align-self: center; /* Centers the badge horizontally within the flex column */
+    margin-top: 20px; /* Space below the button */
     
-    background-color: var(--primary-white); 
+    background-color: var(--primary-white); /* Solid White Background */
     padding: 10px 15px;
     border-radius: 5px;
     z-index: 10;
@@ -543,6 +535,7 @@ body.brands-page-background {
     max-width: 1100px;
     margin: 0 auto;
     text-align: center;
+    align-items: flex-start;
 }
 
 .med-card {
@@ -550,10 +543,9 @@ body.brands-page-background {
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    /* For image and text alignment */
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start; 
     height: 100%;
 }
 
@@ -563,6 +555,7 @@ body.brands-page-background {
     object-fit: contain;
     border-radius: 5px;
     margin-bottom: 10px;
+    align-self: center;
 }
 
 .med-card p {
