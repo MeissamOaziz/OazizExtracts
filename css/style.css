@@ -485,7 +485,6 @@ body.brands-page-background {
     color: var(--primary-black);    
     flex-shrink: 0;
     
-    /* ADDED: Display as block to give it definite width/height and allow text styling */
     display: block;
 }
 
@@ -495,17 +494,15 @@ body.brands-page-background {
     font-weight: 700;
     color: var(--primary-black);
     margin-bottom: 5px;
-    display: block; /* Ensures text takes its own line */
+    display: block; 
 }
-
-/* Removed old .product-availability-badge p style since we use .badge-text now */
 
 .product-availability-badge img {
     /* INCREASED SIZE AND ALIGNED LEFT */
     height: auto;
-    width: 150px; /* Adjust size (approx. 4x the original 25px height) */
-    display: block; /* Treat logo as block to center if needed, but here we keep left-aligned */
-    margin: 5px 0 0 0; /* Space between text and logo */
+    width: 150px; 
+    display: block; 
+    margin: 5px 0 0 0; 
     border-radius: 0;
     object-fit: contain;
     border: none;
@@ -513,17 +510,17 @@ body.brands-page-background {
 }
 
 
-/* --- NEW: Medical Product Showcase Section - MODIFIED FOR ORANGE BACKGROUND --- */
+/* --- NEW: Medical Product Showcase Section - MODIFIED FOR ALIGNMENT --- */
 
 .product-showcase-medical {
-    background-color: var(--primary-orange); /* CHANGE 1: Orange background */
+    background-color: var(--primary-orange); 
     padding: 60px 20px;
     text-align: center;
 }
 
 .section-title-dark {
     font-size: 2.5rem;
-    color: var(--primary-white); /* CHANGE 2: White title text */
+    color: var(--primary-white); 
     margin-bottom: 40px;
 }
 
@@ -539,7 +536,7 @@ body.brands-page-background {
 .med-retailer-link img {
     height: 40px;    
     max-width: 150px;
-    filter: none; /* Removed grayscale filter */
+    filter: none; 
     opacity: 1; 
     transition: all 0.3s ease;
 }
@@ -555,24 +552,42 @@ body.brands-page-background {
 }
 
 .med-card {
-    background-color: var(--primary-black); /* Black card background */
+    background-color: var(--primary-black); 
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    
+    /* FIX 1: Enable Flexbox for vertical alignment */
+    display: flex;
+    flex-direction: column;
+    min-height: 350px; /* Ensure a minimum height for alignment reference */
+}
+
+/* FIX 2: Added wrapper for consistent image height */
+.med-image-wrapper {
+    height: 200px; /* Fixed height for consistent image area */
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    width: 100%;
 }
 
 .med-card img {
+    /* Set image to fit within the new wrapper height consistently */
     width: 100%;
-    max-height: 200px;
+    max-height: 100%; /* Max height of the wrapper */
     object-fit: contain;
     border-radius: 5px;
-    margin-bottom: 10px;
+    margin-bottom: 10px; /* Adjusted spacing */
 }
 
 .med-card p {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--primary-white); /* White product text */
+    color: var(--primary-white); 
+    
+    /* FIX 3: Use auto margin to push the text to the bottom */
+    margin-top: auto; 
 }
 
 
