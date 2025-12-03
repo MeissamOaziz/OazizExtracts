@@ -343,10 +343,8 @@ body.brands-page-background {
 /* 2. Brand CTA / Intro Area - MODIFIED for full-width orange background */
 .brand-intro-cta {
     text-align: center;
-    padding: 30px 20px 30px; /* Adjusted padding */
+    padding: 30px 20px 30px; 
     /* Removed max-width and margin for full-width background */
-    /* max-width: 1200px; */
-    /* margin: 0 auto; */
     
     /* CHANGE 1: Set background to the primary orange color */
     background-color: var(--primary-orange); 
@@ -359,20 +357,20 @@ body.brands-page-background {
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
-    color: var(--primary-white); /* Changed to white */
+    color: var(--primary-white); 
     margin-bottom: 0;    
-    padding-bottom: 0; /* Removed bottom padding/border for seamless look */
-    border-bottom: none; /* Removed light divider */
+    padding-bottom: 0; 
+    border-bottom: none; 
 }
 .available-section {    
     display: none;    
 }
 
-/* 3. Product Showcase Grid - MODIFIED */
+/* 3. Product Showcase Grid */
 .product-showcase {
     padding: 60px 20px;    
-    max-width: 1300px; /* Retaining max-width to center the grid content */
-    margin: 0 auto; /* Retaining auto margin to center the grid content */
+    max-width: 1300px; 
+    margin: 0 auto; 
     
     /* CHANGE 3: Changed background color to transparent since .brand-intro-cta is now orange */
     background-color: transparent; 
@@ -506,17 +504,17 @@ body.brands-page-background {
 }
 
 
-/* --- NEW: Medical Product Showcase Section --- */
+/* --- NEW: Medical Product Showcase Section - MODIFIED FOR ORANGE BACKGROUND --- */
 
 .product-showcase-medical {
-    background-color: var(--primary-white); /* White background */
+    background-color: var(--primary-orange); /* CHANGE 1: Orange background */
     padding: 60px 20px;
     text-align: center;
 }
 
 .section-title-dark {
     font-size: 2.5rem;
-    color: var(--primary-black);
+    color: var(--primary-white); /* CHANGE 2: White title text */
     margin-bottom: 40px;
 }
 
@@ -532,15 +530,12 @@ body.brands-page-background {
 .med-retailer-link img {
     height: 40px;    
     max-width: 150px;
-    filter: grayscale(100%);
-    opacity: 0.7;
+    filter: none; /* CHANGE 3: Removed grayscale filter */
+    opacity: 1; /* Ensure full visibility */
     transition: all 0.3s ease;
 }
 
-.med-retailer-link:hover img {
-    filter: none;
-    opacity: 1;
-}
+/* Removed the unused .med-retailer-link:hover img style */
 
 /* Medical Product Gallery */
 .medical-product-gallery {
@@ -553,10 +548,10 @@ body.brands-page-background {
 }
 
 .med-card {
-    background-color: var(--light-gray);
+    background-color: var(--primary-black); /* CHANGE 4: Black card background */
     border-radius: 10px;
     padding: 15px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
 
 .med-card img {
@@ -570,7 +565,7 @@ body.brands-page-background {
 .med-card p {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--primary-black);
+    color: var(--primary-white); /* CHANGE 5: White product text */
 }
 
 
