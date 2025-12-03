@@ -346,10 +346,8 @@ body.brands-page-background {
     padding: 30px 20px 30px; 
     /* Removed max-width and margin for full-width background */
     
-    /* CHANGE 1: Set background to the primary orange color */
     background-color: var(--primary-orange); 
     
-    /* CHANGE 2: Set text colors for visibility on orange background */
     color: var(--primary-white); 
 }
 .brand-intro-cta h1 {
@@ -372,7 +370,6 @@ body.brands-page-background {
     max-width: 1300px; 
     margin: 0 auto; 
     
-    /* CHANGE 3: Changed background color to transparent since .brand-intro-cta is now orange */
     background-color: transparent; 
     
     color: var(--primary-white);
@@ -472,31 +469,43 @@ body.brands-page-background {
     left: 0;
 }
 
-/* FIX 2: Style for the availability badge (Centered Flow & White BG) */
+/* FIX 2: Style for the availability badge (MODIFIED) */
 .product-availability-badge {
     /* Anchored relative to .product-details, centered horizontally */
-    align-self: center; /* Centers the badge horizontally within the flex column */
-    margin-top: 20px; /* Space below the button */
+    align-self: flex-start; /* Aligns badge to the left, like the button */
+    margin-top: 20px; 
     
     background-color: var(--primary-white); /* Solid White Background */
-    padding: 10px 15px;
-    border-radius: 5px;
+    padding: 15px 20px; /* Increased padding */
+    border-radius: 10px; /* Slightly larger border-radius */
     z-index: 10;
-    text-align: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    text-align: left; /* Aligns content inside the badge to the left */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     text-decoration: none;    
     color: var(--primary-black);    
     flex-shrink: 0;
+    
+    /* ADDED: Display as block to give it definite width/height and allow text styling */
+    display: block;
 }
-.product-availability-badge p {
-    font-size: 0.8rem;
+
+/* New style for the "Disponible chez:" text */
+.product-availability-badge .badge-text {
+    font-size: 1rem;
     font-weight: 700;
     color: var(--primary-black);
     margin-bottom: 5px;
+    display: block; /* Ensures text takes its own line */
 }
+
+/* Removed old .product-availability-badge p style since we use .badge-text now */
+
 .product-availability-badge img {
-    height: 25px;    
-    width: auto;
+    /* INCREASED SIZE AND ALIGNED LEFT */
+    height: auto;
+    width: 150px; /* Adjust size (approx. 4x the original 25px height) */
+    display: block; /* Treat logo as block to center if needed, but here we keep left-aligned */
+    margin: 5px 0 0 0; /* Space between text and logo */
     border-radius: 0;
     object-fit: contain;
     border: none;
@@ -530,12 +539,10 @@ body.brands-page-background {
 .med-retailer-link img {
     height: 40px;    
     max-width: 150px;
-    filter: none; /* CHANGE 3: Removed grayscale filter */
-    opacity: 1; /* Ensure full visibility */
+    filter: none; /* Removed grayscale filter */
+    opacity: 1; 
     transition: all 0.3s ease;
 }
-
-/* Removed the unused .med-retailer-link:hover img style */
 
 /* Medical Product Gallery */
 .medical-product-gallery {
@@ -548,7 +555,7 @@ body.brands-page-background {
 }
 
 .med-card {
-    background-color: var(--primary-black); /* CHANGE 4: Black card background */
+    background-color: var(--primary-black); /* Black card background */
     border-radius: 10px;
     padding: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
@@ -565,7 +572,7 @@ body.brands-page-background {
 .med-card p {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--primary-white); /* CHANGE 5: White product text */
+    color: var(--primary-white); /* White product text */
 }
 
 
