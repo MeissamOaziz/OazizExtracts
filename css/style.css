@@ -3,58 +3,58 @@
 
 /* --- CSS Variables --- */
 :root {
-    --primary-orange: #d05826; /* Oaziz Orange */
-    --primary-black: #1e1e1e;
-    --primary-white: #ffffff;
-    --light-gray: #f4f4f4;
-    --dark-gray: #333333;
+    --primary-orange: #d05826; /* Oaziz Orange */
+    --primary-black: #1e1e1e;
+    --primary-white: #ffffff;
+    --light-gray: #f4f4f4;
+    --dark-gray: #333333;
 }
 
 /* --- General Body & Reset --- */
 *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 html {
-    scroll-behavior: smooth;
+    scroll-behavior: smooth;
 }
 
 body {
-    font-family: 'Montserrat', sans-serif;
-    color: var(--primary-black);
-    background-color: var(--primary-white);
-    line-height: 1.6;
-    padding-bottom: 90px;
+    font-family: 'Montserrat', sans-serif;
+    color: var(--primary-black);
+    background-color: var(--primary-white);
+    line-height: 1.6;
+    padding-bottom: 90px;
 }
 
 /* --- Header & Navigation --- */
 .main-header {
-    background-color: var(--primary-white);
-    padding: 20px 40px;
-    border-bottom: 1px solid #eee;
+    background-color: var(--primary-white);
+    padding: 20px 40px;
+    border-bottom: 1px solid #eee;
 }
 .main-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1600px;
-    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1600px;
+    margin: 0 auto;
 }
 .nav-left, .nav-right {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex: 1;
 }
 .nav-right { justify-content: flex-end; }
 .main-nav a {
-    text-decoration: none;
-    color: var(--primary-black);
-    font-weight: 700;
-    font-size: 1rem;
-    transition: color 0.3s ease;
+    text-decoration: none;
+    color: var(--primary-black);
+    font-weight: 700;
+    font-size: 1rem;
+    transition: color 0.3s ease;
 }
 .main-nav a:hover { color: var(--primary-orange); }
 .nav-center .logo { max-height: 100px; width: auto; }
@@ -63,16 +63,16 @@ body {
 .nav-right #google_translate_element { margin-left: 20px; }
 .goog-te-gadget { font-family: 'Montserrat', sans-serif !important; }
 .goog-te-gadget-simple {
-    background-color: transparent !important;
-    border: 2px solid var(--dark-gray) !important;
-    padding: 4px 6px !important;
-    border-radius: 20px !important;
+    background-color: transparent !important;
+    border: 2px solid var(--dark-gray) !important;
+    padding: 4px 6px !important;
+    border-radius: 20px !important;
 }
 .goog-te-gadget-simple .goog-te-menu-value span {
-    color: var(--primary-black) !important;
-    font-weight: 700 !important;
-    font-size: 1rem !important;
-    text-transform: uppercase;
+    color: var(--primary-black) !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    text-transform: uppercase;
 }
 .goog-logo-link, .goog-te-gadget-icon { display: none !important; }
 .goog-te-banner-frame { display: none !important; }
@@ -82,121 +82,121 @@ body { top: 0px !important; }
 /* --- Hero Collage Section --- */
 .hero-collage { display: flex; width: 100%; height: 60vh; overflow: hidden; }
 .collage-panel {
-    flex: 1;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-right: 2px solid var(--primary-white);
+    flex: 1;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-right: 2px solid var(--primary-white);
 }
 .collage-panel:last-child { border-right: none; }
 .rinse { background-image: url('../images/RINSE.webp'); }
 .refine { background-image: url('../images/REFINE.webp'); }
 .repeat { background-image: url('../images/REPEAT.webp'); }
 .motto-text {
-    font-size: 5rem;
-    font-weight: 900;
-    color: var(--primary-white);
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
-    text-transform: uppercase;
+    font-size: 5rem;
+    font-weight: 900;
+    color: var(--primary-white);
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
+    text-transform: uppercase;
 }
 
 /* --- Partner Carousel --- */
 @keyframes scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
 }
 .partner-carousel {
-    background-color: var(--primary-white);
-    border-top: 1px solid #eee;
-    border-bottom: 1px solid #eee;
-    padding: 25px 0;
-    overflow: hidden;
-    white-space: nowrap;
-    position: relative;
+    background-color: var(--primary-white);
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    padding: 25px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
 }
 .carousel-track {
-    display: flex;
-    align-items: center;
-    animation: scroll 40s linear infinite;
-    width: fit-content;
+    display: flex;
+    align-items: center;
+    animation: scroll 40s linear infinite;
+    width: fit-content;
 }
 .partner-carousel .carousel-track img {
-    height: 50px;
-    width: auto;
-    margin: 0 40px;
-    filter: grayscale(100%);
-    opacity: 0.7;
-    transition: filter 0.3s ease, opacity 0.3s ease;
+    height: 50px;
+    width: auto;
+    margin: 0 40px;
+    filter: grayscale(100%);
+    opacity: 0.7;
+    transition: filter 0.3s ease, opacity 0.3s ease;
 }
 .partner-carousel .carousel-track img:hover { filter: grayscale(0%); opacity: 1; }
 
 /* --- Intro Section --- */
 .intro-section {
-    text-align: center;
-    padding: 80px 20px;
-    background-color: var(--primary-orange);
-    color: var(--primary-white);
+    text-align: center;
+    padding: 80px 20px;
+    background-color: var(--primary-orange);
+    color: var(--primary-white);
 }
 .intro-section h2 {
-    color: var(--primary-white);
-    font-size: 2.5rem;
-    margin-bottom: 15px;
+    color: var(--primary-white);
+    font-size: 2.5rem;
+    margin-bottom: 15px;
 }
 .intro-subheading {
-    color: var(--primary-white);
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin-bottom: 15px;
+    color: var(--primary-white);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 15px;
 }
 .intro-section p {
-    color: var(--primary-white);
+    color: var(--primary-white);
 }
 
 /* --- Services Section --- */
 .services-section { padding: 80px 40px; }
 .services-container { display: flex; justify-content: center; gap: 20px; max-width: 1600px; margin: 0 auto; }
 .service-card {
-    flex: 1;
-    height: 400px;
-    border-radius: 10px;
-    text-decoration: none;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    flex: 1;
+    height: 400px;
+    border-radius: 10px;
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 .service-card:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
 
 .card-collage-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    z-index: 1;
 }
 .bg-line {
-    flex: 1;
-    background-size: cover;
-    background-position: center;
+    flex: 1;
+    background-size: cover;
+    background-position: center;
 }
 .service-card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.4);
-    transition: background 0.3s ease;
-    z-index: 2;
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    transition: background 0.3s ease;
+    z-index: 2;
 }
 .service-card:hover::after { background: rgba(0,0,0,0.2); }
 
@@ -211,621 +211,666 @@ body { top: 0px !important; }
 .bg-transport { background-image: url('../images/transport.webp'); }
 
 .service-title {
-    color: var(--primary-white);
-    font-size: 2rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    text-align: center;
-    z-index: 3;
-    padding: 20px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    color: var(--primary-white);
+    font-size: 2rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-align: center;
+    z-index: 3;
+    padding: 20px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
 /* --- Brands Showcase Page Styles --- */
+body.brands-page-background {
+    background-image: url('../images/oasis-1631145.webp');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--primary-white);
+}
+
 .brands-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 30px;
-    padding: 60px 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    padding: 60px 20px;
 }
 
 .brand-card {
-    position: relative;
-    text-align: center;
-    text-decoration: none;
-    color: var(--primary-white);
-    overflow: hidden;
-    padding: 20px;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    background-color: rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between; 
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    color: var(--primary-white);
+    overflow: hidden;
+    padding: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background-color: rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;    
 }
 
 .brand-logo-wrapper {
-    height: 195px;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    height: 195px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .brand-card:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 25px rgba(0,0,0,0.3);
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(0,0,0,0.3);
 }
 
 .brand-card img {
-    max-height: 195px;
-    width: auto;
-    max-width: 90%;
-    filter: grayscale(100%) brightness(0.9) contrast(1.2);
-    opacity: 0.8;
-    transition: all 0.4s ease;
+    max-height: 195px;
+    width: auto;
+    max-width: 90%;
+    filter: grayscale(100%) brightness(0.9) contrast(1.2);
+    opacity: 0.8;
+    transition: all 0.4s ease;
 }
 
 .brand-card:hover img {
-    filter: grayscale(0%) brightness(1) contrast(1);
-    opacity: 1;
+    filter: grayscale(0%) brightness(1) contrast(1);
+    opacity: 1;
 }
 
 .brand-info {
-    padding: 10px;
+    padding: 10px;
 }
 
 .brand-info h3 {
-    font-size: 2rem;
-    text-transform: uppercase;
-    margin: 0;
-    text-shadow: 1px 1px 3px #000;
+    font-size: 2rem;
+    text-transform: uppercase;
+    margin: 0;
+    text-shadow: 1px 1px 3px #000;
 }
 
 .brand-info p {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--primary-orange);
-    text-transform: uppercase;
-    text-shadow: 1px 1px 3px #000;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-orange);
+    text-transform: uppercase;
+    text-shadow: 1px 1px 3px #000;
 }
 
 /* --- Individual Brand Page & Other Content Pages --- */
 .page-container { max-width: 1200px; margin: 0 auto; }
-.page-container.with-padding { 
-    padding: 0 20px;
-    text-align: center;
-} 
+.page-container.with-padding {    
+    padding: 0 20px;
+    text-align: center;
+}    
 
 /* --- Redesigned CannonFire Page Showcase (cannonfire.html) --- */
 
 /* 1. Hero Section: Make shorter and solid BLACK */
 .brand-hero.white-bg-hero {
-    background-image: none !important;
-    background-color: var(--primary-black); 
-    border-bottom: 3px solid var(--primary-orange); 
-    height: 25vh; 
+    background-image: none !important;
+    background-color: var(--primary-black);    
+    border-bottom: 3px solid var(--primary-orange);    
+    height: 25vh;    
 }
 .brand-hero.white-bg-hero::after {
-    content: none;
+    content: none;
 }
-.brand-hero { 
-    background-size: cover; 
-    background-position: center; 
-    position: relative;
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    border-bottom: 5px solid var(--primary-orange); 
+.brand-hero {    
+    background-size: cover;    
+    background-position: center;    
+    position: relative;
+    display: flex;    
+    justify-content: center;    
+    align-items: center;    
+    border-bottom: 5px solid var(--primary-orange);    
 }
 .brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
 
-/* FIX 1: Reduced Logo Size and prevented overlap */
-.brand-hero-logo { 
-    max-width: 150px; 
-    width: 80%; 
-    position: relative; 
-    z-index: 2; 
-    height: auto;
-    margin-top: 10px; 
+/* NEW: Oval Container for the Logo */
+.brand-logo-container {
+    background-color: var(--primary-white);
+    padding: 20px 40px;
+    border-radius: 50% / 30%; /* Creates the oval shape */
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    margin-top: 20px; /* Adjust spacing from top of hero if needed */
 }
 
-/* 2. Brand CTA / Intro Area - Full Width Fix */
+/* FIX 1: Reduced Logo Size and prevented overlap */
+.brand-hero-logo {    
+    max-width: 180px; /* Reduced size to fit nicely in the oval */
+    width: 100%;    
+    position: relative;    
+    z-index: 3; /* Ensure it's above the container */
+    height: auto;
+    margin: 0; /* Remove previous margins */
+}
+
+/* 2. Brand CTA / Intro Area - MODIFIED for full-width orange background */
 .brand-intro-cta {
-    text-align: center;
-    padding: 30px 0 20px 0; 
-    max-width: none; 
-    margin: 0; 
-    background-color: var(--primary-black); 
-    color: var(--primary-white); 
+    text-align: center;
+    padding: 30px 20px 30px; 
+    /* Removed max-width and margin for full-width background */
+    
+    background-color: var(--primary-orange); 
+    
+    color: var(--primary-white); 
 }
 .brand-intro-cta h1 {
-    display: none; 
+    display: none;    
 }
 .brand-intro-cta p {
-    font-size: 1.2rem;
-    color: var(--light-gray); 
-    margin-bottom: 0; 
-    padding: 0 40px 20px 40px; 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+    font-size: 1.2rem;
+    color: var(--primary-white); 
+    margin-bottom: 0;    
+    padding-bottom: 0; 
+    border-bottom: none; 
 }
-.available-section { 
-    display: none; 
+.available-section {    
+    display: none;    
 }
 
-/* 3. Product Showcase Grid - Set background to Oaziz Orange */
+/* 3. Product Showcase Grid */
 .product-showcase {
-    padding: 60px 20px; 
-    max-width: 1300px;
-    margin: 0 auto;
-    background-color: var(--primary-orange); 
-    color: var(--primary-white);
+    padding: 60px 20px;    
+    max-width: 1300px; 
+    margin: 0 auto; 
+    
+    background-color: transparent; 
+    
+    color: var(--primary-white);
 }
 
 .product-showcase-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
-    gap: 40px;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));    
+    gap: 40px;
+    justify-content: center;
 }
 
 .product-grid-item {
-    display: flex;
-    flex-direction: row; 
-    border-radius: 10px;
-    overflow: hidden;
-    background-color: var(--light-gray);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: row;    
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: var(--light-gray);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
 .product-image-container {
-    width: 45%; 
-    height: auto;
-    min-height: 400px;
-    overflow: hidden;
-    position: relative;
+    width: 45%;    
+    height: auto;
+    min-height: 400px;
+    overflow: hidden;
+    position: relative;
 }
 
 .product-grid-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.4s ease;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s ease;
 }
 
 .product-grid-item:hover img {
-    transform: scale(1.05);
+    transform: scale(1.05);
 }
 
 .product-details {
-    width: 55%; 
-    padding: 30px;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    color: var(--primary-white); 
-    position: relative; 
+    width: 55%;    
+    padding: 30px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: var(--primary-white);    
+    position: relative;    
 }
 
 /* Styles for the dark product details section (Black/Orange/White) */
 .product-details.dark-bg-details {
-    background-color: var(--primary-black);
-    color: var(--primary-white);
+    background-color: var(--primary-black);
+    color: var(--primary-white);
 }
 
 .product-details.dark-bg-details h3 {
-    color: var(--primary-orange);
+    color: var(--primary-orange);
 }
 .product-details.dark-bg-details ul li {
-    color: var(--light-gray);
+    color: var(--light-gray);
 }
 .product-details.dark-bg-details ul li::before {
-    color: var(--primary-orange);
+    color: var(--primary-orange);
 }
 .cta-light {
-    background-color: var(--primary-orange) !important;
-    color: var(--primary-white) !important;
+    background-color: var(--primary-orange) !important;
+    color: var(--primary-white) !important;
 }
 
 .product-details h3 {
-    font-size: 1.8rem;
-    color: var(--primary-orange);
-    margin-bottom: 10px;
+    font-size: 1.8rem;
+    color: var(--primary-orange);
+    margin-bottom: 10px;
 }
 
 .product-details ul {
-    list-style: none;
-    padding: 0;
-    margin-top: 15px;
+    list-style: none;
+    padding: 0;
+    margin-top: 15px;
 }
 
 .product-details ul li {
-    font-size: 1rem;
-    margin-bottom: 8px;
-    padding-left: 20px;
-    position: relative;
+    font-size: 1rem;
+    margin-bottom: 8px;
+    padding-left: 20px;
+    position: relative;
 }
 
 .product-details ul li::before {
-    content: '→';
-    color: var(--primary-orange);
-    font-weight: 900;
-    position: absolute;
-    left: 0;
+    content: '→';
+    color: var(--primary-orange);
+    font-weight: 900;
+    position: absolute;
+    left: 0;
 }
 
-/* FIX 2: Style for the availability badge (Centered Flow & White BG) */
+/* New: Style to manage the CTA button and the Availability Badge */
 .product-cta-group {
     display: flex;
-    flex-direction: column;
-    align-items: center; /* Centers items horizontally */
+    flex-direction: column; /* Stack the button and the badge vertically */
+    gap: 15px; /* Spacing between the button and the badge */
     margin-top: 20px;
+    align-items: flex-start; /* Aligns items to the left */
 }
+
+/* Update: To ensure the CTA button styles are properly inherited */
+.product-cta-group .contact-float-btn {
+    align-self: flex-start; /* Ensures button aligns left */
+}
+
+/* FIX 2: Style for the availability badge (MODIFIED) */
 .product-availability-badge {
-    position: relative; 
-    margin-top: 10px; /* Space below the button */
-    
-    background-color: var(--primary-white); /* Solid White Background */
-    padding: 10px 15px;
-    border-radius: 5px;
-    z-index: 10;
-    text-align: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    text-decoration: none; 
-    color: var(--primary-black); 
-    flex-shrink: 0;
+    /* Anchored relative to .product-details, centered horizontally */
+    align-self: flex-start; /* Aligns badge to the left, like the button */
+    margin-top: 20px; 
+    
+    background-color: var(--primary-white); /* Solid White Background */
+    padding: 15px 20px; /* Increased padding */
+    border-radius: 10px; /* Slightly larger border-radius */
+    z-index: 10;
+    text-align: left; /* Aligns content inside the badge to the left */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    text-decoration: none;    
+    color: var(--primary-black);    
+    flex-shrink: 0;
+    
+    display: block;
 }
-.product-availability-badge p {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--primary-black);
-    margin-bottom: 5px;
+
+/* New style for the "Disponible chez:" text - targets the <p> tag in the HTML */
+.product-availability-badge p { 
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-black);
+    margin-bottom: 5px;
+    display: block; 
 }
+
 .product-availability-badge img {
-    height: 25px; 
-    width: auto;
-    border-radius: 0;
-    object-fit: contain;
-    border: none;
-    box-shadow: none;
+    /* INCREASED SIZE AND ALIGNED LEFT */
+    height: auto;
+    width: 150px; 
+    display: block; 
+    margin: 5px 0 0 0; 
+    border-radius: 0;
+    object-fit: contain;
+    border: none;
+    box-shadow: none;
 }
 
 
-/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
+/* --- NEW: Medical Product Showcase Section - MODIFIED FOR ALIGNMENT --- */
 
 .product-showcase-medical {
-    background-color: var(--primary-white); 
-    padding: 60px 0; 
-    text-align: center;
+    background-color: var(--primary-orange); 
+    padding: 60px 20px;
+    text-align: center;
 }
 
 .section-title-dark {
-    font-size: 2.5rem;
-    color: var(--primary-black);
-    margin-bottom: 40px;
+    font-size: 2.5rem;
+    color: var(--primary-white); 
+    margin-bottom: 40px;
 }
 
 /* Retailers Bar */
 .medical-retailers-bar {
-    display: flex;
-    justify-content: center;
-    gap: 30px;
-    margin-bottom: 40px;
-    flex-wrap: wrap;
-    align-items: center;
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
 }
 
 .med-retailer-link img {
-    height: 40px; 
-    max-width: 150px;
-    filter: grayscale(100%);
-    opacity: 0.7;
-    transition: all 0.3s ease;
-}
-
-.med-retailer-link:hover img {
-    filter: none;
-    opacity: 1;
+    height: 40px;    
+    max-width: 150px;
+    filter: none; 
+    opacity: 1; 
+    transition: all 0.3s ease;
 }
 
 /* Medical Product Gallery */
 .medical-product-gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 25px;
-    max-width: 1100px;
-    margin: 0 auto;
-    text-align: center;
-    align-items: stretch; /* Ensures cards are the same height */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+    max-width: 1100px;
+    margin: 0 auto;
+    text-align: center;
 }
 
 .med-card {
-    background-color: var(--light-gray);
-    border-radius: 10px;
-    padding: 15px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start; 
-    height: 100%;
+    background-color: var(--primary-black); 
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    
+    /* FIX 1: Enable Flexbox for vertical alignment */
+    display: flex;
+    flex-direction: column;
+    min-height: 350px; /* Ensure a minimum height for alignment reference */
+}
+
+/* FIX 2: Added wrapper for consistent image height */
+.med-image-wrapper {
+    height: 200px; /* Fixed height for consistent image area */
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    width: 100%;
 }
 
 .med-card img {
-    width: 100%;
-    max-height: 200px;
-    object-fit: contain;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    align-self: center;
-    /* FIX: Set minimum image box height to align text */
-    min-height: 150px; 
+    /* Set image to fit within the new wrapper height consistently */
+    width: 100%;
+    max-height: 100%; /* Max height of the wrapper */
+    object-fit: contain;
+    border-radius: 5px;
+    margin-bottom: 10px; /* Adjusted spacing */
 }
 
 .med-card p {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--primary-black);
-    /* Guarantees alignment of text blocks at the bottom */
-    margin-top: auto; 
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary-white); 
+    
+    /* FIX 3: Use auto margin to push the text to the bottom */
+    margin-top: auto; 
 }
 
 
 /* --- About Us Page Styles --- */
 .page-header {
-    text-align: center;
-    margin: 40px 0;
-    font-size: 3rem;
-    color: var(--primary-black);
-    border-bottom: 3px solid var(--primary-orange);
-    display: inline-block;
-    padding-bottom: 10px;
+    text-align: center;
+    margin: 40px 0;
+    font-size: 3rem;
+    color: var(--primary-black);
+    border-bottom: 3px solid var(--primary-orange);
+    display: inline-block;
+    padding-bottom: 10px;
 }
 
 .content-section.white-bg {
-    background-color: var(--primary-white);
-    padding: 60px 20px;
+    background-color: var(--primary-white);
+    padding: 60px 20px;
 }
 .content-section.dark-bg {
-    background-color: var(--primary-black);
-    padding: 60px 20px;
+    background-color: var(--primary-black);
+    padding: 60px 20px;
 }
 
 .content-section h2 {
-    font-size: 2.5rem;
-    margin-bottom: 20px;
-    color: var(--primary-black);
-    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: var(--primary-black);
+    text-align: center;
 }
 .content-section .title-light {
-    color: var(--primary-white);
+    color: var(--primary-white);
 }
 .content-section .text-light {
-    color: var(--light-gray);
-    text-align: center;
-    max-width: 800px;
-    margin: 0 auto 40px auto;
+    color: var(--light-gray);
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto 40px auto;
 }
 .team-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-    color: var(--primary-white);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    color: var(--primary-white);
 }
 .team-member {
-    text-align: center;
+    text-align: center;
 }
 .team-member h3 {
-    margin-bottom: 5px;
-    font-size: 1.4rem;
+    margin-bottom: 5px;
+    font-size: 1.4rem;
 }
 .team-member p {
-    font-style: italic;
-    color: var(--primary-orange);
-    font-size: 1rem;
-    font-weight: 700;
+    font-style: italic;
+    color: var(--primary-orange);
+    font-size: 1rem;
+    font-weight: 700;
 }
 
 /* --- Product Page Specific Styles --- */
 .product-description {
-    max-width: 800px;
-    margin: 0 auto 40px auto;
-    text-align: center;
-    font-size: 1.1rem;
+    max-width: 800px;
+    margin: 0 auto 40px auto;
+    text-align: center;
+    font-size: 1.1rem;
 }
 .product-subsection {
-    margin-top: 50px;
+    margin-top: 50px;
 }
 .product-subsection h2 {
-    text-align: center;
-    font-size: 2rem;
-    margin-bottom: 30px;
-    border-bottom: 2px solid var(--light-gray);
-    padding-bottom: 10px;
-    display: inline-block;
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--light-gray);
+    padding-bottom: 10px;
+    display: inline-block;
 }
 .product-subsection-container {
-    text-align: center;
+    text-align: center;
 }
 .product-gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
 }
 .gallery-item img {
-    width: 100%;
-    height: 300px;
-    object-fit: cover;
-    border-radius: 10px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 .contact-lead-in {
-    text-align: center;
-    font-size: 1.5rem;
-    margin: 0 auto 40px auto;
-    max-width: 800px;
-    color: var(--primary-white);
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 0 auto 40px auto;
+    max-width: 800px;
+    color: var(--primary-white);
 }
 
 /* --- Contact Form Styles --- */
 .contact-section {
-    padding: 80px 20px;
-    background-color: var(--primary-black);
+    padding: 80px 20px;
+    background-color: var(--primary-black);
 }
 .contact-section .section-title {
-    text-align: center;
-    color: var(--primary-white);
-    font-size: 2.5rem;
-    margin-bottom: 40px;
+    text-align: center;
+    color: var(--primary-white);
+    font-size: 2.5rem;
+    margin-bottom: 40px;
 }
 .contact-section form {
-    max-width: 700px;
-    margin: 0 auto;
+    max-width: 700px;
+    margin: 0 auto;
 }
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 20px;
 }
 .form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--light-gray);
-    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+    color: var(--light-gray);
+    font-weight: 700;
 }
 .form-group input, .form-group select, .form-group textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--dark-gray);
-    border-radius: 5px;
-    background-color: #2a2a2a;
-    color: var(--primary-white);
-    font-size: 1rem;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--dark-gray);
+    border-radius: 5px;
+    background-color: #2a2a2a;
+    color: var(--primary-white);
+    font-size: 1rem;
 }
 .submit-btn {
-    display: block;
-    width: 100%;
-    padding: 15px;
-    border: none;
-    border-radius: 5px;
-    background-color: var(--primary-orange);
-    color: var(--primary-white);
-    font-size: 1.2rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
+    display: block;
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--primary-orange);
+    color: var(--primary-white);
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
 }
 .submit-btn:hover {
-    background-color: #e67e22;
+    background-color: #e67e22;
 }
 
 /* --- FINAL UPDATED Fixed Bottom Banner & Floating Button Styles --- */
 .contact-float-btn {
-    background-color: var(--primary-orange);
-    color: var(--primary-white);
-    padding: 8px 18px;
-    border-radius: 50px;
-    text-decoration: none;
-    font-weight: 700;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease, background-color 0.2s ease;
-    white-space: nowrap;
-    font-size: 0.9rem;
+    background-color: var(--primary-orange);
+    color: var(--primary-white);
+    padding: 8px 18px;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    white-space: nowrap;
+    font-size: 0.9rem;
 }
 
 .contact-float-btn:hover {
-    background-color: #e67e22;
-    transform: scale(1.05);
+    background-color: #e67e22;
+    transform: scale(1.05);
 }
 
 .fixed-bottom-banner {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: rgba(208, 88, 38, 0.25); 
-    backdrop-filter: blur(10px);
-    padding: 8px 25px;
-    z-index: 1001;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(208, 88, 38, 0.25);    
+    backdrop-filter: blur(10px);
+    padding: 8px 25px;
+    z-index: 1001;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .banner-left, .banner-contact {
-    flex-shrink: 0;
+    flex-shrink: 0;
 }
 
 .banner-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
 
 .banner-logo-container {
-    background-color: rgba(255,255,255,0.9);
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--primary-orange);
-    transition: transform 0.3s ease;
+    background-color: rgba(255,255,255,0.9);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--primary-orange);
+    transition: transform 0.3s ease;
 }
 .banner-logo-container:hover {
-    transform: scale(1.1);
+    transform: scale(1.1);
 }
 .banner-logo-container img {
-    height: 35px;
-    width: auto;
+    height: 35px;
+    width: auto;
 }
 
 .banner-cta-text {
-    font-weight: 700;
-    color: var(--primary-white);
-    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-white);
+    font-size: 1rem;
 }
 
 .banner-items-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 25px;
-    flex-grow: 1;
-    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 25px;
+    flex-grow: 1;
+    overflow-x: auto;
 }
 
 .banner-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    color: var(--primary-white);
-    width: 65px;
-    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--primary-white);
+    width: 65px;
+    flex-shrink: 0;
 }
 
 .banner-item img {
-    width: 40px; 
-    height: 40px;
-    border-radius: 50%;
-    border: 1px solid var(--primary-white);
-    object-fit: cover;
-    transition: transform 0.2s ease;
+    width: 40px;    
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--primary-white);
+    object-fit: cover;
+    transition: transform 0.2s ease;
 }
 
 .banner-item:hover img {
-    transform: scale(1.1);
+    transform: scale(1.1);
 }
 
 .banner-item .item-title {
-    margin-top: 5px;
-    font-weight: 700;
-    font-size: 0.7rem;
-    white-space: nowrap;
+    margin-top: 5px;
+    font-weight: 700;
+    font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 /* --- Footer --- */
@@ -835,49 +880,86 @@ body { top: 0px !important; }
 
 /* --- Responsive Design --- */
 @media (max-width: 1024px) {
-    .product-grid-item {
-        flex-direction: column; 
+    .product-grid-item {
+        flex-direction: column;    
+    }
+    .product-image-container, .product-details {
+        width: 100%;
+        min-height: auto;
+    }
+    /* ADD: Adjust layout for the CTA group on smaller screens */
+    .product-cta-group {
+        align-items: center; /* Center items when stacked vertically on smaller screens */
+        gap: 20px;
     }
-    .product-image-container, .product-details {
-        width: 100%;
-        min-height: auto;
+    .product-details {
+        text-align: center; /* Center details text on vertical layout */
     }
-    .motto-text { font-size: 3rem; }
-    .services-container { flex-direction: column; align-items: center; }
-    .service-card { width: 80%; max-width: 500px; }
-    .main-nav { flex-wrap: wrap; justify-content: center; gap: 20px; }
-    .nav-left, .nav-right { justify-content: center; }
-    .brands-grid { grid-template-columns: repeat(2, 1fr); }
-    .banner-cta-text { display: none; }
+    .product-details ul {
+        text-align: left; /* Keep list items left-aligned */
+        max-width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .product-details h3 {
+        text-align: center;
+    }
+    .product-cta-group .contact-float-btn,
+    .product-availability-badge {
+        align-self: center; /* Center the button and badge */
+    }
+    .motto-text { font-size: 3rem; }
+    .services-container { flex-direction: column; align-items: center; }
+    .service-card { width: 80%; max-width: 500px; }
+    .main-nav { flex-wrap: wrap; justify-content: center; gap: 20px; }
+    .nav-left, .nav-right { justify-content: center; }
+    .brands-grid { grid-template-columns: repeat(2, 1fr); }
+    .banner-cta-text { display: none; }
 }
 @media (max-width: 768px) {
-    .product-grid-item {
-        flex-direction: column; 
+    .product-grid-item {
+        flex-direction: column;    
+    }
+    .product-image-container, .product-details {
+        width: 100%;
+        min-height: auto;
+    }
+    .product-grid-item img {
+        height: 300px;    
+    }
+    /* ADD: Ensure text and badge is centered for mobile */
+    .product-cta-group {
+        align-items: center;
     }
-    .product-image-container, .product-details {
-        width: 100%;
-        min-height: auto;
+    .product-details {
+        text-align: center;
     }
-    .product-grid-item img {
-        height: 300px; 
+    .product-details h3 {
+        text-align: center;
     }
-    body {
-        padding-bottom: 80px;
+    .product-details ul {
+        text-align: left; /* Keep list items left-aligned */
+        max-width: 80%;
+        margin-left: auto;
+        margin-right: auto;
     }
-    .hero-collage { flex-direction: column; height: auto; }
-    .collage-panel { min-height: 200px; border-right: none; border-bottom: 2px solid var(--primary-white); }
-    .motto-text { font-size: 2.5rem; }
-    .main-header { padding: 20px; }
-    .nav-left, .nav-right { width: 100%; justify-content: space-around; }
-    .nav-center { order: -1; width: 100%; text-align: center; margin-bottom: 20px; }
-    .brand-hero { height: 50vh; }
-    .brand-tagline { font-size: 1.4rem; }
-    .partner-carousel .carousel-track img { height: 40px; margin: 0 25px; }
-    .brands-grid { grid-template-columns: 1fr; }
-    .services-container { flex-direction: column; }
-    .service-card { width: 90%; }
-    .product-gallery { grid-template-columns: 1fr; }
-    .banner-logo-container { display: none; }
-    .contact-float-btn { display: none; }
-    .banner-items-container { justify-content: center; }
+    body {
+        padding-bottom: 80px;
+    }
+    .hero-collage { flex-direction: column; height: auto; }
+    .collage-panel { min-height: 200px; border-right: none; border-bottom: 2px solid var(--primary-white); }
+    .motto-text { font-size: 2.5rem; }
+    .main-header { padding: 20px; }
+    .nav-left, .nav-right { width: 100%; justify-content: space-around; }
+    .nav-center { order: -1; width: 100%; text-align: center; margin-bottom: 20px; }
+    .brand-hero { height: 50vh; }
+    .brand-tagline { font-size: 1.4rem; }
+    .partner-carousel .carousel-track img { height: 40px; margin: 0 25px; }
+    .brands-grid { grid-template-columns: 1fr; }
+    .services-container { flex-direction: column; }
+    .service-card { width: 90%; }
+    .product-gallery { grid-template-columns: 1fr; }
+    .banner-logo-container { display: none; }
+    .contact-float-btn { display: none; }
+    .banner-items-container { justify-content: center; }
 }
