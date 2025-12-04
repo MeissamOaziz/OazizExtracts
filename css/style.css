@@ -105,8 +105,8 @@ body { top: 0px !important; }
 
 /* --- Partner Carousel --- */
 @keyframes scroll {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 .partner-carousel {
     background-color: var(--primary-white);
@@ -222,14 +222,6 @@ body { top: 0px !important; }
 }
 
 /* --- Brands Showcase Page Styles --- */
-body.brands-page-background {
-    background-image: url('../images/oasis-1631145.webp');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: var(--primary-white);
-}
-
 .brands-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -251,7 +243,7 @@ body.brands-page-background {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;    
+    justify-content: space-between; 
 }
 
 .brand-logo-wrapper {
@@ -302,89 +294,86 @@ body.brands-page-background {
 
 /* --- Individual Brand Page & Other Content Pages --- */
 .page-container { max-width: 1200px; margin: 0 auto; }
-.page-container.with-padding {    
+.page-container.with-padding { 
     padding: 0 20px;
     text-align: center;
-}    
+} 
 
 /* --- Redesigned CannonFire Page Showcase (cannonfire.html) --- */
 
 /* 1. Hero Section: Make shorter and solid BLACK */
 .brand-hero.white-bg-hero {
     background-image: none !important;
-    background-color: var(--primary-black);    
-    border-bottom: 3px solid var(--primary-orange);    
-    height: 25vh;    
+    background-color: var(--primary-black); 
+    border-bottom: 3px solid var(--primary-orange); 
+    height: 25vh; 
 }
 .brand-hero.white-bg-hero::after {
     content: none;
 }
-.brand-hero {    
-    background-size: cover;    
-    background-position: center;    
+.brand-hero { 
+    background-size: cover; 
+    background-position: center; 
     position: relative;
-    display: flex;    
-    justify-content: center;    
-    align-items: center;    
-    border-bottom: 5px solid var(--primary-orange);    
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    border-bottom: 5px solid var(--primary-orange); 
 }
 .brand-hero::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); }
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
-.brand-hero-logo {    
-    max-width: 180px; /* Further Reduced size to ensure no overlap */
-    width: 80%;    
-    position: relative;    
-    z-index: 2;    
+.brand-hero-logo { 
+    max-width: 150px; 
+    width: 80%; 
+    position: relative; 
+    z-index: 2; 
     height: auto;
-    margin-top: 20px; /* Pushes logo down slightly */
+    margin-top: 10px; 
 }
 
-/* 2. Brand CTA / Intro Area - MODIFIED for full-width orange background */
+/* 2. Brand CTA / Intro Area - Full Width Fix */
 .brand-intro-cta {
     text-align: center;
-    padding: 30px 20px 30px; 
-    /* Removed max-width and margin for full-width background */
-    
-    background-color: var(--primary-orange); 
-    
+    padding: 30px 0 20px 0; 
+    max-width: none; 
+    margin: 0; 
+    background-color: var(--primary-black); 
     color: var(--primary-white); 
 }
 .brand-intro-cta h1 {
-    display: none;    
+    display: none; 
 }
 .brand-intro-cta p {
     font-size: 1.2rem;
-    color: var(--primary-white); 
-    margin-bottom: 0;    
-    padding-bottom: 0; 
-    border-bottom: none; 
+    color: var(--light-gray); 
+    margin-bottom: 0; 
+    padding: 0 40px 20px 40px; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
 }
-.available-section {    
-    display: none;    
+.available-section { 
+    display: none; 
 }
 
-/* 3. Product Showcase Grid */
+/* 3. Product Showcase Grid - Set background to Oaziz Orange */
 .product-showcase {
-    padding: 60px 20px;    
-    max-width: 1300px; 
-    margin: 0 auto; 
-    
-    background-color: transparent; 
-    
+    padding: 60px 20px; 
+    max-width: 1300px;
+    margin: 0 auto;
+    background-color: var(--primary-orange); 
     color: var(--primary-white);
 }
 
 .product-showcase-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));    
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
     gap: 40px;
     justify-content: center;
 }
 
 .product-grid-item {
     display: flex;
-    flex-direction: row;    
+    flex-direction: row; 
     border-radius: 10px;
     overflow: hidden;
     background-color: var(--light-gray);
@@ -392,7 +381,7 @@ body.brands-page-background {
 }
 
 .product-image-container {
-    width: 45%;    
+    width: 45%; 
     height: auto;
     min-height: 400px;
     overflow: hidden;
@@ -412,14 +401,14 @@ body.brands-page-background {
 }
 
 .product-details {
-    width: 55%;    
+    width: 55%; 
     padding: 30px;
     text-align: left;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    color: var(--primary-white);    
-    position: relative;    
+    color: var(--primary-white); 
+    position: relative; 
 }
 
 /* Styles for the dark product details section (Black/Orange/White) */
@@ -469,40 +458,36 @@ body.brands-page-background {
     left: 0;
 }
 
-/* FIX 2: Style for the availability badge (MODIFIED) */
+/* FIX 2: Style for the availability badge (Centered Flow & White BG) */
+.product-cta-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centers items horizontally */
+    margin-top: 20px;
+}
 .product-availability-badge {
-    /* Anchored relative to .product-details, centered horizontally */
-    align-self: flex-start; /* Aligns badge to the left, like the button */
-    margin-top: 20px; 
+    position: relative; 
+    margin-top: 10px; /* Space below the button */
     
     background-color: var(--primary-white); /* Solid White Background */
-    padding: 15px 20px; /* Increased padding */
-    border-radius: 10px; /* Slightly larger border-radius */
+    padding: 10px 15px;
+    border-radius: 5px;
     z-index: 10;
-    text-align: left; /* Aligns content inside the badge to the left */
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    text-decoration: none;    
-    color: var(--primary-black);    
+    text-align: center;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    text-decoration: none; 
+    color: var(--primary-black); 
     flex-shrink: 0;
-    
-    display: block;
 }
-
-/* New style for the "Disponible chez:" text */
-.product-availability-badge .badge-text {
-    font-size: 1rem;
+.product-availability-badge p {
+    font-size: 0.8rem;
     font-weight: 700;
     color: var(--primary-black);
     margin-bottom: 5px;
-    display: block; 
 }
-
 .product-availability-badge img {
-    /* INCREASED SIZE AND ALIGNED LEFT */
-    height: auto;
-    width: 150px; 
-    display: block; 
-    margin: 5px 0 0 0; 
+    height: 25px; 
+    width: auto;
     border-radius: 0;
     object-fit: contain;
     border: none;
@@ -510,17 +495,17 @@ body.brands-page-background {
 }
 
 
-/* --- NEW: Medical Product Showcase Section - MODIFIED FOR ALIGNMENT --- */
+/* --- NEW MEDICAL PRODUCT SHOWCASE STYLES --- */
 
 .product-showcase-medical {
-    background-color: var(--primary-orange); 
-    padding: 60px 20px;
+    background-color: var(--primary-white); 
+    padding: 60px 0; 
     text-align: center;
 }
 
 .section-title-dark {
     font-size: 2.5rem;
-    color: var(--primary-white); 
+    color: var(--primary-black);
     margin-bottom: 40px;
 }
 
@@ -531,14 +516,20 @@ body.brands-page-background {
     gap: 30px;
     margin-bottom: 40px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .med-retailer-link img {
-    height: 40px;    
+    height: 40px; 
     max-width: 150px;
-    filter: none; 
-    opacity: 1; 
+    filter: grayscale(100%);
+    opacity: 0.7;
     transition: all 0.3s ease;
+}
+
+.med-retailer-link:hover img {
+    filter: none;
+    opacity: 1;
 }
 
 /* Medical Product Gallery */
@@ -549,44 +540,36 @@ body.brands-page-background {
     max-width: 1100px;
     margin: 0 auto;
     text-align: center;
+    align-items: stretch; /* Ensures cards are the same height */
 }
 
 .med-card {
-    background-color: var(--primary-black); 
+    background-color: var(--light-gray);
     border-radius: 10px;
     padding: 15px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    
-    /* FIX 1: Enable Flexbox for vertical alignment */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     display: flex;
     flex-direction: column;
-    min-height: 350px; /* Ensure a minimum height for alignment reference */
-}
-
-/* FIX 2: Added wrapper for consistent image height */
-.med-image-wrapper {
-    height: 200px; /* Fixed height for consistent image area */
-    display: flex; 
-    justify-content: center;
-    align-items: center;
-    width: 100%;
+    justify-content: flex-start; 
+    height: 100%;
 }
 
 .med-card img {
-    /* Set image to fit within the new wrapper height consistently */
     width: 100%;
-    max-height: 100%; /* Max height of the wrapper */
+    max-height: 200px;
     object-fit: contain;
     border-radius: 5px;
-    margin-bottom: 10px; /* Adjusted spacing */
+    margin-bottom: 10px;
+    align-self: center;
+    /* FIX: Set minimum image box height to align text */
+    min-height: 150px; 
 }
 
 .med-card p {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--primary-white); 
-    
-    /* FIX 3: Use auto margin to push the text to the bottom */
+    color: var(--primary-black);
+    /* Guarantees alignment of text blocks at the bottom */
     margin-top: auto; 
 }
 
@@ -761,7 +744,7 @@ body.brands-page-background {
     bottom: 0;
     left: 0;
     width: 100%;
-    background-color: rgba(208, 88, 38, 0.25);    
+    background-color: rgba(208, 88, 38, 0.25); 
     backdrop-filter: blur(10px);
     padding: 8px 25px;
     z-index: 1001;
@@ -826,7 +809,7 @@ body.brands-page-background {
 }
 
 .banner-item img {
-    width: 40px;    
+    width: 40px; 
     height: 40px;
     border-radius: 50%;
     border: 1px solid var(--primary-white);
@@ -853,7 +836,7 @@ body.brands-page-background {
 /* --- Responsive Design --- */
 @media (max-width: 1024px) {
     .product-grid-item {
-        flex-direction: column;    
+        flex-direction: column; 
     }
     .product-image-container, .product-details {
         width: 100%;
@@ -869,14 +852,14 @@ body.brands-page-background {
 }
 @media (max-width: 768px) {
     .product-grid-item {
-        flex-direction: column;    
+        flex-direction: column; 
     }
     .product-image-container, .product-details {
         width: 100%;
         min-height: auto;
     }
     .product-grid-item img {
-        height: 300px;    
+        height: 300px; 
     }
     body {
         padding-bottom: 80px;
