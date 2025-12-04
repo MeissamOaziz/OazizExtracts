@@ -499,15 +499,15 @@ body.brands-page-background {
 
 /* FIX 2: Style for the availability badge (MODIFIED) */
 .product-availability-badge {
-    /* Anchored relative to .product-details, centered horizontally */
-    align-self: flex-start; /* Aligns badge to the left, like the button */
+    /* Anchored relative to .product-details, aligned to content */
+    align-self: flex-start; 
     margin-top: 20px; 
     
-    background-color: var(--primary-white); /* Solid White Background */
-    padding: 15px 20px; /* Increased padding */
-    border-radius: 10px; /* Slightly larger border-radius */
+    background-color: var(--primary-white); 
+    padding: 15px 20px; 
+    border-radius: 10px; 
     z-index: 10;
-    text-align: left; /* Aligns content inside the badge to the left */
+    text-align: left; 
     box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     text-decoration: none;    
     color: var(--primary-black);    
@@ -887,7 +887,7 @@ body.brands-page-background {
         width: 100%;
         min-height: auto;
     }
-    /* ADD: Adjust layout for the CTA group on smaller screens */
+    /* ADDED: Adjust layout for the CTA group on smaller screens */
     .product-cta-group {
         align-items: center; 
         gap: 20px;
@@ -927,7 +927,7 @@ body.brands-page-background {
     .product-grid-item img {
         height: 300px;    
     }
-    /* ADD: Ensure text and badge is centered for mobile */
+    /* ADDED: Ensure text and badge is centered for mobile */
     .product-cta-group {
         align-items: center;
     }
