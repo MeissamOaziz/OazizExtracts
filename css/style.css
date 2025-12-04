@@ -332,16 +332,16 @@ body.brands-page-background {
 
 /* NEW: Oval Container for the Logo */
 .brand-logo-container {
-    background-color: var(--primary-white);
-    padding: 20px 40px;
-    border-radius: 50% / 30%; /* Creates the oval shape */
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    z-index: 2;
-    margin-top: 20px; /* Adjust spacing from top of hero if needed */
+    background-color: var(--primary-white);
+    padding: 20px 40px;
+    border-radius: 50% / 30%; /* Creates the oval shape */
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    margin-top: 20px; /* Adjust spacing from top of hero if needed */
 }
 
 /* FIX 1: Reduced Logo Size and prevented overlap */
@@ -485,16 +485,16 @@ body.brands-page-background {
 
 /* New: Style to manage the CTA button and the Availability Badge */
 .product-cta-group {
-    display: flex;
-    flex-direction: column; /* Stack the button and the badge vertically */
-    gap: 15px; /* Spacing between the button and the badge */
-    margin-top: 20px;
-    align-items: flex-start; /* Aligns items to the left */
+    display: flex;
+    flex-direction: column; /* Stack the button and the badge vertically */
+    gap: 15px; /* Spacing between the button and the badge */
+    margin-top: 20px;
+    align-items: flex-start; /* Aligns items to the left */
 }
 
 /* Update: To ensure the CTA button styles are properly inherited */
 .product-cta-group .contact-float-btn {
-    align-self: flex-start; /* Ensures button aligns left */
+    align-self: flex-start; /* Ensures button aligns left */
 }
 
 /* FIX 2: Style for the availability badge (MODIFIED) */
@@ -517,7 +517,7 @@ body.brands-page-background {
 }
 
 /* New style for the "Disponible chez:" text - targets the <p> tag in the HTML */
-.product-availability-badge p { 
+.product-availability-badge p { 
     font-size: 1rem;
     font-weight: 700;
     color: var(--primary-black);
@@ -711,7 +711,6 @@ body.brands-page-background {
     text-align: center;
     font-size: 1.5rem;
     margin: 0 auto 40px auto;
-    max-width: 800px;
     color: var(--primary-white);
 }
 
@@ -887,27 +886,27 @@ body.brands-page-background {
         width: 100%;
         min-height: auto;
     }
-    /* ADD: Adjust layout for the CTA group on smaller screens */
-    .product-cta-group {
-        align-items: center; /* Center items when stacked vertically on smaller screens */
-        gap: 20px;
-    }
-    .product-details {
-        text-align: center; /* Center details text on vertical layout */
-    }
-    .product-details ul {
-        text-align: left; /* Keep list items left-aligned */
-        max-width: fit-content;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    .product-details h3 {
-        text-align: center;
-    }
-    .product-cta-group .contact-float-btn,
-    .product-availability-badge {
-        align-self: center; /* Center the button and badge */
-    }
+    /* ADD: Adjust layout for the CTA group on smaller screens */
+    .product-cta-group {
+        align-items: center; /* Center items when stacked vertically on smaller screens */
+        gap: 20px;
+    }
+    .product-details {
+        text-align: center; /* Center details text on vertical layout */
+    }
+    .product-details ul {
+        text-align: left; /* Keep list items left-aligned */
+        max-width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .product-details h3 {
+        text-align: center;
+    }
+    .product-cta-group .contact-float-btn,
+    .product-availability-badge {
+        align-self: center; /* Center the button and badge */
+    }
     .motto-text { font-size: 3rem; }
     .services-container { flex-direction: column; align-items: center; }
     .service-card { width: 80%; max-width: 500px; }
@@ -927,22 +926,22 @@ body.brands-page-background {
     .product-grid-item img {
         height: 300px;    
     }
-    /* ADD: Ensure text and badge is centered for mobile */
-    .product-cta-group {
-        align-items: center;
-    }
-    .product-details {
-        text-align: center;
-    }
-    .product-details h3 {
-        text-align: center;
-    }
-    .product-details ul {
-        text-align: left; /* Keep list items left-aligned */
-        max-width: 80%;
-        margin-left: auto;
-        margin-right: auto;
-    }
+    /* ADD: Ensure text and badge is centered for mobile */
+    .product-cta-group {
+        align-items: center;
+    }
+    .product-details {
+        text-align: center;
+    }
+    .product-details h3 {
+        text-align: center;
+    }
+    .product-details ul {
+        text-align: left; /* Keep list items left-aligned */
+        max-width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+    }
     body {
         padding-bottom: 80px;
     }
