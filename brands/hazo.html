@@ -5,15 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hazo - Oaziz Extracts</title>
     <link rel="stylesheet" href="../css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* Cohérence avec le style Hashtisan */
+        .white-bg-products {
+            background-color: #ffffff !important;
+            padding: 60px 0;
+            color: #1a1a1a;
+        }
+
+        .section-title-dark {
+            color: #1a1a1a !important;
+            text-align: center;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .medical-product-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            padding-top: 30px;
+        }
+
+        .med-card p strong {
+            color: #FF8C00; /* Orange Hazo/Oaziz */
+            display: block;
+            margin-bottom: 5px;
+            font-size: 1.1em;
+            text-transform: uppercase;
+        }
+
+        .med-card p {
+            color: #ffffff;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+
+        .retailer-header-logo {
+            display: block;
+            margin: 0 auto 30px;
+            max-width: 150px;
+        }
+
+        .separator {
+            border: 0;
+            height: 1px;
+            background: #eee;
+            margin: 50px auto;
+            width: 80%;
+        }
+    </style>
 </head>
 <body>
 
     <header class="main-header">
         <nav class="main-nav">
             <div class="nav-left">
-                <a href="../about.html">About Us</a>
+                <a href="../about.html">À Propos</a>
                 <div class="brands-dropdown-container">
-                    <a href="#" id="brands-link">Brands</a>
+                    <a href="../brands.html" id="brands-link">Marques</a>
                     <div class="brands-menu" id="brands-menu">
                         <a href="cannonfire.html">CannonFire</a>
                         <a href="canolio.html">CANOLIO</a>
@@ -31,25 +85,83 @@
             </div>
             <div class="nav-right">
                 <a href="../export.html">Export</a>
-                <select name="language" id="language-selector">
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                </select>
+                <div id="google_translate_element"></div>
             </div>
         </nav>
     </header>
 
-    <main class="page-container">
-        <div class="brand-logo-container">
-            <img src="../images/Hazo-logo.png" alt="Hazo Logo" class="brand-logo-page">
-            <p>Full page coming soon.</p>
-        </div>
+    <main>
+        <section class="brand-hero white-bg-hero">
+            <img src="../images/Hazo-logo.png" alt="Hazo Logo" class="brand-hero-logo">
+        </section>
+
+        <section class="brand-intro-cta">
+            <h1>HAZO</h1>
+            <p>Une approche moderne du bien-être, offrant des produits de haute qualité conçus pour s'intégrer parfaitement à votre style de vie.</p>
+        </section>
+
+        <section class="white-bg-products">
+            <div class="page-container">
+                
+                <h2 class="section-title-dark">Disponible sur OCS</h2>
+                <div class="medical-retailers-bar">
+                    <a href="https://ocs.ca" target="_blank" class="med-retailer-link">
+                        <img src="../images/OCS-Logo.png" alt="Ontario Cannabis Store" style="max-width: 120px;">
+                    </a>
+                </div>
+                
+                <div class="medical-product-gallery">
+                    <div class="med-card">
+                        <div class="med-image-wrapper">
+                            <img src="../images/HAZO-CBD-Vape-w_packaging.png" alt="Hazo CBD Vape OCS">
+                        </div>
+                        <p><strong>Hazo - CBD Vape</strong>Formule premium riche en CBD pour une expérience apaisante et équilibrée.</p>
+                    </div>
+                </div>
+
+                <hr class="separator">
+
+                <h2 class="section-title-dark">Disponible sur Plateformes Médicales</h2>
+                <div class="medical-retailers-bar">
+                    <a href="https://mendomedical.ca" target="_blank" class="med-retailer-link">
+                        <img src="../images/Mendo-Medical-Cannabis-Logo.webp" alt="Mendo Medical Cannabis">
+                    </a>
+                    <a href="https://teedy.com" target="_blank" class="med-retailer-link">
+                        <img src="../images/Teedy.png" alt="Teedy">
+                    </a>
+                    <a href="https://herbaldispatch.com/" target="_blank" class="med-retailer-link">
+                        <img src="../images/HerbalDispatch.webp" alt="Herbal Dispatch">
+                    </a>
+                </div>
+
+                <div class="medical-product-gallery">
+                    <div class="med-card">
+                        <div class="med-image-wrapper">
+                            <img src="../images/HAZOCBDvape1.png" alt="Hazo CBD Vape Medical">
+                        </div>
+                        <p><strong>Hazo - CBD Vape</strong>Qualité médicale supérieure, idéal pour une utilisation quotidienne contrôlée.</p>
+                    </div>
+
+                    <div class="med-card">
+                        <div class="med-image-wrapper">
+                            <img src="../images/Hazo-BB-muffin-3x.05g.png" alt="Hazo Blueberry Muffins">
+                        </div>
+                        <p><strong>Blueberry Muffins</strong>Format pratique de 3 x 0,5g. Des prerolls artisanaux aux arômes de baies sucrées.</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
     </main>
 
     <footer class="main-footer">
-        <p>&copy; 2025 Oaziz Extracts. All Rights Reserved.</p>
+        <p>&copy; 2025 Oaziz Extracts. Tous droits réservés.</p>
     </footer>
 
+    <script type="text/javascript">
+        function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'fr', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element'); }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script src="../js/script.js"></script>
 </body>
 </html>
