@@ -213,11 +213,12 @@ const fr: Dict = {
   'curado.royal.b3':     'THC 54,7 % · Terpènes totaux 2,81 %',
   'curado.royal.b4':     'Profil : terreux, épicé, herbacé · Terpènes dominants : Caryophyllène, Myrcène, Bisabolol',
 
-  'curado.fruit.title':  'Curado Fruit Temple Ball',
-  'curado.fruit.blurb':  "Temple ball hash fruité, fabriqué selon les méthodes traditionnelles Curado. Fiche produit détaillée à venir.",
-  'curado.fruit.b1':     'Format temple ball — fabrication artisanale',
-  'curado.fruit.b2':     'Profil fruité distinctif',
-  'curado.fruit.b3':     'Disponible exclusivement sur les plateformes médicales',
+  'curado.fruit.title':  'Fruit Temple Ball',
+  'curado.fruit.blurb':  "Temple ball authentique à spectre complet, roulé à la main pour les amateurs de hash traditionnel aux arômes prononcés. Hash pur, strain-specific — sans huiles, distillats ni terpènes ajoutés — mettant en valeur un caractère naturellement fruité.",
+  'curado.fruit.b1':     'Temple ball 1,5 g à spectre complet · 100 % hash pur, roulé à la main',
+  'curado.fruit.b2':     'Cultivar à dominance indica · arômes et saveurs naturellement fruités',
+  'curado.fruit.b3':     'THC 55-65 % · CBD 0-8 %',
+  'curado.fruit.b4':     "Lots boutique en petites quantités · se bonifie avec le temps — gardez-en un de côté",
 
   // Canolio brand
   'canolio.meta.title':  'CANOLIO — Oaziz Extracts',
@@ -510,11 +511,12 @@ const en: Dict = {
   'curado.royal.b3':     'THC 54.7% · Total terpenes 2.81%',
   'curado.royal.b4':     'Profile: earthy, spicy, herbal · Dominant terpenes: Caryophyllene, Myrcene, Bisabolol',
 
-  'curado.fruit.title':  'Curado Fruit Temple Ball',
-  'curado.fruit.blurb':  'Fruit-forward temple ball hash, crafted using the same traditional Curado methods. Full product specs coming soon.',
-  'curado.fruit.b1':     'Temple ball format — hand-crafted',
-  'curado.fruit.b2':     'Distinctive fruit-forward profile',
-  'curado.fruit.b3':     'Available exclusively on medical platforms',
+  'curado.fruit.title':  'Fruit Temple Ball',
+  'curado.fruit.blurb':  'True full-spectrum temple ball, hand-rolled for those who appreciate traditional hash with strong aromas. Pure strain-specific hash — no added oils, distillates, or terpenes — showcasing naturally fruity character.',
+  'curado.fruit.b1':     '1.5g full-spectrum temple ball · 100% pure hash, hand-rolled',
+  'curado.fruit.b2':     'Indica-dominant cultivar · naturally fruity aroma and flavor',
+  'curado.fruit.b3':     'THC 55-65% · CBD 0-8%',
+  'curado.fruit.b4':     'Small-batch boutique lots · ages gracefully — store one away for later',
 
   'canolio.meta.title':  'CANOLIO — Oaziz Extracts',
   'canolio.meta.desc':   'CANOLIO Rosin Syrups developed with Canolio Gourmet for your cannabis-infused edible recipes.',
