@@ -3,17 +3,17 @@ import Layout from '../../layouts/Layout.astro';
 import ContactSection from '../../components/ContactSection.astro';
 import { t } from '../../i18n/ui';
 
-const lang = 'en';
+const lang = 'fr';
 const T = t(lang);
 ---
 
-<Layout title={T('topicals.meta.title')} description={T('topicals.meta.desc')} lang={lang} path="/en/topicals">
+<Layout title={T('export.meta.title')} description={T('export.meta.desc')} lang={lang} path="/fr/export">
   <ContactSection
     lang={lang}
-    title={T('topicals.formTitle')}
+    title={T('export.formTitle')}
     showLeadIn
-    context={T('topicals.ctx')}
-    defaultSubject="sales"
+    context={T('export.ctx')}
+    defaultSubject="export"
     fullHeight
   />
 </Layout>

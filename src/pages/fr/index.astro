@@ -3,7 +3,7 @@ import Layout from '../../layouts/Layout.astro';
 import ContactSection from '../../components/ContactSection.astro';
 import { t, localizeUrl } from '../../i18n/ui';
 
-const lang = 'en';
+const lang = 'fr';
 const T = t(lang);
 
 const partners = [
@@ -17,7 +17,7 @@ const partners = [
 ];
 ---
 
-<Layout title={T('meta.homeTitle')} description={T('meta.defaultDescription')} lang={lang} path="/en">
+<Layout title={T('meta.homeTitle')} description={T('meta.defaultDescription')} lang={lang} path="/fr">
   <section class="hero-collage" aria-label={T('hero.aria')}>
     <div class="collage-panel rinse"><h1 class="motto-text">{T('hero.rinse')}</h1></div>
     <div class="collage-panel refine"><h2 class="motto-text">{T('hero.refine')}</h2></div>

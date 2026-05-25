@@ -3,7 +3,7 @@ import Layout from '../../layouts/Layout.astro';
 import ContactSection from '../../components/ContactSection.astro';
 import { t } from '../../i18n/ui';
 
-const lang = 'en';
+const lang = 'fr';
 const T = t(lang);
 
 const dry = [
@@ -17,7 +17,7 @@ const iwe = [
 ];
 ---
 
-<Layout title={T('kief.meta.title')} description={T('kief.meta.desc')} lang={lang} path="/en/kief">
+<Layout title={T('kief.meta.title')} description={T('kief.meta.desc')} lang={lang} path="/fr/kief">
   <div class="page-container with-padding">
     <h1 class="page-header">{T('kief.h1')}</h1>
     <p class="product-description">{T('kief.desc')}</p>

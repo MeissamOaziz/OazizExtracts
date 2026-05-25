@@ -16,11 +16,11 @@ const links = [
   { href: localizeUrl('/brands', lang), label: T('nav.brands') },
 ];
 
-const altLang: Locale = lang === 'fr' ? 'en' : 'fr';
+const altLang: Locale = lang === 'en' ? 'fr' : 'en';
 const altHref = alternatePath(currentPath, lang);
 
 const isActive = (href: string) => {
-  if (href === '/' || href === '/en' || href === '/en/') return currentPath === href;
+  if (href === '/' || href === '/fr' || href === '/fr/') return currentPath === href;
   return currentPath === href || currentPath.startsWith(href + '/');
 };
 ---
@@ -40,9 +40,28 @@ const isActive = (href: string) => {
       </a>
     </div>
     <div class="nav-right">
-      <a class="lang-toggle" href={altHref} hreflang={altLang} aria-label={T('nav.lang.aria')}>
+      <a
+        class="lang-toggle"
+        href={altHref}
+        hreflang={altLang}
+        aria-label={T('nav.lang.aria')}
+        data-set-locale={altLang}
+      >
         {T('nav.lang.label')}
       </a>
     </div>
   </nav>
 </header>
+
+<script>
+  // Persist the user's explicit language choice in a cookie so the geo-redirect
+  // middleware respects it on subsequent visits. 1-year lifetime.
+  document.querySelectorAll<HTMLAnchorElement>('a.lang-toggle[data-set-locale]').forEach((link) => {
+    link.addEventListener('click', () => {
+      const locale = link.dataset.setLocale;
+      if (locale === 'fr' || locale === 'en') {
+        document.cookie = `oaziz_locale=${locale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+      }
+    });
+  });
+</script>

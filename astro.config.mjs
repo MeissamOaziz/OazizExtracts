@@ -14,14 +14,14 @@ export default defineConfig({
   integrations: [
     sitemap({
       i18n: {
-        defaultLocale: 'fr',
-        locales: { fr: 'fr-CA', en: 'en-CA' },
+        defaultLocale: 'en',
+        locales: { en: 'en-CA', fr: 'fr-CA' },
       },
     }),
   ],
   i18n: {
-    defaultLocale: 'fr',
-    locales: ['fr', 'en'],
+    defaultLocale: 'en',
+    locales: ['en', 'fr'],
     routing: { prefixDefaultLocale: false },
   },
   image: {

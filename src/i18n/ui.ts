@@ -2,9 +2,9 @@
 // FR is the default locale (root paths). EN lives under /en/.
 // Pages call: import { t } from '@/i18n/ui'; const T = t(lang);  then T('nav.home').
 
-export const locales = ['fr', 'en'] as const;
+export const locales = ['en', 'fr'] as const;
 export type Locale = (typeof locales)[number];
-export const defaultLocale: Locale = 'fr';
+export const defaultLocale: Locale = 'en';
 
 type Dict = Record<string, string>;
 
@@ -589,7 +589,8 @@ export function localizeUrl(path: string, lang: Locale): string {
 
 // For language toggle: given the current path, produce the equivalent in the other locale.
 export function alternatePath(currentPath: string, currentLang: Locale): string {
-  const stripped = currentPath.replace(/^\/en(\/|$)/, '/');
-  const altLang: Locale = currentLang === 'fr' ? 'en' : 'fr';
+  // Strip any /fr prefix to get the canonical (English / default) path
+  const stripped = currentPath.replace(/^\/fr(\/|$)/, '/');
+  const altLang: Locale = currentLang === 'en' ? 'fr' : 'en';
   return altLang === defaultLocale ? stripped : `/${altLang}${stripped === '/' ? '' : stripped}`;
 }
