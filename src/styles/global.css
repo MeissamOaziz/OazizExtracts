@@ -601,9 +601,15 @@ body.brands-page-background {
 .content-section p { margin-bottom: 12px; }
 .team-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 30px;
   color: var(--primary-white);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.team-grid-top    { grid-template-columns: repeat(3, 1fr); }
+.team-grid-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 600px; margin-top: 30px; }
+@media (max-width: 768px) {
+  .team-grid-top, .team-grid-bottom { grid-template-columns: 1fr; }
 }
 .team-member { text-align: center; }
 .team-member h3 { margin-bottom: 5px; font-size: 1.4rem; }

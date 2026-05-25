@@ -58,7 +58,7 @@ export const ui: Record<Locale, Dict> = {
     'footer.products': 'Produits',
     'footer.company': 'Société',
     'footer.legal': 'Légal',
-    'footer.address': '10770 Boulevard Henri-Bourassa Est\nMontréal, QC, Canada',
+    'footer.address': '322 Port Royal Ouest\nMontréal, QC, Canada',
     'footer.copyright': '© {year} Oaziz Extracts Inc. Tous droits réservés.',
     'footer.licensed': 'Licence Santé Canada — produit avec rigueur, sans solvant.',
     'footer.legalNotice': 'Mentions légales',

@@ -6,13 +6,14 @@ import { t } from '../i18n/ui';
 const lang = 'fr';
 const T = t(lang);
 
-const team = [
+const teamTop = [
   { name: 'Jorge Sousa',         role: 'PDG' },
   { name: 'Stephane Paquin',     role: 'PAQ' },
   { name: 'Simon Salomone',      role: 'Maître Extracteur' },
+];
+const teamBottom = [
   { name: 'Kyle St-Hilaire',     role: 'Directeur des Ventes' },
-  { name: 'Meissam Hagh Panah',  role: 'Directeur Financier & Administratif' },
-  { name: 'Dorian Vasseur',      role: 'Responsable AQ' },
+  { name: 'Meissam Hagh Panah',  role: 'Directeur Financier' },
 ];
 ---
 
@@ -56,8 +57,16 @@ const team = [
         Par-dessus tout, nous sommes unis par une connaissance fondamentale et une expertise dans
         l'art et la science du cannabis.
       </p>
-      <div class="team-grid">
-        {team.map((m) => (
+      <div class="team-grid team-grid-top">
+        {teamTop.map((m) => (
+          <div class="team-member">
+            <h3>{m.name}</h3>
+            <p>{m.role}</p>
+          </div>
+        ))}
+      </div>
+      <div class="team-grid team-grid-bottom">
+        {teamBottom.map((m) => (
           <div class="team-member">
             <h3>{m.name}</h3>
             <p>{m.role}</p>
