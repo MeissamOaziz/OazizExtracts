@@ -1,36 +1,36 @@
 // Generate favicon assets from the Oaziz logo.
-// Outputs apple-touch-icon.png (180×180) and a 32×32 icon-512 set in public/.
+// The logo is already a circular orange badge on a transparent background,
+// so we just resize it — no extra backdrop needed.
 // Re-run any time the logo changes: `node scripts/generate-favicons.mjs`
 
 import sharp from 'sharp';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, unlink } from 'node:fs/promises';
 
 const SOURCE = 'public/images/Oaziz-Logo.webp';
 
 const targets = [
+  { size:  32, name: 'favicon-32.png' },
+  { size:  96, name: 'favicon-96.png' },
   { size: 180, name: 'apple-touch-icon.png' },
   { size: 192, name: 'icon-192.png' },
   { size: 512, name: 'icon-512.png' },
 ];
 
-const ORANGE = { r: 208, g: 88, b: 38, alpha: 1 }; // brand orange
+const srcBuf = await (await import('node:fs/promises')).readFile(SOURCE);
 
 for (const { size, name } of targets) {
-  const padding = Math.round(size * 0.08);
-  const inner = size - padding * 2;
-
-  const inner_resized = await sharp(SOURCE)
-    .resize({ width: inner, height: inner, fit: 'contain', background: ORANGE })
+  const out = await sharp(srcBuf)
+    .resize({ width: size, height: size, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png({ compressionLevel: 9 })
     .toBuffer();
-
-  const out = await sharp({
-    create: { width: size, height: size, channels: 4, background: ORANGE },
-  })
-    .composite([{ input: inner_resized, top: padding, left: padding }])
-    .png()
-    .toBuffer();
-
   await writeFile(`public/${name}`, out);
   console.log(`  ${name}  (${out.length} bytes)`);
 }
+
+// Clean up the orange "O" placeholder SVG if it's still around.
+try {
+  await unlink('public/favicon.svg');
+  console.log('  removed placeholder favicon.svg');
+} catch {}
+
 console.log('Done.');
