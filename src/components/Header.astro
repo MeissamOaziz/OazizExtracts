@@ -1,6 +1,6 @@
 ---
 import type { Locale } from '../i18n/ui';
-import { t, localizeUrl, alternatePath } from '../i18n/ui';
+import { t, localizeUrl, pathInLocale } from '../i18n/ui';
 
 interface Props {
   lang: Locale;
@@ -16,8 +16,8 @@ const links = [
   { href: localizeUrl('/brands', lang), label: T('nav.brands') },
 ];
 
-const altLang: Locale = lang === 'en' ? 'fr' : 'en';
-const altHref = alternatePath(currentPath, lang);
+const enHref = pathInLocale(currentPath, 'en');
+const frHref = pathInLocale(currentPath, 'fr');
 
 const isActive = (href: string) => {
   if (href === '/' || href === '/fr' || href === '/fr/') return currentPath === href;
@@ -40,23 +40,34 @@ const isActive = (href: string) => {
       </a>
     </div>
     <div class="nav-right">
-      <a
-        class="lang-toggle"
-        href={altHref}
-        hreflang={altLang}
-        aria-label={T('nav.lang.aria')}
-        data-set-locale={altLang}
-      >
-        {T('nav.lang.label')}
-      </a>
+      <div class="lang-switcher" role="group" aria-label="Language">
+        <a
+          href={enHref}
+          class:list={['lang-link', { active: lang === 'en' }]}
+          hreflang="en"
+          data-set-locale="en"
+          aria-current={lang === 'en' ? 'true' : undefined}
+        >
+          English
+        </a>
+        <span class="lang-divider" aria-hidden="true"></span>
+        <a
+          href={frHref}
+          class:list={['lang-link', { active: lang === 'fr' }]}
+          hreflang="fr"
+          data-set-locale="fr"
+          aria-current={lang === 'fr' ? 'true' : undefined}
+        >
+          Français
+        </a>
+      </div>
     </div>
   </nav>
 </header>
 
 <script>
-  // Persist the user's explicit language choice in a cookie so the geo-redirect
-  // middleware respects it on subsequent visits. 1-year lifetime.
-  document.querySelectorAll<HTMLAnchorElement>('a.lang-toggle[data-set-locale]').forEach((link) => {
+  // Persist explicit language choice so the geo-redirect middleware respects it.
+  document.querySelectorAll<HTMLAnchorElement>('a.lang-link[data-set-locale]').forEach((link) => {
     link.addEventListener('click', () => {
       const locale = link.dataset.setLocale;
       if (locale === 'fr' || locale === 'en') {

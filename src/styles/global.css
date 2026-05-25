@@ -83,24 +83,33 @@ body {
 }
 .nav-center .logo { max-height: 90px; width: auto; display: block; }
 
-.lang-toggle {
+.lang-switcher {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 2px solid var(--dark-gray);
-  border-radius: 20px;
-  text-transform: uppercase;
+  gap: 12px;
+  font-size: 0.9rem;
   font-weight: 700;
-  font-size: 0.85rem;
-  background: transparent;
-  cursor: pointer;
-  color: var(--primary-black);
-  text-decoration: none;
+  letter-spacing: 0.3px;
 }
-.lang-toggle:hover {
-  border-color: var(--primary-orange);
+.lang-link {
+  text-decoration: none;
+  color: rgba(30, 30, 30, 0.55);
+  padding: 4px 2px;
+  transition: color 0.2s ease;
+  border-bottom: 1px solid transparent;
+}
+.lang-link:hover {
   color: var(--primary-orange);
+}
+.lang-link.active {
+  color: var(--primary-black);
+  border-bottom-color: var(--primary-orange);
+}
+.lang-divider {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 /* --- Hero Collage --- */

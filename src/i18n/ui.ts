@@ -589,8 +589,14 @@ export function localizeUrl(path: string, lang: Locale): string {
 
 // For language toggle: given the current path, produce the equivalent in the other locale.
 export function alternatePath(currentPath: string, currentLang: Locale): string {
-  // Strip any /fr prefix to get the canonical (English / default) path
-  const stripped = currentPath.replace(/^\/fr(\/|$)/, '/');
   const altLang: Locale = currentLang === 'en' ? 'fr' : 'en';
-  return altLang === defaultLocale ? stripped : `/${altLang}${stripped === '/' ? '' : stripped}`;
+  return pathInLocale(currentPath, altLang);
+}
+
+/** Equivalent of the current page in a specific target locale. */
+export function pathInLocale(currentPath: string, targetLang: Locale): string {
+  const stripped = currentPath.replace(/^\/fr(\/|$)/, '/');
+  return targetLang === defaultLocale
+    ? stripped
+    : `/${targetLang}${stripped === '/' ? '' : stripped}`;
 }
