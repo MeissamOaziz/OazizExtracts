@@ -1,0 +1,22 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title="Page introuvable — Oaziz Extracts"
+  description="La page demandée est introuvable."
+  lang={lang}
+  path="/404"
+>
+  <section style="padding: 120px 20px; text-align: center; min-height: 60vh;">
+    <h1 class="page-header">404</h1>
+    <p style="font-size: 1.25rem; max-width: 600px; margin: 24px auto;">
+      La page que vous cherchez n'existe pas, a été déplacée, ou n'est pas encore disponible.
+    </p>
+    <p style="margin-top: 32px;">
+      <a href="/" class="contact-float-btn cta-light">Retour à l'accueil</a>
+    </p>
+  </section>
+</Layout>

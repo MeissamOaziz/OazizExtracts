@@ -1,0 +1,67 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const lang = 'fr';
+const updated = '2026-05-25';
+---
+
+<Layout
+  title="Politique de Confidentialité — Oaziz Extracts"
+  description="Politique de confidentialité d'Oaziz Extracts Inc."
+  lang={lang}
+  path="/privacy"
+>
+  <article class="content-section white-bg">
+    <div class="page-container" style="max-width: 800px;">
+      <h1 class="page-header">Politique de Confidentialité</h1>
+      <p style="text-align: center; color: var(--dark-gray); margin-bottom: 40px;">
+        Dernière mise à jour : {updated}
+      </p>
+
+      <h2 style="text-align: left;">Données que nous recueillons</h2>
+      <p>
+        Lorsque vous utilisez notre formulaire de contact, nous recueillons les informations
+        suivantes : nom, courriel, objet de la demande et contenu de votre message. Aucun cookie
+        marketing n'est utilisé. Des cookies techniques de session peuvent être déposés par notre
+        hébergeur (Vercel) à des fins d'optimisation et de mesure d'audience anonyme.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Comment nous utilisons vos données</h2>
+      <p>
+        Les informations transmises via le formulaire sont utilisées uniquement pour répondre à
+        votre demande. Elles sont acheminées par courriel via notre prestataire d'envoi
+        transactionnel (Resend) à notre équipe interne, et conservées dans nos boîtes courriel
+        professionnelles.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Partage de données</h2>
+      <p>
+        Nous ne vendons, ne louons et ne partageons jamais vos données avec des tiers à des fins
+        commerciales. Vos données peuvent être partagées avec des sous-traitants techniques
+        (hébergement, courriel) strictement nécessaires à l'opération du site.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Vos droits (Loi 25 — Québec)</h2>
+      <p>
+        Conformément à la <em>Loi sur la protection des renseignements personnels dans le secteur
+        privé</em> du Québec, vous avez le droit d'accéder à vos renseignements personnels, de les
+        rectifier, d'en demander la suppression, et de retirer votre consentement à leur
+        traitement. Pour toute demande, écrivez-nous à
+        <a href="mailto:info@oaziz.ca">info@oaziz.ca</a>.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Conservation</h2>
+      <p>
+        Vos messages sont conservés tant qu'ils sont utiles à la relation commerciale, puis
+        archivés ou supprimés selon nos politiques internes (typiquement 36 mois après le dernier
+        échange).
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Contact</h2>
+      <p>
+        Pour toute question concernant cette politique :
+        <a href="mailto:info@oaziz.ca">info@oaziz.ca</a>.
+      </p>
+    </div>
+  </article>
+</Layout>

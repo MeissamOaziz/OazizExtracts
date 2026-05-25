@@ -1,0 +1,59 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const lang = 'fr';
+const updated = '2026-05-25';
+---
+
+<Layout
+  title="Mentions Légales — Oaziz Extracts"
+  description="Mentions légales d'Oaziz Extracts Inc., producteur sous licence Santé Canada."
+  lang={lang}
+  path="/legal"
+>
+  <article class="content-section white-bg">
+    <div class="page-container" style="max-width: 800px;">
+      <h1 class="page-header">Mentions Légales</h1>
+      <p style="text-align: center; color: var(--dark-gray); margin-bottom: 40px;">
+        Dernière mise à jour : {updated}
+      </p>
+
+      <h2 style="text-align: left;">Éditeur</h2>
+      <p>
+        <strong>Oaziz Extracts Inc.</strong><br />
+        10770 Boulevard Henri-Bourassa Est<br />
+        Montréal, QC, Canada<br />
+        Courriel : <a href="mailto:info@oaziz.ca">info@oaziz.ca</a>
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Licence</h2>
+      <p>
+        Oaziz Extracts Inc. opère sous licence de Santé Canada depuis 2022, conformément à la
+        <em>Loi sur le cannabis</em> et au <em>Règlement sur le cannabis</em>. Le numéro de licence
+        complet est disponible sur demande pour partenaires commerciaux.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Conformité réglementaire</h2>
+      <p>
+        Le contenu de ce site est destiné à un public adulte (18 ans et plus). Les communications
+        relatives au cannabis présentées ici sont strictement informatives et destinées aux
+        partenaires B2B (producteurs, distributeurs, plateformes médicales, exportateurs). Aucun
+        produit n'est vendu directement au consommateur via ce site.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Propriété intellectuelle</h2>
+      <p>
+        L'ensemble du contenu (textes, images, marques, logos) est la propriété d'Oaziz Extracts
+        Inc. ou de ses partenaires autorisés. Toute reproduction sans autorisation écrite préalable
+        est interdite.
+      </p>
+
+      <h2 style="text-align: left; margin-top: 30px;">Avertissement</h2>
+      <p>
+        Les informations présentées sur ce site sont fournies à titre indicatif. Oaziz Extracts
+        Inc. décline toute responsabilité quant à l'usage qui pourrait en être fait en dehors du
+        cadre prévu.
+      </p>
+    </div>
+  </article>
+</Layout>

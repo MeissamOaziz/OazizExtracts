@@ -40,6 +40,27 @@ const alternates = locales.map((loc) => ({
   hreflang: loc === 'fr' ? 'fr-CA' : 'en-CA',
   href: `${siteUrl}${localizeUrl(stripped, loc)}`,
 }));
+
+// JSON-LD Organization schema, attached once per page in <head>
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Oaziz Extracts Inc.',
+  alternateName: 'Oaziz',
+  url: siteUrl,
+  logo: `${siteUrl}/images/Oaziz-Logo.webp`,
+  description: T('meta.defaultDescription'),
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: '10770 Boulevard Henri-Bourassa Est',
+    addressLocality: 'Montréal',
+    addressRegion: 'QC',
+    addressCountry: 'CA',
+  },
+  email: 'info@oaziz.ca',
+  foundingDate: '2022',
+  knowsAbout: ['Cannabis extraction', 'Hashish', 'Rosin', 'Ice water extract', 'Kief'],
+};
 ---
 
 <!DOCTYPE html>
@@ -80,6 +101,9 @@ const alternates = locales.map((loc) => ({
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json" set:html={JSON.stringify(organizationJsonLd)}></script>
   </head>
   <body class={bodyClass}>
     <AgeGate lang={lang} />
