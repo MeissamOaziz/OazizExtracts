@@ -1,0 +1,61 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t, localizeUrl } from '../i18n/ui';
+
+interface Props { lang: Locale; }
+const { lang } = Astro.props;
+const T = t(lang);
+const year = new Date().getFullYear();
+---
+
+<footer class="main-footer">
+  <div class="footer-content">
+    <div class="footer-col">
+      <h4>Oaziz Extracts</h4>
+      <p>{T('footer.tagline')}</p>
+      <p style="margin-top: 14px; font-size: 0.8rem; opacity: 0.7;">
+        {T('footer.licensed')}
+      </p>
+    </div>
+
+    <div class="footer-col">
+      <h4>{T('footer.contact')}</h4>
+      <p style="white-space: pre-line;">{T('footer.address')}</p>
+      <p style="margin-top: 10px;">
+        <a href="mailto:info@oaziz.ca">info@oaziz.ca</a>
+      </p>
+    </div>
+
+    <div class="footer-col">
+      <h4>{T('footer.products')}</h4>
+      <ul>
+        <li><a href={localizeUrl('/hash',     lang)}>{T('banner.hash')}</a></li>
+        <li><a href={localizeUrl('/rosin',    lang)}>{T('banner.rosin')}</a></li>
+        <li><a href={localizeUrl('/kief',     lang)}>{T('banner.kief')}</a></li>
+        <li><a href={localizeUrl('/flower',   lang)}>{T('banner.flower')}</a></li>
+        <li><a href={localizeUrl('/trim',     lang)}>{T('banner.trim')}</a></li>
+        <li><a href={localizeUrl('/topicals', lang)}>{T('banner.topicals')}</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h4>{T('footer.company')}</h4>
+      <ul>
+        <li><a href={localizeUrl('/about',  lang)}>{T('nav.about')}</a></li>
+        <li><a href={localizeUrl('/brands', lang)}>{T('nav.brands')}</a></li>
+        <li><a href={localizeUrl('/export', lang)}>{T('banner.export')}</a></li>
+        <li><a href={localizeUrl('/bulk',   lang)}>{T('services.bulk')}</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <p>
+      {T('footer.copyright').replace('{year}', String(year))}
+      &nbsp;·&nbsp;
+      <a href={localizeUrl('/legal', lang)}>{T('footer.legalNotice')}</a>
+      &nbsp;·&nbsp;
+      <a href={localizeUrl('/privacy', lang)}>{T('footer.privacy')}</a>
+    </p>
+  </div>
+</footer>

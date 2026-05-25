@@ -1,0 +1,51 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t, localizeUrl } from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+  currentPath: string;
+}
+
+const { lang, currentPath } = Astro.props;
+const T = t(lang);
+
+const links = [
+  { href: localizeUrl('/', lang),       label: T('nav.home') },
+  { href: localizeUrl('/about', lang),  label: T('nav.about') },
+  { href: localizeUrl('/brands', lang), label: T('nav.brands') },
+];
+
+// Lang toggle: swap between fr and en at the equivalent path
+const altLang: Locale = lang === 'fr' ? 'en' : 'fr';
+// Strip current /en prefix if present, then re-prefix if going to en
+const stripped = currentPath.replace(/^\/en(\/|$)/, '/');
+const altHref = altLang === 'fr' ? stripped : `/en${stripped === '/' ? '' : stripped}`;
+
+const isActive = (href: string) => {
+  if (href === '/' || href === '/en' || href === '/en/') return currentPath === href;
+  return currentPath === href || currentPath.startsWith(href + '/');
+};
+---
+
+<header class="main-header">
+  <nav class="main-nav" aria-label="Primary">
+    <div class="nav-left">
+      {links.map((l) => (
+        <a href={l.href} aria-current={isActive(l.href) ? 'page' : undefined}>
+          {l.label}
+        </a>
+      ))}
+    </div>
+    <div class="nav-center">
+      <a href={localizeUrl('/', lang)} aria-label="Oaziz Extracts">
+        <img src="/images/Oaziz-Logo.webp" alt="Oaziz Extracts" class="logo" width="200" height="90" />
+      </a>
+    </div>
+    <div class="nav-right">
+      <a class="lang-toggle" href={altHref} hreflang={altLang} aria-label={altLang === 'en' ? 'Switch to English' : 'Passer en français'}>
+        {altLang.toUpperCase()}
+      </a>
+    </div>
+  </nav>
+</header>

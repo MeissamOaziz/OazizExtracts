@@ -1,0 +1,85 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const lang = 'fr';
+
+const products = [
+  {
+    img: '/images/HashtisanGemBesidePackaing.png',
+    alt: 'Hashtisan GEM',
+    title: 'Hashtisan — GEM',
+    desc: 'Hash infusé de diamants avec une puissance de plus de 80%',
+  },
+  {
+    img: '/images/Hashtisan-Hashgar.png',
+    alt: 'Hashtisan Hashgar',
+    title: 'Hashtisan — Hashgar',
+    desc: 'Preroll de 1,5g enveloppé dans 1,5g de notre feuille de hash importé — embout en verre — fait à la main en lots limités',
+  },
+  {
+    img: '/images/minigar-1.webp',
+    alt: 'Hashtisan Minigar',
+    title: 'Hashtisan — Minigar',
+    desc: 'Version compacte de 1,5g — embout de papier — la même qualité artisanale en format réduit',
+  },
+  {
+    img: '/images/HashtisanBonmatinfront.png',
+    alt: 'Hashtisan Bon Matin',
+    title: 'Hashtisan — Bon Matin',
+    desc: 'Notre offre unique de hash en format 7g',
+  },
+  {
+    img: '/images/HashtisanImportHash.png',
+    alt: 'Hashtisan Import Hash',
+    title: 'Hashtisan — Import Hash',
+    desc: 'Hash pressé de style marocain',
+  },
+];
+
+const retailers = [
+  { href: 'https://mendomedical.ca',     src: '/images/Mendo-Medical-Cannabis-Logo.webp', alt: 'Mendo Medical Cannabis' },
+  { href: 'https://teedy.com',           src: '/images/Teedy.png',                        alt: 'Teedy' },
+  { href: 'https://herbaldispatch.com/', src: '/images/HerbalDispatch.webp',              alt: 'Herbal Dispatch' },
+  { href: 'https://flodega.com',         src: '/images/Flodega.png',                      alt: 'Flodega' },
+];
+---
+
+<Layout
+  title='HASHTISAN — Oaziz Extracts'
+  description='Hash artisanal Hashtisan : GEM, Hashgar, Minigar, Bon Matin, Import Hash. Disponible sur les plateformes médicales canadiennes.'
+  lang={lang}
+  path="/brands/hashtisan"
+  ogImage='/images/Hashtisan-Logo.png'
+>
+  <section class="brand-hero white-bg-hero">
+    <img src="/images/Hashtisan-Logo.png" alt="HASHTISAN Logo" class="brand-hero-logo" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">HASHTISAN</h1>
+    <p>Découvrez notre collection de hashish artisanal de qualité supérieure, disponible exclusivement sur les plateformes médicales.</p>
+  </section>
+
+  <section class="product-showcase-medical white-bg-products">
+    <div class="page-container with-padding">
+      <h2 class="section-title-dark">Nos Produits Disponibles sur Plateformes Médicales</h2>
+
+      <div class="medical-retailers-bar">
+        {retailers.map((r) => (
+          <a href={r.href} target="_blank" rel="noopener" class="med-retailer-link">
+            <img src={r.src} alt={r.alt} loading="lazy" />
+          </a>
+        ))}
+      </div>
+
+      <div class="medical-product-gallery">
+        {products.map((p) => (
+          <div class="med-card">
+            <div class="med-image-wrapper"><img src={p.img} alt={p.alt} loading="lazy" /></div>
+            <p><strong>{p.title}</strong>{p.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

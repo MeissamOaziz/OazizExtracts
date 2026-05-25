@@ -1,0 +1,104 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t } from '../i18n/ui';
+
+interface Props {
+  lang: Locale;
+  /** Optional context shown in the form-submission email subject (e.g. "Hash page"). */
+  context?: string;
+  /** Optional default selected subject (matches one of: general | export | sales | qa | finance). */
+  defaultSubject?: 'general' | 'export' | 'sales' | 'qa' | 'finance';
+}
+
+const { lang, context = '', defaultSubject = 'general' } = Astro.props;
+const T = t(lang);
+---
+
+<form id="contact-form-element" novalidate>
+  <input type="hidden" name="lang" value={lang} />
+  <input type="hidden" name="context" value={context} />
+
+  <!-- Honeypot — must remain empty. Bots auto-fill it. -->
+  <div class="form-honeypot" aria-hidden="true">
+    <label>Leave this empty<input type="text" name="company_website" tabindex="-1" autocomplete="off" /></label>
+  </div>
+
+  <div class="form-group">
+    <label for="cf-name">{T('form.name')}</label>
+    <input type="text" id="cf-name" name="name" autocomplete="name" required />
+  </div>
+
+  <div class="form-group">
+    <label for="cf-email">{T('form.email')}</label>
+    <input type="email" id="cf-email" name="email" autocomplete="email" required />
+  </div>
+
+  <div class="form-group">
+    <label for="cf-subject">{T('form.subject')}</label>
+    <select id="cf-subject" name="subject" required>
+      <option value="general"  selected={defaultSubject === 'general'}>{T('form.subject.general')}</option>
+      <option value="export"   selected={defaultSubject === 'export'}>{T('form.subject.export')}</option>
+      <option value="sales"    selected={defaultSubject === 'sales'}>{T('form.subject.sales')}</option>
+      <option value="qa"       selected={defaultSubject === 'qa'}>{T('form.subject.qa')}</option>
+      <option value="finance"  selected={defaultSubject === 'finance'}>{T('form.subject.finance')}</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="cf-message">{T('form.message')}</label>
+    <textarea id="cf-message" name="message" rows="5" required></textarea>
+  </div>
+
+  <button type="submit" class="submit-btn" data-default-label={T('form.submit')} data-sending-label={T('form.sending')}>
+    {T('form.submit')}
+  </button>
+
+  <div
+    class="form-feedback"
+    role="status"
+    aria-live="polite"
+    data-success-msg={T('form.success')}
+    data-error-msg={T('form.error')}
+  ></div>
+</form>
+
+<script>
+  const form = document.getElementById('contact-form-element') as HTMLFormElement | null;
+  if (form) {
+    const btn = form.querySelector<HTMLButtonElement>('.submit-btn')!;
+    const feedback = form.querySelector<HTMLDivElement>('.form-feedback')!;
+    const defaultLabel = btn.dataset.defaultLabel ?? 'Send';
+    const sendingLabel = btn.dataset.sendingLabel ?? 'Sending…';
+    const successMsg = feedback.dataset.successMsg ?? 'Sent!';
+    const errorMsg = feedback.dataset.errorMsg ?? 'Error. Please try again.';
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      feedback.className = 'form-feedback';
+      feedback.textContent = '';
+
+      const data = Object.fromEntries(new FormData(form).entries());
+      btn.disabled = true;
+      btn.textContent = sendingLabel;
+
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        form.reset();
+        feedback.className = 'form-feedback success';
+        feedback.textContent = successMsg;
+      } catch (err) {
+        feedback.className = 'form-feedback error';
+        feedback.textContent = errorMsg;
+        console.error('Contact form error', err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = defaultLabel;
+      }
+    });
+  }
+</script>

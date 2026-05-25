@@ -1,0 +1,22 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Topiques — Oaziz Extracts'
+  description='Topiques de cannabis pour marques privées et formulations sur mesure. Production sous licence Santé Canada.'
+  lang={lang}
+  path="/topicals"
+>
+  <ContactSection
+    lang={lang}
+    title="Demande d'Information — Topiques"
+    showLeadIn
+    context="Topicals inquiry"
+    defaultSubject="sales"
+    fullHeight
+  />
+</Layout>

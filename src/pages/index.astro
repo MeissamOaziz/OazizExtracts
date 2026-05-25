@@ -1,15 +1,75 @@
 ---
-const title = 'Oaziz Extracts — Rincer. Raffiner. Répéter.';
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+import { t } from '../i18n/ui';
+
+const lang = 'fr';
+const T = t(lang);
+
+const partners = [
+  { src: '/images/BIG.svg',                    alt: 'BIG Brand' },
+  { src: '/images/CC-logo.jpeg',               alt: 'Cannara Biotech' },
+  { src: '/images/great-white-north-logo.png', alt: 'Great White North' },
+  { src: '/images/RMB-logo.png',               alt: 'Rosebud Motel' },
+  { src: '/images/shinybud_logo.jpeg',         alt: 'Shinybud' },
+  { src: '/images/The-Loud-Plug-Logo.png',     alt: 'The Loud Plug' },
+  { src: '/images/Truro.jpg',                  alt: 'Truro Cannabis' },
+];
 ---
-<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
-  </head>
-  <body>
-    <h1>Oaziz Extracts</h1>
-    <p>Astro scaffold is live. Full site migration in progress.</p>
-  </body>
-</html>
+
+<Layout
+  title="Oaziz Extracts — Rincer. Raffiner. Répéter."
+  description="Oaziz Extracts — raffineur de cannabis sans solvant basé à Montréal. Hash, rosine, kief IWE, fleur GMP, exportation B2B internationale."
+  lang={lang}
+  path="/"
+>
+  <section class="hero-collage" aria-label="Rincer · Raffiner · Répéter">
+    <div class="collage-panel rinse"><h1 class="motto-text">{T('hero.rinse')}</h1></div>
+    <div class="collage-panel refine"><h2 class="motto-text">{T('hero.refine')}</h2></div>
+    <div class="collage-panel repeat"><h2 class="motto-text">{T('hero.repeat')}</h2></div>
+  </section>
+
+  <section class="partner-carousel" aria-label="Partenaires">
+    <div class="carousel-track">
+      {partners.map((p) => <img src={p.src} alt={p.alt} loading="lazy" />)}
+      {partners.map((p) => <img src={p.src} alt="" aria-hidden="true" loading="lazy" />)}
+    </div>
+  </section>
+
+  <section class="intro-section">
+    <h2>{T('intro.title')}</h2>
+    <p class="intro-subheading">{T('intro.subheading')}</p>
+    <p>{T('intro.tagline')}</p>
+  </section>
+
+  <section class="services-section" aria-label="Nos services">
+    <div class="services-container">
+      <a href="/bulk" class="service-card">
+        <div class="card-collage-bg">
+          <div class="bg-line bg-rosin"></div>
+          <div class="bg-line bg-bulkhash"></div>
+          <div class="bg-line bg-trim"></div>
+        </div>
+        <span class="service-title">{T('services.bulk')}</span>
+      </a>
+      <a href="/whitelabel" class="service-card">
+        <div class="card-collage-bg">
+          <div class="bg-line bg-kief"></div>
+          <div class="bg-line bg-topicals"></div>
+          <div class="bg-line bg-vapefilling"></div>
+        </div>
+        <span class="service-title">{T('services.b2b')}</span>
+      </a>
+      <a href="/export" class="service-card">
+        <div class="card-collage-bg">
+          <div class="bg-line bg-cannabisflowergmp"></div>
+          <div class="bg-line bg-vapes"></div>
+          <div class="bg-line bg-transport"></div>
+        </div>
+        <span class="service-title">{T('services.export')}</span>
+      </a>
+    </div>
+  </section>
+
+  <ContactSection lang={lang} context="Homepage" />
+</Layout>

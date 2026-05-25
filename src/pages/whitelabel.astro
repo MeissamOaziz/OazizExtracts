@@ -1,0 +1,23 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Services B2B — Oaziz Extracts'
+  description='Services B2B Oaziz : marque blanche, formulation, contrôle qualité, logistique. Solution complète pour producteurs et distributeurs.'
+  lang={lang}
+  path="/whitelabel"
+>
+  <div class="page-container with-padding" style="padding: 60px 20px;">
+    <h1 class="page-header">Services B2B</h1>
+    <p class="product-description" style="font-size: 1.1rem;">
+      De la formulation à la mise en marché, Oaziz Extracts offre des services complets de
+      transformation, conditionnement et accompagnement réglementaire pour ses partenaires B2B.
+    </p>
+  </div>
+
+  <ContactSection lang={lang} context="B2B / White-label inquiry" defaultSubject="sales" />
+</Layout>

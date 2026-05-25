@@ -1,0 +1,76 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const lang = 'fr';
+
+const gallery = [
+  '/images/brands/aube/Aube-product-quebec.jpg',
+  '/images/brands/aube/Aube-product-forest.jpg',
+  '/images/brands/aube/Aube-laboratory.jpg',
+  '/images/brands/aube/AUBESunrise.jpg',
+  '/images/brands/aube/Aube-packaging-and-cart.jpg',
+  '/images/brands/aube/Aube-packaging-and-fullcart.jpg',
+];
+---
+
+<Layout
+  title='AUBE — Vape de Rosine CannonFire — Oaziz Extracts'
+  description='AUBE par CannonFire — rosine pure sans solvant, format 510, profil de terpènes fidèle à la fleur. Disponible à la SQDC.'
+  lang={lang}
+  path="/brands/aube"
+  ogImage='/images/brands/aube/AUBESunrise.jpg'
+>
+  <section
+    class="brand-hero"
+    style={`background-image: url('/images/brands/aube/AUBESunrise.jpg'); height: 45vh;`}
+  >
+    <img src="/images/brands/aube/AUBE-LOGO.png" alt="AUBE Logo" class="brand-hero-logo" style="max-width: 220px;" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">AUBE par CannonFire</h1>
+    <p>La rosine la plus pure de CannonFire, dans un format 510 prêt à l'emploi — disponible à la SQDC.</p>
+  </section>
+
+  <section class="product-showcase">
+    <div class="product-showcase-grid">
+      <div class="product-grid-item">
+        <div class="product-image-container">
+          <img src="/images/brands/aube/Aube-packaging-and-fullcart.jpg" alt="AUBE Cartouche et Emballage" loading="lazy" />
+        </div>
+        <div class="product-details dark-bg-details">
+          <h3>AUBE — Vape de Rosine</h3>
+          <p>L'expression la plus pure de la fleur, sans solvant, dans un format de poche.</p>
+          <ul>
+            <li>Rosine sans solvant de qualité supérieure</li>
+            <li>Format 510 prêt à l'emploi</li>
+            <li>Profil de terpènes complet</li>
+            <li>Fabriqué à Montréal sous licence Santé Canada</li>
+          </ul>
+          <div class="product-cta-group">
+            <a
+              href="https://www.sqdc.ca/en-CA/p-aube/628942710100-P/628942710100"
+              target="_blank"
+              rel="noopener"
+              class="product-availability-badge"
+            >
+              <span class="badge-text">Disponible chez:</span>
+              <img src="/images/SQDC-logo.png" alt="SQDC" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="product-showcase">
+    <h2 style="text-align: center; color: var(--primary-black); font-size: 2rem; margin-bottom: 32px;">
+      Galerie AUBE
+    </h2>
+    <div class="product-gallery">
+      {gallery.map((src) => (
+        <div class="gallery-item"><img src={src} alt="" loading="lazy" /></div>
+      ))}
+    </div>
+  </section>
+</Layout>

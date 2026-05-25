@@ -1,0 +1,22 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Trim — Oaziz Extracts'
+  description='Trim de cannabis en vrac pour extraction et produits dérivés. Volumes flexibles et délais courts.'
+  lang={lang}
+  path="/trim"
+>
+  <ContactSection
+    lang={lang}
+    title="Demande d'Information — Trim"
+    showLeadIn
+    context="Trim inquiry"
+    defaultSubject="sales"
+    fullHeight
+  />
+</Layout>

@@ -1,0 +1,56 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+
+const pressed = [
+  { src: '/images/Afghan-Hash3.webp', alt: 'Hashish Afghan' },
+  { src: '/images/Afghan-Hash2.webp', alt: 'Hashish Afghan Pressé' },
+  { src: '/images/REPEAT.webp',       alt: 'Hashish Bloc' },
+];
+const iwe = [
+  { src: '/images/Curado-Purple-Octane-Hash.webp', alt: 'Hash Curado Purple Octane' },
+  { src: '/images/Curado-Royal-Temple-Ball.webp',  alt: 'Royal Temple Ball' },
+  { src: '/images/Piatella.webp',                  alt: 'Piatella Hash' },
+  { src: '/images/Templeball.webp',                alt: 'Templeball Hash' },
+];
+---
+
+<Layout
+  title='Hashish Pressé et Hash IWE — Oaziz Extracts'
+  description='Sélection de hashish Oaziz : pressage traditionnel et extraction à l’eau glacée (Ice Water Extract). Saveurs, textures et puissances variées pour connaisseurs B2B.'
+  lang={lang}
+  path="/hash"
+>
+  <div class="page-container with-padding">
+    <h1 class="page-header">Hashish Pressé et Hash « Ice Water Extract »</h1>
+    <p class="product-description">
+      Explorez notre sélection de hashish, allant des méthodes de pressage traditionnelles aux
+      techniques modernes d'extraction à l'eau glacée. Nous proposons des produits aux profils
+      de saveurs, textures et puissances variés pour satisfaire les connaisseurs.
+    </p>
+
+    <div class="product-subsection-container">
+      <div class="product-subsection">
+        <h2>Hashish Pressé</h2>
+        <div class="product-gallery">
+          {pressed.map((p) => (
+            <div class="gallery-item"><img src={p.src} alt={p.alt} loading="lazy" width="600" height="600" /></div>
+          ))}
+        </div>
+      </div>
+
+      <div class="product-subsection">
+        <h2>Hash « Ice Water Extract »</h2>
+        <div class="product-gallery">
+          {iwe.map((p) => (
+            <div class="gallery-item"><img src={p.src} alt={p.alt} loading="lazy" width="600" height="600" /></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ContactSection lang={lang} context="Hash inquiry" defaultSubject="sales" />
+</Layout>

@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+
+const items = [
+  { src: '/images/Rosin-1.webp', alt: 'Rosine 1' },
+  { src: '/images/Rosin-2.webp', alt: 'Rosine 2' },
+  { src: '/images/Rosin-3.webp', alt: 'Rosine 3' },
+  { src: '/images/Rosin-4.webp', alt: 'Rosine 4' },
+  { src: '/images/Rosin-5.webp', alt: 'Rosine 5' },
+];
+---
+
+<Layout
+  title='Rosines Cured et Live — Oaziz Extracts'
+  description='Rosines artisanales Oaziz : Cured Rosin riche et complexe, Live Rosin au profil terpénique frais. Production sans solvant à Montréal.'
+  lang={lang}
+  path="/rosin"
+>
+  <div class="page-container with-padding">
+    <h1 class="page-header">Rosines « Cured » et « Live »</h1>
+    <p class="product-description">
+      Découvrez le summum de l'extraction sans solvant avec notre collection de rosines. Nous
+      offrons à la fois de la « Cured Rosin », connue pour ses saveurs riches et complexes, et
+      de la « Live Rosin », célébrée pour son profil terpénique vibrant et frais.
+    </p>
+    <div class="product-gallery">
+      {items.map((p) => (
+        <div class="gallery-item"><img src={p.src} alt={p.alt} loading="lazy" width="600" height="600" /></div>
+      ))}
+    </div>
+  </div>
+
+  <ContactSection lang={lang} context="Rosin inquiry" defaultSubject="sales" />
+</Layout>

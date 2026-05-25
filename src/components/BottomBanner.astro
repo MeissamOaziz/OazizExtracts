@@ -1,0 +1,40 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t, localizeUrl } from '../i18n/ui';
+
+interface Props { lang: Locale; }
+const { lang } = Astro.props;
+const T = t(lang);
+
+const items = [
+  { href: localizeUrl('/kief',     lang), img: '/images/IWE-Kief-2.webp',         alt: 'Kief & IWE',  title: T('banner.kief') },
+  { href: localizeUrl('/hash',     lang), img: '/images/Afghan-Hash3.webp',       alt: 'Hash',        title: T('banner.hash') },
+  { href: localizeUrl('/rosin',    lang), img: '/images/Rosin-6.webp',            alt: 'Rosin',       title: T('banner.rosin') },
+  { href: localizeUrl('/trim',     lang), img: '/images/Trim.webp',               alt: 'Trim',        title: T('banner.trim') },
+  { href: localizeUrl('/flower',   lang), img: '/images/cannabisflowerGMP.webp',  alt: 'Flower',      title: T('banner.flower') },
+  { href: localizeUrl('/topicals', lang), img: '/images/Topicals.webp',           alt: 'Topicals',    title: T('banner.topicals') },
+  { href: localizeUrl('/export',   lang), img: '/images/transport.webp',          alt: 'Export',      title: T('banner.export') },
+];
+---
+
+<div class="fixed-bottom-banner" role="navigation" aria-label="Quick product access">
+  <div class="banner-left">
+    <a href={localizeUrl('/', lang)} class="banner-logo-container" aria-label="Oaziz Extracts home">
+      <img src="/images/Oaziz-Logo.webp" alt="" width="35" height="35" />
+    </a>
+    <span class="banner-cta-text">{T('banner.cta')}</span>
+  </div>
+
+  <div class="banner-items-container">
+    {items.map((i) => (
+      <a href={i.href} class="banner-item">
+        <img src={i.img} alt={i.alt} width="40" height="40" loading="lazy" />
+        <span class="item-title">{i.title}</span>
+      </a>
+    ))}
+  </div>
+
+  <div class="banner-contact">
+    <a href="#contact-form" class="contact-float-btn">{T('nav.contact')}</a>
+  </div>
+</div>

@@ -1,0 +1,99 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const lang = 'fr';
+
+const featured = [
+  {
+    img: '/images/PurpleOctane.webp',
+    alt: 'Curado Purple Octane Vape',
+    title: 'Curado Purple Octane 1.5g',
+    blurb: 'Une expérience de vapotage puissante et savoureuse.',
+    bullets: ['Distillat haut de gamme', 'Teneur élevée en THC', 'Format prêt à l\'emploi'],
+  },
+  {
+    img: '/images/PurpleOctane.webp',
+    alt: 'Curado Fruit 1.5g Vape',
+    title: 'Curado Fruit 1.5g',
+    blurb: 'Des saveurs fruitées et une puissance constante.',
+    bullets: ['Distillat de qualité supérieure', 'Profil de terpènes riche', 'Format 510 pratique'],
+  },
+];
+
+const medical = [
+  { src: '/images/TropicannaCookies.webp', alt: 'Tropicana Cookies',       label: 'Curado Tropicana Cookies Vape' },
+  { src: '/images/TropicannaCookies.webp', alt: 'Black Cherry Punch',      label: 'Curado Black Cherry Punch Vape' },
+  { src: '/images/PurpleOctane.webp',      alt: 'Purple Octane',           label: 'Curado Purple Octane Vape' },
+  { src: '/images/PurpleOctane.webp',      alt: 'Curado Fruit 1.5g',       label: 'Curado Fruit 1.5g Vape' },
+];
+
+const retailers = [
+  { href: 'https://mendomedical.ca',     src: '/images/Mendo-Medical-Cannabis-Logo.webp', alt: 'Mendo Medical Cannabis' },
+  { href: 'https://teedy.com',           src: '/images/Teedy.png',                        alt: 'Teedy' },
+  { href: 'https://herbaldispatch.com/', src: '/images/HerbalDispatch.webp',              alt: 'Herbal Dispatch' },
+  { href: 'https://flodega.com',         src: '/images/Flodega.png',                      alt: 'Flodega' },
+];
+---
+
+<Layout
+  title='CURADO — Oaziz Extracts'
+  description="CURADO Hash Ice Water Extract et vapes premium — disponibles à l'OCS et sur les plateformes médicales canadiennes."
+  lang={lang}
+  path="/brands/curado"
+  ogImage='/images/Curado-Logo.png'
+>
+  <section class="brand-hero white-bg-hero">
+    <img src="/images/Curado-Logo.png" alt="CURADO Logo" class="brand-hero-logo" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">CURADO</h1>
+    <p>Découvrez nos Hashish disponibles sur le marché Canadien</p>
+  </section>
+
+  <section class="product-showcase">
+    <div class="product-showcase-grid">
+      {featured.map((p) => (
+        <div class="product-grid-item">
+          <div class="product-image-container">
+            <img src={p.img} alt={p.alt} loading="lazy" />
+          </div>
+          <div class="product-details dark-bg-details">
+            <h3>{p.title}</h3>
+            <p>{p.blurb}</p>
+            <ul>{p.bullets.map((b) => <li>{b}</li>)}</ul>
+            <div class="product-cta-group">
+              <a href="https://ocs.ca" target="_blank" rel="noopener" class="product-availability-badge">
+                <span class="badge-text">Disponible chez:</span>
+                <img src="/images/OCS-logo.png" alt="OCS" />
+              </a>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="product-showcase-medical">
+    <div class="page-container with-padding">
+      <h2 class="section-title-dark">Nos Produits Disponibles sur Plateformes Médicales</h2>
+
+      <div class="medical-retailers-bar">
+        {retailers.map((r) => (
+          <a href={r.href} target="_blank" rel="noopener" class="med-retailer-link">
+            <img src={r.src} alt={r.alt} loading="lazy" />
+          </a>
+        ))}
+      </div>
+
+      <div class="medical-product-gallery">
+        {medical.map((m) => (
+          <div class="med-card">
+            <div class="med-image-wrapper"><img src={m.src} alt={m.alt} loading="lazy" /></div>
+            <p>{m.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

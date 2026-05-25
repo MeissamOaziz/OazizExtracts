@@ -1,0 +1,42 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t } from '../i18n/ui';
+
+interface Props { lang: Locale; }
+const { lang } = Astro.props;
+const T = t(lang);
+---
+
+<div id="age-gate" class="age-gate-overlay" hidden>
+  <div class="age-gate-card" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
+    <img src="/images/Oaziz-Logo.webp" alt="Oaziz Extracts" />
+    <h2 id="age-gate-title">{T('age.title')}</h2>
+    <p>{T('age.body')}</p>
+    <div class="age-gate-actions">
+      <button type="button" class="age-gate-yes" id="age-gate-yes">{T('age.yes')}</button>
+      <button type="button" class="age-gate-no" id="age-gate-no">{T('age.no')}</button>
+    </div>
+    <p class="age-gate-fine-print">{T('age.finePrint')}</p>
+  </div>
+</div>
+
+<script>
+  const KEY = 'oaziz_age_ok';
+  const overlay = document.getElementById('age-gate');
+  if (overlay) {
+    if (sessionStorage.getItem(KEY) === '1' || localStorage.getItem(KEY) === '1') {
+      overlay.remove();
+    } else {
+      overlay.hidden = false;
+      document.body.style.overflow = 'hidden';
+      document.getElementById('age-gate-yes')?.addEventListener('click', () => {
+        localStorage.setItem(KEY, '1');
+        overlay.remove();
+        document.body.style.overflow = '';
+      });
+      document.getElementById('age-gate-no')?.addEventListener('click', () => {
+        window.location.href = 'https://www.google.com';
+      });
+    }
+  }
+</script>

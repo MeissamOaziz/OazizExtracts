@@ -1,0 +1,22 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Exportation — Oaziz Extracts'
+  description='Exportation internationale de produits de cannabis sous licence Santé Canada. Conformité réglementaire, logistique douanière, partenaires de confiance.'
+  lang={lang}
+  path="/export"
+>
+  <ContactSection
+    lang={lang}
+    title="Demande d'Information — Exportation"
+    showLeadIn
+    context="Export inquiry"
+    defaultSubject="export"
+    fullHeight
+  />
+</Layout>

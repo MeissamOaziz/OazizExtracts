@@ -1,0 +1,93 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const lang = 'fr';
+
+const medical = [
+  { src: '/images/CannonfireBCP.webp',              alt: 'Black Cherry Punch Vape',  label: 'Black Cherry Punch Rosin Vape' },
+  { src: '/images/Cannonfire3bk1.webp',             alt: '3 Blue Kings Rosin Vape',  label: '3 Blue Kings Rosin Vape' },
+  { src: '/images/CannonfireMandarinCookies1.webp', alt: 'Mandarin Cookies Vape',    label: 'Mandarin Cookies Rosin Vape' },
+  { src: '/images/CannonfireFlawless.webp',         alt: 'Flawless Victory Vape',    label: 'Flawless Victory Rosin Vape' },
+  { src: '/images/SAPPHIRE_SCOUTVAPE.jpg',          alt: 'Sapphire Scout Vape',      label: 'Sapphire Scout Rosin Vape' },
+];
+
+const retailers = [
+  { href: 'https://mendomedical.ca',  src: '/images/Mendo-Medical-Cannabis-Logo.webp', alt: 'Mendo Medical Cannabis' },
+  { href: 'https://teedy.com',        src: '/images/Teedy.png',                        alt: 'Teedy' },
+  { href: 'https://herbaldispatch.com/', src: '/images/HerbalDispatch.webp',           alt: 'Herbal Dispatch' },
+  { href: 'https://flodega.com',      src: '/images/Flodega.png',                      alt: 'Flodega' },
+];
+---
+
+<Layout
+  title='CannonFire — Oaziz Extracts'
+  description='Vapes de rosine sans solvant CannonFire — disponibles à la SQDC et sur les plateformes médicales canadiennes.'
+  lang={lang}
+  path="/brands/cannonfire"
+  ogImage='/images/Cannonfire-Logo.png'
+>
+  <section class="brand-hero white-bg-hero">
+    <img src="/images/Cannonfire-Logo.png" alt="CannonFire Logo" class="brand-hero-logo" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">CannonFire</h1>
+    <p>Découvrez nos Vapes disponibles sur le marché Canadien</p>
+  </section>
+
+  <section class="product-showcase">
+    <div class="product-showcase-grid">
+      <div class="product-grid-item">
+        <div class="product-image-container">
+          <img src="/images/Aube-packaging-and-fullcart.jpg" alt="AUBE Vape Cartridge" loading="lazy" />
+        </div>
+        <div class="product-details dark-bg-details">
+          <h3>AUBE</h3>
+          <p>La rosine la plus pure de CannonFire, pour une expérience douce et complète.</p>
+          <ul>
+            <li>Rosine sans solvant de qualité supérieure</li>
+            <li>Format 510 prêt à l'emploi</li>
+            <li>Profil de terpènes complet et fidèle à la fleur</li>
+          </ul>
+          <div class="product-cta-group">
+            <a href="/brands/aube" class="contact-float-btn cta-light">Voir le Produit</a>
+            <a
+              href="https://www.sqdc.ca/en-CA/p-aube/628942710100-P/628942710100"
+              target="_blank"
+              rel="noopener"
+              class="product-availability-badge"
+            >
+              <span class="badge-text">Disponible chez:</span>
+              <img src="/images/SQDC-logo.png" alt="SQDC" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="product-showcase-medical">
+    <div class="page-container with-padding">
+      <h2 class="section-title-dark">Nos Produits Disponibles sur Plateformes Médicales</h2>
+
+      <div class="medical-retailers-bar">
+        {retailers.map((r) => (
+          <a href={r.href} target="_blank" rel="noopener" class="med-retailer-link">
+            <img src={r.src} alt={r.alt} loading="lazy" />
+          </a>
+        ))}
+      </div>
+
+      <div class="medical-product-gallery">
+        {medical.map((m) => (
+          <div class="med-card">
+            <div class="med-image-wrapper">
+              <img src={m.src} alt={m.alt} loading="lazy" />
+            </div>
+            <p>{m.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

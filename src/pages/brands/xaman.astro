@@ -1,0 +1,25 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ContactSection from '../../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Xaman — Oaziz Extracts'
+  description='Xaman — gamme de topiques au cannabis Oaziz Extracts. Page complète à venir.'
+  lang={lang}
+  path="/brands/xaman"
+  ogImage='/images/Xaman-logo.jpg'
+>
+  <section class="brand-hero white-bg-hero">
+    <img src="/images/Xaman-logo.jpg" alt="Xaman Logo" class="brand-hero-logo" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">Xaman</h1>
+    <p>Notre gamme de topiques au cannabis — page complète à venir.</p>
+  </section>
+
+  <ContactSection lang={lang} title="Demande d'Information — Xaman" showLeadIn context="Xaman inquiry" defaultSubject="sales" />
+</Layout>

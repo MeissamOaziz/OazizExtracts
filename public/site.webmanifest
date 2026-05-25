@@ -1,0 +1,10 @@
+{
+  "name": "Oaziz Extracts",
+  "short_name": "Oaziz",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "theme_color": "#d05826",
+  "background_color": "#1e1e1e",
+  "display": "standalone"
+}

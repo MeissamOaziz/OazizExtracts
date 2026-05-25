@@ -1,0 +1,62 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const lang = 'fr';
+
+const medical = [
+  { src: '/images/CanolioBCP.png',           alt: 'Canolio 3 Blue Kings',          label: 'Canolio 3 Blue Kings Rosin Syrup' },
+  { src: '/images/CanolioBCPpackaging.png',  alt: 'Canolio Black Cherry Punch',    label: 'Canolio Black Cherry Punch Rosin Syrup' },
+  { src: '/images/CanolioBCP.png',           alt: 'Canolio Sapphire Scout',        label: 'Canolio Sapphire Scout Rosin Syrup' },
+];
+
+const retailers = [
+  { href: 'https://mendomedical.ca',     src: '/images/Mendo-Medical-Cannabis-Logo.webp', alt: 'Mendo Medical Cannabis' },
+  { href: 'https://teedy.com',           src: '/images/Teedy.png',                        alt: 'Teedy' },
+  { href: 'https://herbaldispatch.com/', src: '/images/HerbalDispatch.webp',              alt: 'Herbal Dispatch' },
+  { href: 'https://flodega.com',         src: '/images/Flodega.png',                      alt: 'Flodega' },
+];
+---
+
+<Layout
+  title='CANOLIO — Oaziz Extracts'
+  description='Sirops de Rosine CANOLIO développés avec Canolio Gourmet pour vos recettes de comestibles infusés au cannabis.'
+  lang={lang}
+  path="/brands/canolio"
+  ogImage='/images/Canolio-Logo.png'
+>
+  <section class="brand-hero white-bg-hero">
+    <img src="/images/Canolio-Logo.png" alt="CANOLIO Logo" class="brand-hero-logo" />
+  </section>
+
+  <section class="brand-intro-cta">
+    <h1 class="sr-only">CANOLIO</h1>
+    <p>
+      Découvrez nos Sirops de Rosine développés en partenariat avec
+      <a href="https://canoliogourmet.ca/" target="_blank" rel="noopener">Canolio Gourmet</a>,
+      spécifiquement conçus pour vos recettes de produits comestibles au cannabis.
+    </p>
+  </section>
+
+  <section class="product-showcase-medical">
+    <div class="page-container with-padding">
+      <h2 class="section-title-dark">Nos Produits Disponibles sur Plateformes Médicales</h2>
+
+      <div class="medical-retailers-bar">
+        {retailers.map((r) => (
+          <a href={r.href} target="_blank" rel="noopener" class="med-retailer-link">
+            <img src={r.src} alt={r.alt} loading="lazy" />
+          </a>
+        ))}
+      </div>
+
+      <div class="medical-product-gallery">
+        {medical.map((m) => (
+          <div class="med-card">
+            <div class="med-image-wrapper"><img src={m.src} alt={m.alt} loading="lazy" /></div>
+            <p>{m.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Layout>

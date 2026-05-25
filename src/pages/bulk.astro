@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+---
+
+<Layout
+  title='Extraits en Vrac & Marque Blanche — Oaziz Extracts'
+  description='Extraits sans solvant en vrac et services de marque blanche pour producteurs licenciés.'
+  lang={lang}
+  path="/bulk"
+>
+  <div class="page-container with-padding" style="padding: 60px 20px;">
+    <h1 class="page-header">Extraits en Vrac & Marque Blanche</h1>
+    <p class="product-description" style="font-size: 1.1rem;">
+      Nous offrons des extraits sans solvant en vrac — hash pressé, kief, IWE, rosine — ainsi
+      que des services de marque blanche complets pour les producteurs licenciés. Notre équipe
+      vous accompagne du concept à la livraison.
+    </p>
+  </div>
+
+  <ContactSection lang={lang} context="Bulk / White-label inquiry" defaultSubject="sales" />
+</Layout>

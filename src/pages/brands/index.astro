@@ -1,0 +1,41 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { t } from '../../i18n/ui';
+
+const lang = 'fr';
+const T = t(lang);
+
+const brands = [
+  { href: '/brands/cannonfire', logo: '/images/Cannonfire-Logo.png', alt: 'CannonFire Logo', name: 'CannonFire', tag: '' },
+  { href: '/brands/curado',     logo: '/images/Curado-Logo.png',     alt: 'Curado Logo',     name: 'CURADO',     tag: 'HASH Ice Water Extract' },
+  { href: '/brands/canolio',    logo: '/images/Canolio-Logo.png',    alt: 'Canolio Logo',    name: 'CANOLIO',    tag: 'Sirop de Rosine' },
+  { href: '/brands/xaman',      logo: '/images/Xaman-logo.jpg',      alt: 'Xaman Logo',      name: 'Xaman',      tag: 'TOPIQUES' },
+  { href: '/brands/hashtisan',  logo: '/images/Hashtisan-Logo.png',  alt: 'Hashtisan Logo',  name: 'Hashtisan',  tag: 'HASH Dry Sift' },
+  { href: '/brands/hazo',       logo: '/images/Hazo-logo.png',       alt: 'Hazo Logo',       name: 'Hazo',       tag: 'FLEUR' },
+];
+---
+
+<Layout
+  title="Nos Marques — Oaziz Extracts"
+  description="Découvrez les marques Oaziz Extracts : CannonFire, Curado, Canolio, Hashtisan, Hazo, Xaman. Hash, rosine, ice water extract, fleur et plus."
+  lang={lang}
+  path="/brands"
+  bodyClass="brands-page-background"
+>
+  <main class="page-container">
+    <h1 class="sr-only">{T('brands.title')}</h1>
+    <div class="brands-grid">
+      {brands.map((b) => (
+        <a href={b.href} class="brand-card">
+          <div class="brand-logo-wrapper">
+            <img src={b.logo} alt={b.alt} loading="lazy" />
+          </div>
+          <div class="brand-info">
+            <h3>{b.name}</h3>
+            {b.tag && <p>{b.tag}</p>}
+          </div>
+        </a>
+      ))}
+    </div>
+  </main>
+</Layout>

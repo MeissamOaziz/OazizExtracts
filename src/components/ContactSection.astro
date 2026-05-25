@@ -1,0 +1,40 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t } from '../i18n/ui';
+import ContactForm from './ContactForm.astro';
+
+interface Props {
+  lang: Locale;
+  /** If true, show the long lead-in copy. Used on dedicated product enquiry pages. */
+  showLeadIn?: boolean;
+  /** Override the section title; defaults to "Nous Joindre". */
+  title?: string;
+  context?: string;
+  defaultSubject?: 'general' | 'export' | 'sales' | 'qa' | 'finance';
+  /** Stretch the section to nearly full viewport (used when the form *is* the page). */
+  fullHeight?: boolean;
+}
+
+const {
+  lang,
+  showLeadIn = false,
+  title,
+  context = '',
+  defaultSubject = 'general',
+  fullHeight = false,
+} = Astro.props;
+const T = t(lang);
+const sectionTitle = title ?? T('form.title');
+---
+
+<section
+  id="contact-form"
+  class="contact-section"
+  style={fullHeight ? 'min-height: 80vh; display: flex; align-items: center;' : ''}
+>
+  <div class="page-container">
+    <h2 class="section-title">{sectionTitle}</h2>
+    {showLeadIn && <p class="contact-lead-in">{T('form.leadIn')}</p>}
+    <ContactForm lang={lang} context={context} defaultSubject={defaultSubject} />
+  </div>
+</section>

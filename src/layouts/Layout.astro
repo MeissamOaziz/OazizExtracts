@@ -1,0 +1,93 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t, localizeUrl, defaultLocale, locales } from '../i18n/ui';
+import Header from '../components/Header.astro';
+import BottomBanner from '../components/BottomBanner.astro';
+import Footer from '../components/Footer.astro';
+import AgeGate from '../components/AgeGate.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  lang?: Locale;
+  /** Class applied to <body> (e.g. "brands-page-background" for the brands index). */
+  bodyClass?: string;
+  /** Absolute path of this page, root-relative (e.g. "/hash"). Used by Header for active state + lang switch + OG canonical. */
+  path: string;
+  /** Open Graph image (defaults to homepage hero). */
+  ogImage?: string;
+}
+
+const {
+  title,
+  description,
+  lang = defaultLocale,
+  bodyClass = '',
+  path,
+  ogImage = '/images/Oaziz-Logo.webp',
+} = Astro.props;
+
+const T = t(lang);
+const metaDescription = description ?? T('meta.defaultDescription');
+const siteUrl = (Astro.site ?? new URL('https://oaziz.ca')).toString().replace(/\/$/, '');
+const canonical = `${siteUrl}${path === '/' ? '' : path}`;
+const ogImageAbs = ogImage.startsWith('http') ? ogImage : `${siteUrl}${ogImage}`;
+
+// Build hreflang alternates: for each locale, derive the equivalent URL
+const stripped = path.replace(/^\/en(\/|$)/, '/');
+const alternates = locales.map((loc) => ({
+  hreflang: loc === 'fr' ? 'fr-CA' : 'en-CA',
+  href: `${siteUrl}${localizeUrl(stripped, loc)}`,
+}));
+---
+
+<!DOCTYPE html>
+<html lang={lang === 'fr' ? 'fr-CA' : 'en-CA'}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={metaDescription} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- hreflang alternates -->
+    {alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)}
+    <link rel="alternate" hreflang="x-default" href={`${siteUrl}${stripped === '/' ? '' : stripped}`} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={metaDescription} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageAbs} />
+    <meta property="og:locale" content={lang === 'fr' ? 'fr_CA' : 'en_CA'} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={metaDescription} />
+    <meta name="twitter:image" content={ogImageAbs} />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#d05826" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet" />
+  </head>
+  <body class={bodyClass}>
+    <AgeGate lang={lang} />
+    <Header lang={lang} currentPath={path} />
+    <main>
+      <slot />
+    </main>
+    <BottomBanner lang={lang} />
+    <Footer lang={lang} />
+  </body>
+</html>

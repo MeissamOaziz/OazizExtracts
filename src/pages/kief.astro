@@ -1,0 +1,56 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ContactSection from '../components/ContactSection.astro';
+
+const lang = 'fr';
+
+const dry = [
+  { src: '/images/Dry-Tumbled-Kief-2.webp', alt: 'Kief Tamisé à sec' },
+  { src: '/images/Dry-Tumbled-Kief.webp',   alt: 'Kief Tamisé' },
+];
+const iwe = [
+  { src: '/images/IWE-Kief-2.webp',           alt: 'Ice Water Extract Kief 1' },
+  { src: '/images/IWE-Kief.webp',             alt: 'Ice Water Extract Kief 2' },
+  { src: '/images/Ice-Water-Extract-Kief.webp', alt: 'Ice Water Extract Kief 3' },
+];
+---
+
+<Layout
+  title='Kief Tamisé et Kief IWE — Oaziz Extracts'
+  description='Kief Oaziz : tamisé traditionnel et Ice Water Extract haut de gamme. Plusieurs grades de pureté et puissance, disponibles en vrac pour producteurs licenciés.'
+  lang={lang}
+  path="/kief"
+>
+  <div class="page-container with-padding">
+    <h1 class="page-header">Kief Tamisé et Kief « Ice Water Extract »</h1>
+    <p class="product-description">
+      Nous offrons deux types distincts de kief pour répondre à tous les besoins du marché. Chaque
+      type est disponible en plusieurs grades de qualité et de puissance, avec une variété de
+      gammes de couleurs pour satisfaire les spécifications précises de nos clients. Notre Kief
+      IWE (Ice Water Extract) est généralement plus puissant et pur, idéal pour les produits
+      hauts de gamme.
+    </p>
+
+    <div class="product-subsection-container">
+      <div class="product-subsection">
+        <h2>Kief Tamisé (Tumbled Kief)</h2>
+        <div class="product-gallery">
+          {dry.map((p) => (
+            <div class="gallery-item"><img src={p.src} alt={p.alt} loading="lazy" width="600" height="600" /></div>
+          ))}
+        </div>
+      </div>
+
+      <div class="product-subsection">
+        <h2>Kief « Ice Water Extract » (IWE)</h2>
+        <div class="product-gallery">
+          {iwe.map((p) => (
+            <div class="gallery-item"><img src={p.src} alt={p.alt} loading="lazy" width="600" height="600" /></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ContactSection lang={lang} context="Kief & IWE inquiry" defaultSubject="sales" />
+</Layout>
