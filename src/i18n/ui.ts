@@ -206,6 +206,19 @@ const fr: Dict = {
   'curado.cj.b3':        "Profil complexe : gaz/diesel, menthe sucrée, terre crémeuse, zeste d'agrumes, finale herbacée",
   'curado.cj.b4':        'Terpènes dominants : β-Linalool, β-Caryophyllène, (-)-α-Bisabolol — effets stimulants et enveloppants',
 
+  'curado.royal.title':  'Royal (M-39) Temple Ball',
+  'curado.royal.blurb':  "Le légendaire cultivar Royal M-39 sous forme concentrée. Temple ball 1,5 g vieilli 3-4 mois selon les méthodes traditionnelles québécoises — texture dense et malléable, finition brun glacé, effets équilibrés pour usage thérapeutique polyvalent.",
+  'curado.royal.b1':     "Vieillissement authentique 3-4 mois — développement complet des cannabinoïdes et terpènes",
+  'curado.royal.b2':     'Cultivar : Royal M-39 (Hybride) · héritage cannabique québécois',
+  'curado.royal.b3':     'THC 54,7 % · Terpènes totaux 2,81 %',
+  'curado.royal.b4':     'Profil : terreux, épicé, herbacé · Terpènes dominants : Caryophyllène, Myrcène, Bisabolol',
+
+  'curado.fruit.title':  'Curado Fruit Temple Ball',
+  'curado.fruit.blurb':  "Temple ball hash fruité, fabriqué selon les méthodes traditionnelles Curado. Fiche produit détaillée à venir.",
+  'curado.fruit.b1':     'Format temple ball — fabrication artisanale',
+  'curado.fruit.b2':     'Profil fruité distinctif',
+  'curado.fruit.b3':     'Disponible exclusivement sur les plateformes médicales',
+
   // Canolio brand
   'canolio.meta.title':  'CANOLIO — Oaziz Extracts',
   'canolio.meta.desc':   'Sirops de Rosine CANOLIO développés avec Canolio Gourmet pour vos recettes de comestibles infusés au cannabis.',
@@ -489,6 +502,19 @@ const en: Dict = {
   'curado.cj.b2':        'Total terpenes 2.37% · THC 59.98%',
   'curado.cj.b3':        'Complex profile: gas/diesel, sweet mint, creamy earth, citrus zest, herbal finish',
   'curado.cj.b4':        'Dominant terpenes: β-Linalool, β-Caryophyllene, (-)-α-Bisabolol — uplifting and heavy-bodied effects',
+
+  'curado.royal.title':  'Royal (M-39) Temple Ball',
+  'curado.royal.blurb':  "The legendary Royal M-39 cultivar in premium concentrate form. 1.5g temple ball aged 3-4 months in the traditional Quebec hash-making style — dense yet malleable texture, glossy brown finish, balanced effects for versatile therapeutic use.",
+  'curado.royal.b1':     'Authentically aged 3-4 months — full cannabinoid and terpene development',
+  'curado.royal.b2':     "Strain: Royal M-39 (Hybrid) · Quebec's rich cannabis heritage",
+  'curado.royal.b3':     'THC 54.7% · Total terpenes 2.81%',
+  'curado.royal.b4':     'Profile: earthy, spicy, herbal · Dominant terpenes: Caryophyllene, Myrcene, Bisabolol',
+
+  'curado.fruit.title':  'Curado Fruit Temple Ball',
+  'curado.fruit.blurb':  'Fruit-forward temple ball hash, crafted using the same traditional Curado methods. Full product specs coming soon.',
+  'curado.fruit.b1':     'Temple ball format — hand-crafted',
+  'curado.fruit.b2':     'Distinctive fruit-forward profile',
+  'curado.fruit.b3':     'Available exclusively on medical platforms',
 
   'canolio.meta.title':  'CANOLIO — Oaziz Extracts',
   'canolio.meta.desc':   'CANOLIO Rosin Syrups developed with Canolio Gourmet for your cannabis-infused edible recipes.',
