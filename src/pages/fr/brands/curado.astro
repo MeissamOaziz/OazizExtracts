@@ -7,22 +7,26 @@ const T = t(lang);
 
 const featured = [
   {
-    img: '/images/PBB-J-Temple-Ball.webp', alt: 'Curado Peanut Butter Breath Temple Ball',
-    titleKey: 'curado.pbb.title', blurbKey: 'curado.pbb.blurb',
+    img: '/images/PBB-J-Temple-Ball.webp',
+    alt: 'Curado Peanut Butter Breath Temple Ball',
+    titleKey: 'curado.pbb.title',
+    blurbKey: 'curado.pbb.blurb',
     bKeys: ['curado.pbb.b1', 'curado.pbb.b2', 'curado.pbb.b3', 'curado.pbb.b4'],
   },
   {
-    img: '/images/PurpleOctane.webp', alt: 'Curado Fruit 1.5g Vape',
-    titleKey: 'curado.fruit.title', blurbKey: 'curado.fruit.blurb',
-    bKeys: ['curado.fruit.b1', 'curado.fruit.b2', 'curado.fruit.b3'],
+    img: '/images/Curado-Cali-Biscotti-Hash-1.5g.webp',
+    alt: 'Curado Cali Biscotti Temple Ball Hash',
+    titleKey: 'curado.cb.title',
+    blurbKey: 'curado.cb.blurb',
+    bKeys: ['curado.cb.b1', 'curado.cb.b2', 'curado.cb.b3', 'curado.cb.b4'],
   },
-];
-
-const medical = [
-  { src: '/images/TropicannaCookies.webp', alt: 'Tropicana Cookies',   labelKey: 'curado.med.tc' },
-  { src: '/images/TropicannaCookies.webp', alt: 'Black Cherry Punch',  labelKey: 'curado.med.bcp' },
-  { src: '/images/PurpleOctane.webp',      alt: 'Purple Octane',       labelKey: 'curado.med.po' },
-  { src: '/images/PurpleOctane.webp',      alt: 'Curado Fruit 1.5g',   labelKey: 'curado.med.fruit' },
+  {
+    img: '/images/Curado-Cap-Junky-Temple-Ball-Jar.webp',
+    alt: 'Curado Cap Junky Temple Ball',
+    titleKey: 'curado.cj.title',
+    blurbKey: 'curado.cj.blurb',
+    bKeys: ['curado.cj.b1', 'curado.cj.b2', 'curado.cj.b3', 'curado.cj.b4'],
+  },
 ];
 
 const retailers = [
@@ -54,12 +58,6 @@ const retailers = [
             <h3>{T(p.titleKey)}</h3>
             <p>{T(p.blurbKey)}</p>
             <ul>{p.bKeys.map((k) => <li>{T(k)}</li>)}</ul>
-            <div class="product-cta-group">
-              <a href="https://ocs.ca" target="_blank" rel="noopener" class="product-availability-badge">
-                <span class="badge-text">{T('brands.availableAt')}</span>
-                <img src="/images/OCS-logo.png" alt="OCS" />
-              </a>
-            </div>
           </div>
         </div>
       ))}
@@ -74,14 +72,6 @@ const retailers = [
           <a href={r.href} target="_blank" rel="noopener" class="med-retailer-link">
             <img src={r.src} alt={r.alt} loading="lazy" />
           </a>
-        ))}
-      </div>
-      <div class="medical-product-gallery">
-        {medical.map((m) => (
-          <div class="med-card">
-            <div class="med-image-wrapper"><img src={m.src} alt={m.alt} loading="lazy" /></div>
-            <p>{T(m.labelKey)}</p>
-          </div>
         ))}
       </div>
     </div>
