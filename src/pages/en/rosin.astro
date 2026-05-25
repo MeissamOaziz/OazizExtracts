@@ -1,9 +1,9 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import ContactSection from '../components/ContactSection.astro';
-import { t } from '../i18n/ui';
+import Layout from '../../layouts/Layout.astro';
+import ContactSection from '../../components/ContactSection.astro';
+import { t } from '../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 
 const items = [
@@ -15,7 +15,7 @@ const items = [
 ];
 ---
 
-<Layout title={T('rosin.meta.title')} description={T('rosin.meta.desc')} lang={lang} path="/rosin">
+<Layout title={T('rosin.meta.title')} description={T('rosin.meta.desc')} lang={lang} path="/en/rosin">
   <div class="page-container with-padding">
     <h1 class="page-header">{T('rosin.h1')}</h1>
     <p class="product-description">{T('rosin.desc')}</p>

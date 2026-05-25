@@ -1,9 +1,9 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import ContactSection from '../components/ContactSection.astro';
-import { t } from '../i18n/ui';
+import Layout from '../../layouts/Layout.astro';
+import ContactSection from '../../components/ContactSection.astro';
+import { t } from '../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 
 const teamTop = [
@@ -17,7 +17,7 @@ const teamBottom = [
 ];
 ---
 
-<Layout title={T('about.meta.title')} description={T('about.meta.desc')} lang={lang} path="/about">
+<Layout title={T('about.meta.title')} description={T('about.meta.desc')} lang={lang} path="/en/about">
   <div class="page-container with-padding">
     <h1 class="page-header">{T('about.title')}</h1>
   </div>

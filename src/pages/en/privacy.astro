@@ -1,13 +1,13 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import { t } from '../i18n/ui';
+import Layout from '../../layouts/Layout.astro';
+import { t } from '../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 const updated = '2026-05-25';
 ---
 
-<Layout title={T('privacy.meta.title')} description={T('privacy.meta.desc')} lang={lang} path="/privacy">
+<Layout title={T('privacy.meta.title')} description={T('privacy.meta.desc')} lang={lang} path="/en/privacy">
   <article class="content-section white-bg">
     <div class="page-container" style="max-width: 800px;">
       <h1 class="page-header">{T('privacy.title')}</h1>

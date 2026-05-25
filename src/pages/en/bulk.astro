@@ -1,13 +1,13 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import ContactSection from '../components/ContactSection.astro';
-import { t } from '../i18n/ui';
+import Layout from '../../layouts/Layout.astro';
+import ContactSection from '../../components/ContactSection.astro';
+import { t } from '../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 ---
 
-<Layout title={T('bulk.meta.title')} description={T('bulk.meta.desc')} lang={lang} path="/bulk">
+<Layout title={T('bulk.meta.title')} description={T('bulk.meta.desc')} lang={lang} path="/en/bulk">
   <div class="page-container with-padding" style="padding: 60px 20px;">
     <h1 class="page-header">{T('bulk.h1')}</h1>
     <p class="product-description" style="font-size: 1.1rem;">{T('bulk.desc')}</p>

@@ -1,21 +1,18 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ContactSection from '../components/ContactSection.astro';
+import { t } from '../i18n/ui';
 
 const lang = 'fr';
+const T = t(lang);
 ---
 
-<Layout
-  title='Exportation — Oaziz Extracts'
-  description='Exportation internationale de produits de cannabis sous licence Santé Canada. Conformité réglementaire, logistique douanière, partenaires de confiance.'
-  lang={lang}
-  path="/export"
->
+<Layout title={T('export.meta.title')} description={T('export.meta.desc')} lang={lang} path="/export">
   <ContactSection
     lang={lang}
-    title="Demande d'Information — Exportation"
+    title={T('export.formTitle')}
     showLeadIn
-    context="Export inquiry"
+    context={T('export.ctx')}
     defaultSubject="export"
     fullHeight
   />

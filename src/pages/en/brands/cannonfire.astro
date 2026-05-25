@@ -1,8 +1,8 @@
 ---
-import Layout from '../../layouts/Layout.astro';
-import { t, localizeUrl } from '../../i18n/ui';
+import Layout from '../../../layouts/Layout.astro';
+import { t, localizeUrl } from '../../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 
 const medical = [
@@ -21,7 +21,7 @@ const retailers = [
 ];
 ---
 
-<Layout title={T('cf.meta.title')} description={T('cf.meta.desc')} lang={lang} path="/brands/cannonfire" ogImage="/images/Cannonfire-Logo.png">
+<Layout title={T('cf.meta.title')} description={T('cf.meta.desc')} lang={lang} path="/en/brands/cannonfire" ogImage="/images/Cannonfire-Logo.png">
   <section class="brand-hero white-bg-hero">
     <img src="/images/Cannonfire-Logo.png" alt="CannonFire Logo" class="brand-hero-logo" />
   </section>

@@ -1,13 +1,13 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import { t } from '../i18n/ui';
+import Layout from '../../layouts/Layout.astro';
+import { t } from '../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 const updated = '2026-05-25';
 ---
 
-<Layout title={T('legal.meta.title')} description={T('legal.meta.desc')} lang={lang} path="/legal">
+<Layout title={T('legal.meta.title')} description={T('legal.meta.desc')} lang={lang} path="/en/legal">
   <article class="content-section white-bg">
     <div class="page-container" style="max-width: 800px;">
       <h1 class="page-header">{T('legal.title')}</h1>
@@ -18,7 +18,7 @@ const updated = '2026-05-25';
       <h2 style="text-align: left;">{T('legal.publisher')}</h2>
       <p>
         <strong>Oaziz Extracts Inc.</strong><br />
-        322 Port Royal Ouest<br />
+        322 Port Royal West<br />
         Montréal, QC, Canada<br />
         {T('legal.email')} <a href="mailto:info@oaziz.ca">info@oaziz.ca</a>
       </p>

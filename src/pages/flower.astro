@@ -1,21 +1,18 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ContactSection from '../components/ContactSection.astro';
+import { t } from '../i18n/ui';
 
 const lang = 'fr';
+const T = t(lang);
 ---
 
-<Layout
-  title='Fleur — Oaziz Extracts'
-  description='Fleur de cannabis GMP, disponible pour producteurs et exportateurs. Demandez vos volumes, délais et spécifications.'
-  lang={lang}
-  path="/flower"
->
+<Layout title={T('flower.meta.title')} description={T('flower.meta.desc')} lang={lang} path="/flower">
   <ContactSection
     lang={lang}
-    title="Demande d'Information — Fleur"
+    title={T('flower.formTitle')}
     showLeadIn
-    context="Flower inquiry"
+    context={T('flower.ctx')}
     defaultSubject="sales"
     fullHeight
   />

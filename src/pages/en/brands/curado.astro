@@ -1,8 +1,8 @@
 ---
-import Layout from '../../layouts/Layout.astro';
-import { t } from '../../i18n/ui';
+import Layout from '../../../layouts/Layout.astro';
+import { t } from '../../../i18n/ui';
 
-const lang = 'fr';
+const lang = 'en';
 const T = t(lang);
 
 const featured = [
@@ -33,7 +33,7 @@ const retailers = [
 ];
 ---
 
-<Layout title={T('curado.meta.title')} description={T('curado.meta.desc')} lang={lang} path="/brands/curado" ogImage="/images/Curado-Logo.png">
+<Layout title={T('curado.meta.title')} description={T('curado.meta.desc')} lang={lang} path="/en/brands/curado" ogImage="/images/Curado-Logo.png">
   <section class="brand-hero white-bg-hero">
     <img src="/images/Curado-Logo.png" alt="CURADO Logo" class="brand-hero-logo" />
   </section>
