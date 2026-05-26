@@ -393,19 +393,28 @@ body.brands-page-background {
   gap: 24px;
   justify-content: center;
 }
-/* Single-featured-card variant: narrower, centered in the section. */
+/* Single-featured-card variant: centered in the section. */
 .product-showcase-grid.single {
-  grid-template-columns: minmax(0, 240px);
+  grid-template-columns: minmax(0, 480px);
   justify-content: center;
 }
-/* Portrait image variant: tall container, image fits without cropping
-   (preserves the natural aspect of the source photo). */
+/* Portrait image variant: tall container with the image centered inside
+   at a fixed visible size — image keeps its natural aspect, container
+   doubles around it for visual breathing room. */
 .product-grid-item.portrait .product-image-container {
-  height: 320px;
+  height: 640px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 .product-grid-item.portrait .product-image-container img {
+  width: auto;
+  height: auto;
+  max-width: 200px;
+  max-height: 280px;
   object-fit: contain;
-  padding: 18px;
+  padding: 0;
 }
 .product-grid-item {
   display: flex;
