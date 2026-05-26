@@ -393,6 +393,20 @@ body.brands-page-background {
   gap: 24px;
   justify-content: center;
 }
+/* Single-featured-card variant: narrower, centered in the section. */
+.product-showcase-grid.single {
+  grid-template-columns: minmax(0, 240px);
+  justify-content: center;
+}
+/* Portrait image variant: tall container, image fits without cropping
+   (preserves the natural aspect of the source photo). */
+.product-grid-item.portrait .product-image-container {
+  height: 320px;
+}
+.product-grid-item.portrait .product-image-container img {
+  object-fit: contain;
+  padding: 18px;
+}
 .product-grid-item {
   display: flex;
   flex-direction: column;
