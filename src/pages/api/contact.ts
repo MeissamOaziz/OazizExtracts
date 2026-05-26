@@ -75,7 +75,9 @@ export const POST: APIRoute = async ({ request }) => {
 <html><head><meta charset="utf-8"><style>
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;margin:0;padding:24px}
   .card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:12px;padding:28px;max-width:560px;margin:0 auto}
-  h2{color:#fff;margin:0 0 20px;font-size:18px}
+  .brand{text-align:center;margin-bottom:18px}
+  .brand img{height:64px;width:auto;display:inline-block}
+  .brand-name{display:block;color:#fff;margin-top:8px;font-size:13px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
   .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#d05826;color:#fff;margin-bottom:18px}
   .row{margin-bottom:14px}
   .label{font-size:11px;font-weight:600;color:#8b93a7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
@@ -85,7 +87,10 @@ export const POST: APIRoute = async ({ request }) => {
 </style></head>
 <body>
   <div class="card">
-    <h2>🌿 Oaziz Extracts</h2>
+    <div class="brand">
+      <img src="https://www.oaziz.ca/images/Oaziz-Logo.webp" alt="Oaziz Extracts" width="64" height="64" />
+      <span class="brand-name">Oaziz Extracts</span>
+    </div>
     <div class="badge">${safeSubject}</div>
     <div class="row"><div class="label">From</div><div class="value">${safeName} &lt;${safeEmail}&gt;</div></div>
     ${safeContext ? `<div class="row"><div class="label">Page / context</div><div class="value">${safeContext}</div></div>` : ''}
@@ -96,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
 </body></html>`;
 
     const apiKey = import.meta.env.RESEND_API_KEY;
-    const toEmail = import.meta.env.CONTACT_TO_EMAIL ?? 'meissam.h.p@gmail.com';
+    const toEmail = import.meta.env.CONTACT_TO_EMAIL ?? 'info@oaziz.ca';
     const fromEmail = import.meta.env.CONTACT_FROM_EMAIL ?? 'Oaziz Extracts <onboarding@resend.dev>';
 
     if (!apiKey) {
