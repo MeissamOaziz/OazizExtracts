@@ -608,6 +608,38 @@ body.brands-page-background {
   font-weight: 700;
 }
 
+/* --- About Page: Mission / Vision band --- */
+.mission-vision-section {
+  background-color: var(--primary-white);
+  padding: 50px 20px 30px;
+}
+.mission-vision-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.mv-card {
+  background-color: var(--light-gray);
+  padding: 28px 32px;
+  border-left: 4px solid var(--primary-orange);
+  border-radius: 6px;
+}
+.mv-card h3 {
+  color: var(--primary-orange);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 1rem;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+.mv-card p {
+  color: var(--primary-black);
+  line-height: 1.6;
+  font-size: 0.98rem;
+}
+
 /* --- About Page --- */
 .page-header {
   text-align: center;

@@ -30,9 +30,9 @@ const fr: Dict = {
 
   // Services
   'services.aria':       'Nos services',
-  'services.bulk':       'Extraits en Vrac & Marque Blanche',
-  'services.b2b':        'Services B2B',
-  'services.export':     'EXPORTATION',
+  'services.bulk':       'Extraits en Vrac et Services de Marque Blanche',
+  'services.b2b':        'Solutions B2B et Approvisionnement',
+  'services.export':     "Sentier d'Exportation",
 
   // Bottom banner
   'banner.cta':          'Je suis intéressé par :',
@@ -89,10 +89,15 @@ const fr: Dict = {
   'about.team.title':    'Notre Équipe',
   'about.team.intro':    "La direction d'Oaziz est composée d'un groupe diversifié d'individus possédant une vaste expérience en image de marque, formulation de produits, assurance qualité et financement. Par-dessus tout, nous sommes unis par une connaissance fondamentale et une expertise dans l'art et la science du cannabis.",
   'about.role.ceo':      'PDG',
-  'about.role.paq':      'PAQ',
-  'about.role.extractor':'Maître Extracteur',
-  'about.role.sales':    'Directeur des Ventes',
+  'about.role.paq':      "Directeur de l'Assurance Qualité et de la Conformité",
+  'about.role.extractor':'Directeur de la Production et de la R&D',
+  'about.role.sales':    'Directeur des Ventes et de la Commercialisation',
   'about.role.cfo':      'Directeur Financier',
+
+  'about.mission.title': 'Mission',
+  'about.mission.body':  "Chez Oaziz Extracts, notre raison d'être est de fournir à nos partenaires l'expertise, les infrastructures et les ressources nécessaires au développement de produits de cannabis de haute qualité, tout en respectant l'environnement et les communautés que nous desservons.",
+  'about.vision.title':  'Vision',
+  'about.vision.body':   "Être le gardien de confiance du raffinement du cannabis tout en établissant les normes de qualité, d'innovation, de durabilité et de gestion responsable dans l'industrie du cannabis.",
 
   // Brands
   'brands.meta.title':   'Nos Marques — Oaziz Extracts',
@@ -340,9 +345,9 @@ const en: Dict = {
   'intro.tagline':       'Tell us what brings you here today.',
 
   'services.aria':       'Our services',
-  'services.bulk':       'Bulk Extracts & White Label',
-  'services.b2b':        'B2B Services',
-  'services.export':     'EXPORT',
+  'services.bulk':       'Bulk Extracts and White Label Services',
+  'services.b2b':        'B2B and Procurement Solutions',
+  'services.export':     'International Export Pathway',
 
   'banner.cta':          "I'm interested in:",
   'banner.kief':         'Kief & IWE',
@@ -394,10 +399,15 @@ const en: Dict = {
   'about.team.title':    'Our Team',
   'about.team.intro':    "Oaziz's leadership is a diverse group with deep experience across branding, product formulation, quality assurance, and finance. Above all, we are united by foundational expertise in the art and science of cannabis.",
   'about.role.ceo':      'CEO',
-  'about.role.paq':      'QAP',
-  'about.role.extractor':'Master Extractor',
-  'about.role.sales':    'Sales Director',
+  'about.role.paq':      'Director of Quality Assurance and Compliance',
+  'about.role.extractor':'Director of Production and R&D',
+  'about.role.sales':    'Director of Sales and Commercialization',
   'about.role.cfo':      'Chief Financial Officer',
+
+  'about.mission.title': 'Mission',
+  'about.mission.body':  'At Oaziz Extracts, our purpose is to provide our partners with the expertise, infrastructure, and resources required to develop high-quality cannabis products while operating with respect for the environment and the communities we serve.',
+  'about.vision.title':  'Vision',
+  'about.vision.body':   'To be the trusted custodian of cannabis refinement, setting the standard for quality, innovation, sustainability, and responsible stewardship within the cannabis industry.',
 
   'brands.meta.title':   'Our Brands — Oaziz Extracts',
   'brands.meta.desc':    'Discover the Oaziz Extracts brands: CannonFire, Curado, Canolio, Hashtisan, Hazo, Xaman. Hash, rosin, ice water extract, flower and more.',
