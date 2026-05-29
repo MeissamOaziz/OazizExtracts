@@ -36,13 +36,22 @@ const fr: Dict = {
 
   // Bottom banner
   'banner.cta':          'Je suis intéressé par :',
-  'banner.kief':         'Kief & IWE',
+  'banner.kief':         'Kief & Bubble Hash',
   'banner.hash':         'Hash',
-  'banner.rosin':        'Rosine',
+  'banner.rosinvapes':   'Rosine & Vapes',
   'banner.trim':         'Trim',
   'banner.flower':       'Fleur',
+  'banner.prerolls':     'Pré-roulés',
   'banner.topicals':     'Topiques',
   'banner.export':       'Export',
+
+  'gallery.title':       'Raffinés',
+  'gallery.vapes':       'Vapes',
+  'gallery.bubblehash':  'Bubble Hash',
+  'gallery.hash':        'Hash',
+  'gallery.flower':      'Fleur',
+  'gallery.prerolls':    'Pré-roulés',
+  'gallery.topicals':    'Topiques',
 
   // Contact form
   'form.title':          'Nous Joindre',
@@ -101,7 +110,7 @@ const fr: Dict = {
   'brands.meta.desc':    'Découvrez les marques Oaziz Extracts : CannonFire, Curado, Canolio, Hashtisan, Hazo, Xaman. Hash, rosine, ice water extract, fleur et plus.',
   'brands.title':        'Nos Marques',
   'brands.tag.cannonfire':'',
-  'brands.tag.curado':   'HASH Ice Water Extract',
+  'brands.tag.curado':   'BUBBLE HASH',
   'brands.tag.canolio':  'Sirop de Rosine',
   'brands.tag.xaman':    'TOPIQUES',
   'brands.tag.hashtisan':'HASH Dry Sift',
@@ -110,12 +119,12 @@ const fr: Dict = {
   'brands.availableAt':  'Disponible chez :',
 
   // Hash page
-  'hash.meta.title':     'Hashish Pressé et Hash IWE — Oaziz Extracts',
-  'hash.meta.desc':      "Sélection de hashish Oaziz : pressage traditionnel et extraction à l'eau glacée (Ice Water Extract). Saveurs, textures et puissances variées pour connaisseurs B2B.",
-  'hash.h1':             'Hashish Pressé et Hash « Ice Water Extract »',
-  'hash.desc':           "Explorez notre sélection de hashish, allant des méthodes de pressage traditionnelles aux techniques modernes d'extraction à l'eau glacée. Nous proposons des produits aux profils de saveurs, textures et puissances variés pour satisfaire les connaisseurs.",
+  'hash.meta.title':     'Hashish Pressé et Bubble Hash — Oaziz Extracts',
+  'hash.meta.desc':      'Sélection de hashish Oaziz : pressage traditionnel et Bubble Hash (extraction à l\'eau glacée). Saveurs, textures et puissances variées pour connaisseurs B2B.',
+  'hash.h1':             'Hashish Pressé et Bubble Hash',
+  'hash.desc':           "Explorez notre sélection de hashish, allant des méthodes de pressage traditionnelles aux techniques modernes de Bubble Hash (extraction à l'eau glacée). Nous proposons des produits aux profils de saveurs, textures et puissances variés pour satisfaire les connaisseurs.",
   'hash.sub.pressed':    'Hashish Pressé',
-  'hash.sub.iwe':        'Hash « Ice Water Extract »',
+  'hash.sub.iwe':        'Bubble Hash',
   'hash.ctx':            'Hash inquiry',
 
   // Rosin page
@@ -126,13 +135,13 @@ const fr: Dict = {
   'rosin.ctx':           'Rosin inquiry',
 
   // Kief page
-  'kief.meta.title':     'Kief Tamisé et Kief IWE — Oaziz Extracts',
-  'kief.meta.desc':      'Kief Oaziz : tamisé traditionnel et Ice Water Extract haut de gamme. Plusieurs grades de pureté et puissance, disponibles en vrac pour producteurs licenciés.',
-  'kief.h1':             'Kief Tamisé et Kief « Ice Water Extract »',
-  'kief.desc':           "Nous offrons deux types distincts de kief pour répondre à tous les besoins du marché. Chaque type est disponible en plusieurs grades de qualité et de puissance, avec une variété de gammes de couleurs pour satisfaire les spécifications précises de nos clients. Notre Kief IWE (Ice Water Extract) est généralement plus puissant et pur, idéal pour les produits hauts de gamme.",
+  'kief.meta.title':     'Kief Tamisé et Bubble Hash Kief — Oaziz Extracts',
+  'kief.meta.desc':      'Kief Oaziz : tamisé traditionnel et Bubble Hash haut de gamme. Plusieurs grades de pureté et puissance, disponibles en vrac pour producteurs licenciés.',
+  'kief.h1':             'Kief Tamisé et Bubble Hash Kief',
+  'kief.desc':           'Nous offrons deux types distincts de kief pour répondre à tous les besoins du marché. Chaque type est disponible en plusieurs grades de qualité et de puissance, avec une variété de gammes de couleurs pour satisfaire les spécifications précises de nos clients. Notre Bubble Hash Kief (extrait à l\'eau glacée) est généralement plus puissant et pur, idéal pour les produits hauts de gamme.',
   'kief.sub.dry':        'Kief Tamisé (Tumbled Kief)',
-  'kief.sub.iwe':        'Kief « Ice Water Extract » (IWE)',
-  'kief.ctx':            'Kief & IWE inquiry',
+  'kief.sub.iwe':        'Bubble Hash Kief',
+  'kief.ctx':            'Kief & Bubble Hash inquiry',
 
   // Stub product pages
   'flower.meta.title':   'Fleur — Oaziz Extracts',
@@ -150,6 +159,11 @@ const fr: Dict = {
   'topicals.formTitle':  "Demande d'Information — Topiques",
   'topicals.ctx':        'Topicals inquiry',
 
+  'prerolls.meta.title': 'Pré-roulés — Oaziz Extracts',
+  'prerolls.meta.desc':  'Pré-roulés artisanaux et infusés pour producteurs licenciés et distributeurs. Demandez vos volumes, formats et délais.',
+  'prerolls.formTitle':  "Demande d'Information — Pré-roulés",
+  'prerolls.ctx':        'Pre-rolls inquiry',
+
   'export.meta.title':   'Exportation — Oaziz Extracts',
   'export.meta.desc':    "Exportation internationale de produits de cannabis sous licence Santé Canada. Conformité réglementaire, logistique douanière, partenaires de confiance.",
   'export.formTitle':    "Demande d'Information — Exportation",
@@ -158,7 +172,7 @@ const fr: Dict = {
   'bulk.meta.title':     'Extraits en Vrac & Marque Blanche — Oaziz Extracts',
   'bulk.meta.desc':      'Extraits sans solvant en vrac et services de marque blanche pour producteurs licenciés.',
   'bulk.h1':             'Extraits en Vrac & Marque Blanche',
-  'bulk.desc':           "Nous offrons des extraits sans solvant en vrac — hash pressé, kief, IWE, rosine — ainsi que des services de marque blanche complets pour les producteurs licenciés. Notre équipe vous accompagne du concept à la livraison.",
+  'bulk.desc':           "Nous offrons des extraits sans solvant en vrac — hash pressé, kief, Bubble Hash, rosine — ainsi que des services de marque blanche complets pour les producteurs licenciés. Notre équipe vous accompagne du concept à la livraison.",
   'bulk.ctx':            'Bulk / White-label inquiry',
 
   'whitelabel.meta.title':'Services B2B — Oaziz Extracts',
@@ -185,7 +199,7 @@ const fr: Dict = {
 
   // Curado brand
   'curado.meta.title':   'CURADO — Oaziz Extracts',
-  'curado.meta.desc':    "CURADO Hash Ice Water Extract et vapes premium — disponibles à l'OCS et sur les plateformes médicales canadiennes.",
+  'curado.meta.desc':    "CURADO Bubble Hash et vapes premium — disponibles sur les plateformes médicales canadiennes.",
   'curado.intro':        'Découvrez nos Hashish disponibles sur le marché Canadien',
   'curado.pbb.title':    'Peanut Butter Breath Temple Ball',
   'curado.pbb.blurb':    'Temple ball 1,5 g à spectre complet — hybride Peanut Butter Breath (Do-Si-Dos × Mendo Breath).',
@@ -319,7 +333,7 @@ const fr: Dict = {
   'privacy.contact':     'Pour toute question concernant cette politique :',
 
   // Meta
-  'meta.defaultDescription': "Oaziz Extracts — raffineur de cannabis sans solvant basé à Montréal. Hash, rosine, kief IWE, fleur GMP, exportation B2B internationale.",
+  'meta.defaultDescription': "Oaziz Extracts — raffineur de cannabis sans solvant basé à Montréal. Hash, rosine, Bubble Hash, fleur GMP, exportation B2B internationale.",
   'meta.homeTitle':      'Oaziz Extracts — Rincer. Raffiner. Répéter.',
 };
 
@@ -347,13 +361,22 @@ const en: Dict = {
   'services.export':     'International Export Pathway',
 
   'banner.cta':          "I'm interested in:",
-  'banner.kief':         'Kief & IWE',
+  'banner.kief':         'Kief & Bubble Hash',
   'banner.hash':         'Hash',
-  'banner.rosin':        'Rosin',
+  'banner.rosinvapes':   'Rosin & Vapes',
   'banner.trim':         'Trim',
   'banner.flower':       'Flower',
+  'banner.prerolls':     'Pre-rolls',
   'banner.topicals':     'Topicals',
   'banner.export':       'Export',
+
+  'gallery.title':       'Refined',
+  'gallery.vapes':       'Vapes',
+  'gallery.bubblehash':  'Bubble Hash',
+  'gallery.hash':        'Hash',
+  'gallery.flower':      'Flower',
+  'gallery.prerolls':    'Pre-rolls',
+  'gallery.topicals':    'Topicals',
 
   'form.title':          'Contact Us',
   'form.leadIn':         'Tell us what you need: potential volumes, timelines, specifications, and anything that helps us address your request more accurately.',
@@ -407,7 +430,7 @@ const en: Dict = {
   'brands.meta.desc':    'Discover the Oaziz Extracts brands: CannonFire, Curado, Canolio, Hashtisan, Hazo, Xaman. Hash, rosin, ice water extract, flower and more.',
   'brands.title':        'Our Brands',
   'brands.tag.cannonfire':'',
-  'brands.tag.curado':   'HASH Ice Water Extract',
+  'brands.tag.curado':   'BUBBLE HASH',
   'brands.tag.canolio':  'Rosin Syrup',
   'brands.tag.xaman':    'TOPICALS',
   'brands.tag.hashtisan':'HASH Dry Sift',
@@ -415,12 +438,12 @@ const en: Dict = {
   'brands.medical.title':'Our Products on Medical Platforms',
   'brands.availableAt':  'Available at:',
 
-  'hash.meta.title':     'Pressed Hashish and IWE Hash — Oaziz Extracts',
-  'hash.meta.desc':      'Oaziz hashish selection: traditional pressing and modern Ice Water Extract techniques. Varied flavor profiles, textures, and potencies for B2B connoisseurs.',
-  'hash.h1':             'Pressed Hashish and "Ice Water Extract" Hash',
-  'hash.desc':           'Explore our hashish selection, from traditional pressing methods to modern ice-water extraction techniques. We offer products with varied flavor profiles, textures, and potencies to satisfy connoisseurs.',
+  'hash.meta.title':     'Pressed Hashish and Bubble Hash — Oaziz Extracts',
+  'hash.meta.desc':      'Oaziz hashish selection: traditional pressing and modern Bubble Hash (ice-water extraction) techniques. Varied flavor profiles, textures, and potencies for B2B connoisseurs.',
+  'hash.h1':             'Pressed Hashish and Bubble Hash',
+  'hash.desc':           'Explore our hashish selection, from traditional pressing methods to modern Bubble Hash (ice-water extraction). We offer products with varied flavor profiles, textures, and potencies to satisfy connoisseurs.',
   'hash.sub.pressed':    'Pressed Hashish',
-  'hash.sub.iwe':        '"Ice Water Extract" Hash',
+  'hash.sub.iwe':        'Bubble Hash',
   'hash.ctx':            'Hash inquiry',
 
   'rosin.meta.title':    'Cured and Live Rosins — Oaziz Extracts',
@@ -429,13 +452,13 @@ const en: Dict = {
   'rosin.desc':          'Discover the pinnacle of solvent-free extraction with our rosin collection. We offer both "Cured Rosin," known for its rich, complex flavors, and "Live Rosin," celebrated for its vibrant, fresh terpene profile.',
   'rosin.ctx':           'Rosin inquiry',
 
-  'kief.meta.title':     'Tumbled Kief and IWE Kief — Oaziz Extracts',
-  'kief.meta.desc':      'Oaziz kief: traditional tumbled and premium Ice Water Extract. Multiple purity and potency grades, available in bulk for licensed producers.',
-  'kief.h1':             'Tumbled Kief and "Ice Water Extract" Kief',
-  'kief.desc':           'We offer two distinct types of kief to meet all market needs. Each type is available in multiple quality and potency grades, with a range of color profiles to satisfy our clients\' precise specifications. Our IWE (Ice Water Extract) Kief is typically more potent and purer, ideal for premium products.',
+  'kief.meta.title':     'Tumbled Kief and Bubble Hash Kief — Oaziz Extracts',
+  'kief.meta.desc':      'Oaziz kief: traditional tumbled and premium Bubble Hash. Multiple purity and potency grades, available in bulk for licensed producers.',
+  'kief.h1':             'Tumbled Kief and Bubble Hash Kief',
+  'kief.desc':           'We offer two distinct types of kief to meet all market needs. Each type is available in multiple quality and potency grades, with a range of color profiles to satisfy our clients\' precise specifications. Our Bubble Hash Kief (ice-water extracted) is typically more potent and purer, ideal for premium products.',
   'kief.sub.dry':        'Tumbled Kief',
-  'kief.sub.iwe':        '"Ice Water Extract" (IWE) Kief',
-  'kief.ctx':            'Kief & IWE inquiry',
+  'kief.sub.iwe':        'Bubble Hash Kief',
+  'kief.ctx':            'Kief & Bubble Hash inquiry',
 
   'flower.meta.title':   'Flower — Oaziz Extracts',
   'flower.meta.desc':    'GMP cannabis flower for producers and exporters. Request your volumes, timelines, and specifications.',
@@ -452,6 +475,11 @@ const en: Dict = {
   'topicals.formTitle':  'Information Request — Topicals',
   'topicals.ctx':        'Topicals inquiry',
 
+  'prerolls.meta.title': 'Pre-rolls — Oaziz Extracts',
+  'prerolls.meta.desc':  'Artisan and infused pre-rolls for licensed producers and distributors. Request your volumes, formats, and lead times.',
+  'prerolls.formTitle':  'Information Request — Pre-rolls',
+  'prerolls.ctx':        'Pre-rolls inquiry',
+
   'export.meta.title':   'Export — Oaziz Extracts',
   'export.meta.desc':    'International export of cannabis products under Health Canada license. Regulatory compliance, customs logistics, trusted partners.',
   'export.formTitle':    'Information Request — Export',
@@ -460,7 +488,7 @@ const en: Dict = {
   'bulk.meta.title':     'Bulk Extracts & White Label — Oaziz Extracts',
   'bulk.meta.desc':      'Solvent-free bulk extracts and white-label services for licensed producers.',
   'bulk.h1':             'Bulk Extracts & White Label',
-  'bulk.desc':           'We offer solvent-free bulk extracts — pressed hash, kief, IWE, rosin — as well as complete white-label services for licensed producers. Our team supports you from concept to delivery.',
+  'bulk.desc':           'We offer solvent-free bulk extracts — pressed hash, kief, Bubble Hash, rosin — as well as complete white-label services for licensed producers. Our team supports you from concept to delivery.',
   'bulk.ctx':            'Bulk / White-label inquiry',
 
   'whitelabel.meta.title':'B2B Services — Oaziz Extracts',
@@ -485,7 +513,7 @@ const en: Dict = {
   'cf.med.sapphire':     'Sapphire Scout Rosin Vape',
 
   'curado.meta.title':   'CURADO — Oaziz Extracts',
-  'curado.meta.desc':    'CURADO Hash Ice Water Extract and premium vapes — available at OCS and on Canadian medical platforms.',
+  'curado.meta.desc':    'CURADO Bubble Hash and premium vapes — available on Canadian medical platforms.',
   'curado.intro':        'Discover our hashish available on the Canadian market',
   'curado.pbb.title':    'Peanut Butter Breath Temple Ball',
   'curado.pbb.blurb':    'Full-spectrum 1.5g temple ball from the Peanut Butter Breath hybrid (Do-Si-Dos × Mendo Breath).',
@@ -610,7 +638,7 @@ const en: Dict = {
   'privacy.h.contact':   'Contact',
   'privacy.contact':     'For any question regarding this policy:',
 
-  'meta.defaultDescription': 'Oaziz Extracts — solvent-free cannabis refiner based in Montréal. Hash, rosin, IWE kief, GMP flower, international B2B export.',
+  'meta.defaultDescription': 'Oaziz Extracts — solvent-free cannabis refiner based in Montréal. Hash, rosin, Bubble Hash, GMP flower, international B2B export.',
   'meta.homeTitle':      'Oaziz Extracts — Rinse. Refine. Repeat.',
 };
 

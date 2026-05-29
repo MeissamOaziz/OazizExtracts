@@ -1,0 +1,53 @@
+---
+import type { Locale } from '../i18n/ui';
+import { t, localizeUrl } from '../i18n/ui';
+
+interface Props { lang: Locale; }
+const { lang } = Astro.props;
+const T = t(lang);
+
+const tiles = [
+  { href: '/export',   img: '/images/vapes.webp',                                                            titleKey: 'gallery.vapes' },
+  { href: '/kief',     img: '/images/Ice-Water-Extract-Kief.webp',                                            titleKey: 'gallery.bubblehash' },
+  { href: '/hash',     img: '/images/Afghan-Hash3.webp',                                                      titleKey: 'gallery.hash' },
+  { href: '/flower',   img: '/images/Red-Velvet-Ice-Cream-Smalls.webp',                                       titleKey: 'gallery.flower' },
+  { href: '/prerolls', img: '/images/blueberry-muffin-pre-rolls-by-hazo-cannabis-oaziz-v0-xfpswzmzj5kg1.webp', titleKey: 'gallery.prerolls' },
+  { href: '/topicals', img: '/images/Topicals.webp',                                                          titleKey: 'gallery.topicals' },
+];
+---
+
+<section class="home-gallery" aria-labelledby="home-gallery-heading">
+  <div class="home-gallery-inner">
+    <h2 id="home-gallery-heading" class="home-gallery-heading">{T('gallery.title')}</h2>
+    <div class="home-gallery-grid">
+      {tiles.map((tile, i) => (
+        <a
+          href={localizeUrl(tile.href, lang)}
+          class="home-gallery-tile"
+          style={`--stagger:${i * 80}ms`}
+        >
+          <img src={tile.img} alt="" loading="lazy" />
+          <span class="home-gallery-title">{T(tile.titleKey)}</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>
+
+<script>
+  // Stagger-fade tiles in on first viewport entry
+  const tiles = document.querySelectorAll<HTMLElement>('.home-gallery-tile');
+  if ('IntersectionObserver' in window && tiles.length > 0) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          (e.target as HTMLElement).classList.add('is-visible');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    tiles.forEach((t) => io.observe(t));
+  } else {
+    tiles.forEach((t) => t.classList.add('is-visible'));
+  }
+</script>

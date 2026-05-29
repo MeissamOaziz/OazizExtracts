@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import ContactSection from '../../components/ContactSection.astro';
+import HomeGallery from '../../components/HomeGallery.astro';
 import { t, localizeUrl } from '../../i18n/ui';
 
 const lang = 'fr';
@@ -36,6 +37,8 @@ const partners = [
     <p class="intro-subheading">{T('intro.subheading')}</p>
     <p>{T('intro.tagline')}</p>
   </section>
+
+  <HomeGallery lang={lang} />
 
   <section class="services-section" aria-label={T('services.aria')}>
     <div class="services-container">
