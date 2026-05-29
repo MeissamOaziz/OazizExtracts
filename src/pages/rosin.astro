@@ -13,6 +13,30 @@ const items = [
   { src: '/images/Rosin-4.webp', alt: 'Rosin 4' },
   { src: '/images/Rosin-5.webp', alt: 'Rosin 5' },
 ];
+
+const vapeTiers = [
+  {
+    img: '/images/Aube-packaging-and-fullcart.jpg',
+    alt: 'Rosin Vape — AUBE',
+    titleKey: 'vapes.rosin.title',
+    blurbKey: 'vapes.rosin.blurb',
+    bKeys: ['vapes.rosin.b1', 'vapes.rosin.b2', 'vapes.rosin.b3', 'vapes.rosin.b4'],
+  },
+  {
+    img: '/images/CannonfireBCP.webp',
+    alt: 'Hybrid Rosin × Distillate Vape',
+    titleKey: 'vapes.hybrid.title',
+    blurbKey: 'vapes.hybrid.blurb',
+    bKeys: ['vapes.hybrid.b1', 'vapes.hybrid.b2', 'vapes.hybrid.b3', 'vapes.hybrid.b4'],
+  },
+  {
+    img: '/images/Cannonfire3bk1.webp',
+    alt: 'Full Distillate Vape',
+    titleKey: 'vapes.distillate.title',
+    blurbKey: 'vapes.distillate.blurb',
+    bKeys: ['vapes.distillate.b1', 'vapes.distillate.b2', 'vapes.distillate.b3', 'vapes.distillate.b4'],
+  },
+];
 ---
 
 <Layout title={T('rosin.meta.title')} description={T('rosin.meta.desc')} lang={lang} path="/rosin">
@@ -25,6 +49,35 @@ const items = [
       ))}
     </div>
   </div>
+
+  <section id="vapes" class="vapes-section">
+    <div class="page-container with-padding">
+      <h2 class="vapes-heading">{T('vapes.h2')}</h2>
+      <p class="vapes-intro">{T('vapes.intro')}</p>
+    </div>
+
+    <div class="product-showcase">
+      <div class="product-showcase-grid">
+        {vapeTiers.map((p) => (
+          <div class="product-grid-item">
+            <div class="product-image-container">
+              <img src={p.img} alt={p.alt} loading="lazy" />
+            </div>
+            <div class="product-details dark-bg-details">
+              <h3>{T(p.titleKey)}</h3>
+              <p>{T(p.blurbKey)}</p>
+              <ul>{p.bKeys.map((k) => <li>{T(k)}</li>)}</ul>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="page-container with-padding vapes-options">
+      <h3 class="vapes-options-title">{T('vapes.options.title')}</h3>
+      <p class="vapes-options-body" set:html={T('vapes.options.body').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}></p>
+    </div>
+  </section>
 
   <ContactSection lang={lang} context={T('rosin.ctx')} defaultSubject="sales" />
 </Layout>
