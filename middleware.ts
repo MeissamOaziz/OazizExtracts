@@ -12,7 +12,7 @@
 // 4. The toggle in Header.astro sets the cookie on click, so a returning
 //    visitor's choice always wins over geo detection.
 
-const PASS_THROUGH = /^\/(fr|api|_vercel|_next|images|favicon|robots|sitemap|apple-touch|icon-|site\.webmanifest)/;
+const PASS_THROUGH = /^\/(fr|api|portail|_vercel|_next|images|favicon|robots|sitemap|apple-touch|icon-|site\.webmanifest)/;
 const ASSET_EXT = /\.(png|jpg|jpeg|webp|svg|ico|json|xml|txt|css|js|woff2?|ttf|otf|map)$/i;
 
 export default function middleware(request: Request): Response | void {

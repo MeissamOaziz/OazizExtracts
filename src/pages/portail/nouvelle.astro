@@ -1,0 +1,159 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+
+const { data: allStaff } = await supabase
+  .from('staff')
+  .select('id, full_name, email, title')
+  .eq('is_active', true)
+  .order('full_name');
+
+const roster = allStaff ?? [];
+const findByEmail = (email: string) => roster.find((s) => s.email === email);
+
+// Sensible defaults sourced from the seeded roster.
+const defaults = {
+  initiator: findByEmail(staff.email)?.id ?? '',
+  production: findByEmail('simon@oaziz.ca')?.id ?? '',
+  qa: findByEmail('stephane@oaziz.ca')?.id ?? '',
+  consent_obtainer: findByEmail('jorge@oaziz.ca')?.id ?? '',
+};
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const errorMessages: Record<string, string> = {
+  missing: 'Veuillez remplir tous les champs obligatoires.',
+  no_participants: 'Sélectionnez au moins un participant.',
+  unknown: 'Une erreur est survenue lors de l\'enregistrement.',
+};
+
+const today = new Date().toISOString().slice(0, 10);
+---
+<PortailLayout title="Nouvelle demande" staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+      ← Retour au tableau de bord
+    </a>
+  </div>
+  <h1>Nouvelle demande d'échantillon</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">
+    F5-SOP-PRO-013/00 · Section « À remplir par l'initiateur »
+  </p>
+
+  {error && (
+    <div class="flash flash-error">{errorMessages[error] ?? errorMessages.unknown}</div>
+  )}
+
+  <form method="POST" action="/api/portail/submissions" class="card">
+    <div class="form-row">
+      <label for="form_date">Date (JJ/MM/AAAA)</label>
+      <input type="date" name="form_date" id="form_date" value={today} required />
+    </div>
+
+    <div class="form-row">
+      <label for="initiator_staff_id">Nom de l'initiateur</label>
+      <select name="initiator_staff_id" id="initiator_staff_id" required>
+        {roster.map((s) => (
+          <option value={s.id} selected={s.id === defaults.initiator}>{s.full_name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="product_name">Nom du produit / souche</label>
+      <input type="text" name="product_name" id="product_name" required />
+    </div>
+
+    <div class="form-row">
+      <label for="product_type">Type de produit</label>
+      <input type="text" name="product_type" id="product_type" placeholder="ex: Rosin, Hash, Kief…" required />
+    </div>
+
+    <div class="form-row">
+      <label for="quantity">Quantité (g ou unités)</label>
+      <input type="text" name="quantity" id="quantity" required />
+    </div>
+
+    <div class="form-row">
+      <label>Participants</label>
+      <div class="participants-grid">
+        {roster.map((s) => (
+          <label>
+            <input type="checkbox" name="participants" value={s.id} />
+            <span>{s.full_name}</span>
+          </label>
+        ))}
+      </div>
+      <div class="hint">Un formulaire R&D et un consentement seront générés par participant.</div>
+    </div>
+
+    <h2 style="margin-top: 28px;">À remplir par le personnel de production</h2>
+
+    <div class="form-row">
+      <label for="production_staff_id">Personnel de production</label>
+      <select name="production_staff_id" id="production_staff_id" required>
+        {roster.map((s) => (
+          <option value={s.id} selected={s.id === defaults.production}>{s.full_name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>État de production</label>
+      <div style="display: flex; gap: 20px; padding-top: 4px;">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
+          <input type="radio" name="production_state" value="vrac" /> Vrac
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
+          <input type="radio" name="production_state" value="emballe" /> Emballé
+        </label>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="production_id">Identifiant du lot (ID)</label>
+      <input type="text" name="production_id" id="production_id" />
+    </div>
+
+    <h2 style="margin-top: 28px;">Rôles pour la signature</h2>
+    <p class="hint" style="margin-bottom: 16px;">
+      Modifiables uniquement si un remplacement est nécessaire pour cette demande.
+    </p>
+
+    <div class="form-row">
+      <label for="qa_staff_id">Vérification AQ</label>
+      <select name="qa_staff_id" id="qa_staff_id" required>
+        {roster.map((s) => (
+          <option value={s.id} selected={s.id === defaults.qa}>{s.full_name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="consent_obtainer_staff_id">Personne obtenant le consentement</label>
+      <select name="consent_obtainer_staff_id" id="consent_obtainer_staff_id" required>
+        {roster.map((s) => (
+          <option value={s.id} selected={s.id === defaults.consent_obtainer}>{s.full_name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div style="display: flex; gap: 12px; margin-top: 28px;">
+      <button type="submit" name="action" value="save_draft" class="btn btn-primary">
+        Enregistrer le brouillon
+      </button>
+      <button type="button" class="btn btn-secondary" disabled title="Disponible à la prochaine étape (envoi aux signataires)">
+        Envoyer pour signature
+      </button>
+      <a href="/portail" class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
+    </div>
+  </form>
+</PortailLayout>

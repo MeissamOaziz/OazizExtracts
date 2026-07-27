@@ -1,0 +1,83 @@
+---
+import DocPaper from './DocPaper.astro';
+import type { SubmissionForRender, StaffLite } from '../../lib/portail-types';
+import { fmtDateFr } from '../../lib/portail-types';
+
+interface Props {
+  submission: SubmissionForRender;
+  participants: StaffLite[];
+}
+const { submission, participants } = Astro.props;
+const state = submission.production_state;
+---
+<DocPaper>
+  <div class="doc-hdr">
+    <div class="side">
+      <p>OAZIZ EXTRACTS INC.</p>
+      <p>F2-QAS-001/01</p>
+    </div>
+    <div class="center">
+      <h1 class="doc-title">DEMANDE D'ÉCHANTILLON</h1>
+      <p class="doc-subtitle">F5-SOP-PRO-013/00</p>
+    </div>
+    <div class="side right"></div>
+  </div>
+
+  <h2 class="doc-section">À REMPLIR PAR L'INITIATEUR</h2>
+  <div class="doc-grid">
+    <div class="label">Date (JJ/MM/AAAA) :</div>
+    <div><span class="fill">{fmtDateFr(submission.form_date)}</span></div>
+
+    <div class="label">Nom de l'initiateur :</div>
+    <div><span class="fill">{submission.initiator.name}</span></div>
+
+    <div class="label">Nom du produit :</div>
+    <div><span class="fill">{submission.product_name}</span></div>
+
+    <div class="label">Type de produit :</div>
+    <div><span class="fill">{submission.product_type}</span></div>
+
+    <div class="label">Quantité (g ou unités) :</div>
+    <div><span class="fill">{submission.quantity}</span></div>
+
+    <div class="label">Nom des participants :</div>
+    <div>
+      {participants.length === 0 ? (
+        <span class="fill empty">(aucun)</span>
+      ) : (
+        <ul style="margin: 4px 0 0 18px; padding: 0;">
+          {participants.map((p) => <li>{p.name}</li>)}
+        </ul>
+      )}
+    </div>
+  </div>
+
+  <h2 class="doc-section">À REMPLIR PAR LE PERSONNEL DE PRODUCTION</h2>
+  <div class="doc-grid">
+    <div class="label">Nom du personnel :</div>
+    <div><span class="fill">{submission.production.name}</span></div>
+
+    <div class="label">État de production :</div>
+    <div>
+      <label style="margin-right: 14px;"><input type="checkbox" checked={state === 'vrac'} disabled /> Vrac</label>
+      <label><input type="checkbox" checked={state === 'emballe'} disabled /> Emballé</label>
+    </div>
+
+    <div class="label">Quantité (g ou unités) :</div>
+    <div><span class="fill">{submission.quantity}</span></div>
+
+    <div class="label">ID :</div>
+    <div><span class={`fill ${submission.production_id ? '' : 'empty'}`}>{submission.production_id ?? '(à remplir)'}</span></div>
+  </div>
+
+  <div class="sig-block">
+    <div>
+      <div class="sig-line"></div>
+      <p><strong>Signature de l'initiateur</strong> — {submission.initiator.name}</p>
+    </div>
+    <div>
+      <div class="sig-line"></div>
+      <p><strong>Signature du personnel de production</strong> — {submission.production.name}</p>
+    </div>
+  </div>
+</DocPaper>

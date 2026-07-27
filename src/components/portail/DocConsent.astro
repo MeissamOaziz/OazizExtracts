@@ -1,0 +1,122 @@
+---
+import DocPaper from './DocPaper.astro';
+import type { SubmissionForRender, StaffLite } from '../../lib/portail-types';
+import { fmtDateFr, INVESTIGATOR_PHONE } from '../../lib/portail-types';
+
+interface Props {
+  submission: SubmissionForRender;
+  participant: StaffLite;
+}
+const { submission, participant } = Astro.props;
+const initiator = submission.initiator;
+const obtainer = submission.consent_obtainer;
+---
+<DocPaper title="Formulaire de consentement éclairé – Étude organoleptique sur le cannabis">
+  <div style="border-top: 1px solid #d1d5db; margin: 6px 0 12px;"></div>
+
+  <p><strong>Titre du projet :</strong><br />Évaluation organoleptique des produits du cannabis</p>
+
+  <p style="margin-top: 10px;"><strong>Chercheur principal :</strong><br />
+    {initiator.name}<br />
+    Entreprise : Oaziz Extracts Inc.<br />
+    Courriel : {initiator.email ?? ''}<br />
+    Téléphone : {INVESTIGATOR_PHONE}
+  </p>
+
+  <p><strong>Source de financement :</strong><br />Cette étude est financée à l'interne par Oaziz Extracts Inc.</p>
+
+  <p><strong>Invitation à participer</strong><br />
+    Vous êtes invité(e) à participer à une étude de recherche menée par Oaziz Extracts Inc. L'objectif de cette étude est d'évaluer les propriétés organoleptiques (goût, apparence, odeur, toucher, et réponses sensorielles-émotives) de divers produits à base de cannabis. Votre participation est entièrement volontaire et votre décision n'affectera en rien votre relation avec l'entreprise.
+  </p>
+  <p>Veuillez lire attentivement ce formulaire. Si vous avez des questions, n'hésitez pas à les poser au chercheur.</p>
+
+  <p><strong>Objectif de l'étude</strong><br />
+    Le but de cette étude est d'évaluer les caractéristiques sensorielles et la réaction des consommateurs aux produits à base de cannabis fabriqués par Oaziz Extracts Inc. ou d'autres producteurs autorisés. Les commentaires obtenus aideront à déterminer le potentiel commercial et la qualité du produit.
+  </p>
+
+  <p><strong>Ce que l'on vous demandera de faire</strong><br />
+    Si vous acceptez de participer :
+  </p>
+  <ul>
+    <li>Vous assisterez à une session courte (15 à 30 minutes).</li>
+    <li>Vous consommerez une petite quantité pré-mesurée de cannabis selon votre mode de consommation habituel (oral, inhalé ou topique).</li>
+    <li>Vous remplirez un court questionnaire papier sur les propriétés organoleptiques du produit (goût, odeur, texture, etc.).</li>
+  </ul>
+  <p>Chaque participant évaluera uniquement des produits correspondant à son usage habituel de cannabis.</p>
+
+  <p><strong>Critères de participation</strong><br />Pour être admissible :</p>
+  <ul>
+    <li>Vous devez être âgé(e) de 18 à 65 ans.</li>
+    <li>Vous devez être un(e) consommateur(trice) régulier(ère) de cannabis (minimum 3 fois/semaine depuis au moins 12 mois).</li>
+    <li>Vous devez être en bonne santé et ne pas prendre de produits de santé.</li>
+    <li>Vous ne devez pas être enceinte, allaiter ou avoir des allergies au cannabis ou des problèmes médicaux graves.</li>
+    <li>Vous ne devez pas participer à une autre étude sur le cannabis le même jour.</li>
+  </ul>
+
+  <p><strong>Risques et avantages possibles</strong><br />Risques :</p>
+  <ul>
+    <li>Effets secondaires possibles du cannabis, comme la somnolence, l'anxiété ou d'autres effets typiques.</li>
+    <li>Léger inconfort psychologique possible lors des réponses aux questions.</li>
+  </ul>
+  <p>Mesures d'atténuation :</p>
+  <ul>
+    <li>Contrôle strict des doses (par ex., ≤4 inhalations, ≤10 mg de THC par voie orale).</li>
+    <li>Surveillance post-consommation et transport prévu si nécessaire.</li>
+  </ul>
+  <p>Avantages :</p>
+  <ul>
+    <li>Aucun avantage direct, mais vos commentaires pourraient améliorer le développement des produits.</li>
+    <li>Un remboursement ou une prise en charge du transport pourra être offert après la session.</li>
+  </ul>
+
+  <p><strong>Confidentialité et protection des renseignements personnels</strong></p>
+  <ul>
+    <li>Votre identité restera confidentielle. Les données seront conservées dans une armoire verrouillée (copies papier seulement).</li>
+    <li>Seul le personnel de l'assurance qualité et la personne responsable chez Oaziz Extracts y auront accès.</li>
+    <li>Vos renseignements personnels ne seront partagés avec personne en dehors d'Oaziz Extracts Inc.</li>
+  </ul>
+
+  <p><strong>Participation volontaire et retrait</strong><br />Votre participation est volontaire. Vous pouvez :</p>
+  <ul>
+    <li>Refuser de répondre à certaines questions.</li>
+    <li>Vous retirer à tout moment sans conséquence.</li>
+    <li>Refuser de participer sans impact sur votre relation avec l'équipe de recherche ou l'entreprise.</li>
+  </ul>
+
+  <p><strong>Utilisation des résultats</strong><br />
+    Vos réponses seront utilisées uniquement à des fins d'évaluation interne des produits. Aucune donnée ne sera publiée ou partagée à l'extérieur d'Oaziz Extracts Inc.
+  </p>
+
+  <p><strong>Questions ou préoccupations</strong><br />
+    Pour toute question concernant l'étude, contactez :<br />
+    {initiator.name} – Personne responsable<br />
+    Courriel : {initiator.email ?? ''}<br />
+    Téléphone : {INVESTIGATOR_PHONE}
+  </p>
+
+  <p><strong>Déclaration de consentement</strong><br />En signant ci-dessous, vous confirmez que :</p>
+  <ul>
+    <li>L'étude vous a été expliquée.</li>
+    <li>Toutes vos questions ont été répondues.</li>
+    <li>Vous comprenez les risques et avantages.</li>
+    <li>Vous acceptez de participer volontairement.</li>
+  </ul>
+
+  <p style="margin-top: 6px;">Vous pouvez tout de même participer si vous cochez « Non » ci-dessous :</p>
+  <p><input type="checkbox" checked disabled /> Oui <input type="checkbox" disabled /> Non &nbsp;&nbsp; J'accepte d'être cité(e) anonymement (ex. : commentaires dans les rapports)</p>
+  <p><input type="checkbox" disabled /> Oui <input type="checkbox" checked disabled /> Non &nbsp;&nbsp; J'accepte que ma session soit enregistrée à des fins de contrôle qualité</p>
+
+  <div style="margin-top: 14px;">
+    <p><strong>Nom du participant :</strong> <span class="fill">{participant.name}</span></p>
+    <p><strong>Signature :</strong> <span class="sig-line"></span></p>
+    <p><strong>Date :</strong> <span class="fill">{fmtDateFr(submission.form_date)}</span></p>
+    <p><strong>(Si désiré) Courriel :</strong> <span class="fill empty">(facultatif)</span></p>
+  </div>
+
+  <h2 class="doc-section" style="margin-top: 16px;">Personne obtenant le consentement</h2>
+  <div>
+    <p><strong>Nom :</strong> <span class="fill">{obtainer.name}</span></p>
+    <p><strong>Signature :</strong> <span class="sig-line"></span></p>
+    <p><strong>Date :</strong> <span class="fill">{fmtDateFr(submission.form_date)}</span></p>
+  </div>
+</DocPaper>

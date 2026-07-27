@@ -1,0 +1,295 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/portail');
+
+const { data: submission } = await supabase
+  .from('submissions')
+  .select(`
+    id, status, created_by_email, form_date, product_name, product_type, quantity,
+    production_state, production_id, created_at, updated_at, sent_at, finalized_at,
+    initiator:initiator_staff_id ( full_name, email ),
+    production:production_staff_id ( full_name, email ),
+    qa:qa_staff_id ( full_name, email ),
+    consent_obtainer:consent_obtainer_staff_id ( full_name, email )
+  `)
+  .eq('id', id)
+  .maybeSingle();
+
+if (!submission) {
+  return new Response('Demande introuvable.', { status: 404 });
+}
+
+const { data: participants } = await supabase
+  .from('submission_participants')
+  .select('participant:participant_staff_id ( id, full_name, email )')
+  .eq('submission_id', id);
+
+const { data: signers } = await supabase
+  .from('v_signers_public')
+  .select('id, role, staff_name, staff_email, document_kind, participant_name, status, signed_at, expires_at, signer_token_id, completed_at')
+  .eq('submission_id', id)
+  .order('role');
+
+// Group signers by signer_token_id so the "Régénérer le lien" button appears once per person
+type SignerRow = {
+  id: string;
+  role: string;
+  staff_name: string;
+  staff_email: string;
+  document_kind: string;
+  participant_name: string | null;
+  status: string;
+  signed_at: string | null;
+  signer_token_id: string | null;
+  completed_at: string | null;
+};
+const signerRowList: SignerRow[] = (signers ?? []) as SignerRow[];
+const tokenPending = new Map<string, boolean>();
+for (const row of signerRowList) {
+  if (!row.signer_token_id) continue;
+  // Token is "pending overall" if it has no completed_at.
+  tokenPending.set(row.signer_token_id, !row.completed_at);
+}
+
+const isCreator = submission.created_by_email === staff.email;
+const isDraft = submission.status === 'draft';
+
+const pageUrl = new URL(Astro.request.url);
+const info = pageUrl.searchParams.get('info');
+const errCode = pageUrl.searchParams.get('error');
+const revealUrl = pageUrl.searchParams.get('reveal_url');
+const revealFor = pageUrl.searchParams.get('reveal_for');
+const revealEmailStatus = pageUrl.searchParams.get('reveal_email_status');
+const infoMessages: Record<string, string> = {
+  sent: 'Demande envoyée. Les signataires ont reçu leur lien par courriel.',
+};
+const errorMessages: Record<string, string> = {
+  not_creator: 'Seul le créateur de la demande peut l\'envoyer.',
+  already_sent: 'Cette demande a déjà été envoyée.',
+  already_signed_row: 'Ce signataire a déjà signé — pas besoin de régénérer.',
+  no_participants: 'Ajoutez au moins un participant avant d\'envoyer.',
+  not_found: 'Demande introuvable.',
+  unknown: 'Une erreur est survenue.',
+  token_insert: 'Impossible de créer les jetons de signature. Réessayez.',
+  signer_insert: 'Impossible de créer les signataires. Réessayez.',
+  delete: 'La suppression a échoué.',
+};
+const emailStatusLabel: Record<string, string> = {
+  sent: 'Courriel envoyé.',
+  skipped_no_key: 'Aucun courriel envoyé (clé Resend non configurée). Copiez le lien ci-dessous.',
+  error: 'L\'envoi du courriel a échoué. Copiez le lien manuellement ci-dessous.',
+};
+
+const statusLabel: Record<string, string> = {
+  draft: 'Brouillon',
+  sent: 'Envoyé',
+  signing: 'En signature',
+  complete: 'Complet',
+  finalized: 'Finalisé',
+  cancelled: 'Annulé',
+};
+const stateLabel: Record<string, string> = { vrac: 'Vrac', emballe: 'Emballé' };
+const roleLabel: Record<string, string> = {
+  initiator: 'Initiateur',
+  production: 'Personnel de production',
+  participant: 'Participant',
+  consent_obtainer: 'Personne obtenant le consentement',
+  qa_verifier: 'Vérification AQ',
+};
+const kindLabel: Record<string, string> = {
+  sample_request: "Demande d'échantillon",
+  rnd: 'R&D',
+  consent: 'Consentement',
+};
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+---
+<PortailLayout title={submission.product_name || 'Demande'} staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+      ← Tableau de bord
+    </a>
+  </div>
+
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px;">
+    <div>
+      <h1 style="margin-bottom: 4px;">{submission.product_name}</h1>
+      <p style="color: var(--p-muted);">
+        {submission.product_type} · Créé le {fmtDate(submission.created_at)}
+      </p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      {['finalized', 'complete', 'signing', 'sent'].includes(submission.status) && (
+        <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title="Télécharger le PDF (signé si tous ont signé, sinon partiel)">
+          ⬇ Télécharger le PDF
+        </a>
+      )}
+      <span class={`badge badge-${submission.status}`}>{statusLabel[submission.status]}</span>
+    </div>
+  </div>
+
+  {info && infoMessages[info] && (
+    <div class="flash flash-success">{infoMessages[info]}</div>
+  )}
+  {errCode && (
+    <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+  )}
+  {revealUrl && (
+    <div class="card" id="reveal-card" style="border-color: var(--p-accent); margin-bottom: 20px;">
+      <h2 style="margin-bottom: 6px;">Nouveau lien de signature pour {revealFor}</h2>
+      <p style="color: var(--p-muted); margin-bottom: 12px; font-size: .9rem;">
+        {emailStatusLabel[revealEmailStatus ?? ''] ?? 'Copiez le lien ci-dessous pour le partager.'}
+        <br/>Le lien précédent pour cette personne a été révoqué.
+      </p>
+      <div style="display: flex; gap: 8px; align-items: stretch;">
+        <input type="text" id="reveal-input" value={revealUrl} readonly onclick="this.select()" style="flex: 1; font-family: monospace; font-size: .85rem;" />
+        <button type="button" id="reveal-copy" class="btn btn-secondary">Copier</button>
+      </div>
+      <script is:inline>
+        (function() {
+          // Strip the reveal_* params from the address bar so a page reload doesn't re-flash the URL.
+          try {
+            const u = new URL(window.location.href);
+            u.searchParams.delete('reveal_url');
+            u.searchParams.delete('reveal_for');
+            u.searchParams.delete('reveal_token_id');
+            u.searchParams.delete('reveal_email_status');
+            window.history.replaceState({}, '', u.toString());
+          } catch (e) {}
+
+          const btn = document.getElementById('reveal-copy');
+          const input = document.getElementById('reveal-input');
+          if (btn && input) {
+            btn.addEventListener('click', function() {
+              input.select();
+              try {
+                navigator.clipboard.writeText(input.value).then(function() {
+                  btn.textContent = 'Copié ✓';
+                  setTimeout(function() { btn.textContent = 'Copier'; }, 1800);
+                });
+              } catch (e) {
+                document.execCommand('copy');
+                btn.textContent = 'Copié ✓';
+                setTimeout(function() { btn.textContent = 'Copier'; }, 1800);
+              }
+            });
+          }
+        })();
+      </script>
+    </div>
+  )}
+
+  <div class="card" style="margin-bottom: 24px;">
+    <h2>Détails</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width: 260px;">Date du formulaire</th><td>{fmtDate(submission.form_date)}</td></tr>
+        <tr><th>Initiateur</th><td>{(submission.initiator as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>Type de produit</th><td>{submission.product_type}</td></tr>
+        <tr><th>Quantité</th><td>{submission.quantity}</td></tr>
+        <tr><th>État de production</th><td>{submission.production_state ? stateLabel[submission.production_state] : '—'}</td></tr>
+        <tr><th>Identifiant du lot</th><td>{submission.production_id || '—'}</td></tr>
+        <tr><th>Personnel de production</th><td>{(submission.production as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>Vérification AQ</th><td>{(submission.qa as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>Personne obtenant le consentement</th><td>{(submission.consent_obtainer as any)?.full_name ?? '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <h2>Participants ({participants?.length ?? 0})</h2>
+    {(!participants || participants.length === 0) ? (
+      <p style="color: var(--p-muted); margin-top: 8px;">Aucun participant.</p>
+    ) : (
+      <ul style="margin-top: 12px; padding-left: 20px;">
+        {participants.map((p: any) => (
+          <li style="margin-bottom: 6px;">{p.participant.full_name}</li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  <div class="card" style="margin-bottom: 24px;">
+    <h2>Signatures</h2>
+    {(!signers || signers.length === 0) ? (
+      <div style="color: var(--p-muted); margin-top: 8px;">
+        {isDraft
+          ? "Les signataires seront créés lorsque la demande sera envoyée."
+          : "Aucun signataire enregistré."}
+      </div>
+    ) : (
+      <table class="data" style="margin-top: 12px;">
+        <thead>
+          <tr>
+            <th>Rôle</th>
+            <th>Signataire</th>
+            <th>Document</th>
+            <th>Statut</th>
+            <th>Signé le</th>
+            {isCreator && <th></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {signerRowList.map((s, i) => {
+            // Only show the regenerate button on the first row of each pending token
+            const prev = signerRowList[i - 1];
+            const isFirstOfToken = !prev || prev.signer_token_id !== s.signer_token_id;
+            const canRegen = isCreator
+              && isFirstOfToken
+              && s.signer_token_id
+              && tokenPending.get(s.signer_token_id) === true
+              && ['sent', 'signing', 'complete'].includes(submission.status);
+            return (
+              <tr>
+                <td>{roleLabel[s.role] ?? s.role}</td>
+                <td>
+                  {s.staff_name}
+                  {s.participant_name && <div style="color: var(--p-muted); font-size: .82rem;">Pour {s.participant_name}</div>}
+                </td>
+                <td>{kindLabel[s.document_kind] ?? s.document_kind}</td>
+                <td>
+                  <span class={`badge badge-${s.status === 'signed' ? 'complete' : s.status === 'pending' ? 'sent' : 'cancelled'}`}>
+                    {s.status === 'signed' ? 'Signé' : s.status === 'pending' ? 'En attente' : s.status}
+                  </span>
+                </td>
+                <td>{fmtDate(s.signed_at)}</td>
+                {isCreator && (
+                  <td style="text-align: right;">
+                    {canRegen ? (
+                      <form method="POST" action={`/api/portail/submissions/${id}/signers/${s.signer_token_id}/regenerate`} style="margin: 0;">
+                        <button type="submit" class="btn btn-secondary" style="font-size: .78rem; padding: 5px 10px;">Régénérer le lien</button>
+                      </form>
+                    ) : null}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </div>
+
+  {isCreator && isDraft && (
+    <div style="display: flex; gap: 12px;">
+      <form method="POST" action={`/api/portail/submissions/${id}/send`} onsubmit="return confirm('Envoyer les liens de signature à chaque signataire par courriel ?');" style="margin: 0;">
+        <button type="submit" class="btn btn-primary">Envoyer pour signature</button>
+      </form>
+      <form method="POST" action={`/api/portail/submissions/${id}/delete`} onsubmit="return confirm('Supprimer ce brouillon ?');" style="margin: 0;">
+        <button type="submit" class="btn btn-danger">Supprimer le brouillon</button>
+      </form>
+    </div>
+  )}
+</PortailLayout>

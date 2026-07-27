@@ -1,0 +1,55 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion?error=no_session');
+}
+
+const url = new URL(Astro.request.url);
+const isFirst = url.searchParams.get('first') === '1';
+const errCode = url.searchParams.get('error');
+const errorMessages: Record<string, string> = {
+  short: 'Le mot de passe doit contenir au moins 10 caractères.',
+  mismatch: 'Les deux mots de passe ne correspondent pas.',
+  weak: 'Ce mot de passe est trop courant. Choisissez-en un autre.',
+  unknown: 'Une erreur est survenue. Réessayez.',
+};
+---
+<PortailLayout title="Définir votre mot de passe" staffName={staff.full_name} minimal>
+  <div style="max-width: 480px; margin: 40px auto;">
+    <div class="card">
+      <h1 style="margin-bottom: 8px;">
+        {isFirst ? 'Bienvenue sur le portail' : 'Définir un nouveau mot de passe'}
+      </h1>
+      <p style="color: var(--p-muted); font-size: .92rem; margin-bottom: 22px;">
+        {isFirst
+          ? `Bonjour ${staff.full_name.split(' ')[0]}, choisissez le mot de passe que vous utiliserez pour vous connecter.`
+          : 'Choisissez votre nouveau mot de passe.'}
+      </p>
+
+      {errCode && (
+        <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+      )}
+
+      <form method="POST" action="/api/portail/set-password">
+        <div class="form-row">
+          <label for="password">Nouveau mot de passe</label>
+          <input type="password" name="password" id="password" required minlength="10" autocomplete="new-password" />
+          <div class="hint">Au moins 10 caractères. Évitez les mots courants.</div>
+        </div>
+        <div class="form-row">
+          <label for="confirm">Confirmer</label>
+          <input type="password" name="confirm" id="confirm" required minlength="10" autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          {isFirst ? 'Définir mon mot de passe' : 'Enregistrer'}
+        </button>
+      </form>
+    </div>
+  </div>
+</PortailLayout>

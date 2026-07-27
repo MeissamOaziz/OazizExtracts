@@ -1,0 +1,87 @@
+---
+// Wrapper that gives each preview a "printed page" look and consistent typography.
+// Global styles for all three doc components live here (scoped via .doc-paper class).
+interface Props {
+  title?: string;
+}
+const { title } = Astro.props;
+---
+<style is:global>
+  .doc-paper {
+    background: #fff;
+    color: #111;
+    font-family: 'Roboto', Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    padding: 22px 26px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    max-width: 780px;
+    margin: 0 auto 24px;
+  }
+  .doc-paper h1.doc-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: .3px;
+  }
+  .doc-paper .doc-subtitle {
+    text-align: center;
+    font-size: .9rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #374151;
+  }
+  .doc-paper .doc-hdr {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    font-weight: 700; font-size: .78rem;
+    margin-bottom: 14px;
+  }
+  .doc-paper .doc-hdr .side { width: 28%; }
+  .doc-paper .doc-hdr .side.right { text-align: right; }
+  .doc-paper .doc-hdr .center { flex-grow: 1; text-align: center; }
+  .doc-paper h2.doc-section {
+    font-size: .9rem; font-weight: 700; margin-top: 14px; margin-bottom: 6px;
+    background: #e5e7eb; padding: 5px 8px; border: 1px solid #d1d5db;
+  }
+  .doc-paper table.doc-table {
+    width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 10px;
+  }
+  .doc-paper table.doc-table th,
+  .doc-paper table.doc-table td {
+    border: 1px solid #4b5563; padding: 5px 7px; vertical-align: top;
+    font-size: 9pt;
+  }
+  .doc-paper table.doc-table th {
+    background: #f3f4f6; font-weight: 700; text-align: left;
+  }
+  .doc-paper .doc-grid {
+    display: grid; grid-template-columns: 180px 1fr;
+    gap: 8px 14px; margin: 8px 0;
+  }
+  .doc-paper .doc-grid > .label { font-weight: 700; }
+  .doc-paper .fill {
+    background: #fffbe6; padding: 3px 6px; border: 1px dashed #d1d5db;
+    display: inline-block; min-width: 120px;
+  }
+  .doc-paper .fill.block { display: block; min-height: 22px; }
+  .doc-paper .fill.empty { color: #9ca3af; font-style: italic; }
+  .doc-paper .sig-line {
+    display: inline-block; border-bottom: 1px solid #111; min-width: 220px; height: 26px; vertical-align: bottom;
+  }
+  .doc-paper .sig-block {
+    display: flex; gap: 32px; margin-top: 22px;
+  }
+  .doc-paper .sig-block > div { text-align: center; flex: 1; }
+  .doc-paper .rating-row td { text-align: center; }
+  .doc-paper .rating-row td:first-child { text-align: left; font-weight: 600; }
+  .doc-paper p { margin: 6px 0; }
+  .doc-paper ul { margin: 4px 0 4px 20px; }
+</style>
+
+<div class="doc-paper">
+  {title && <h1 class="doc-title">{title}</h1>}
+  <slot />
+</div>

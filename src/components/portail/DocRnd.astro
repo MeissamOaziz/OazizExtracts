@@ -1,0 +1,73 @@
+---
+import DocPaper from './DocPaper.astro';
+import type { SubmissionForRender, StaffLite } from '../../lib/portail-types';
+import { fmtDateFr } from '../../lib/portail-types';
+
+interface Props {
+  submission: SubmissionForRender;
+  participant: StaffLite;
+}
+const { submission, participant } = Astro.props;
+const objective = submission.rnd_objective ?? 'Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit, essai de résistance à la traction';
+---
+<DocPaper>
+  <table class="doc-table" style="margin-bottom: 12px;">
+    <tr>
+      <td rowspan="2" style="width: 30%;"><strong>OAZIZ EXTRACTS INC.</strong></td>
+      <td><strong>RECHERCHE ET DÉVELOPPEMENT</strong></td>
+      <td style="width: 20%;">F2-OAS-001</td>
+    </tr>
+    <tr>
+      <td><strong>UTILISATION ET PRODUCTION DE CANNABIS</strong></td>
+      <td>F2-PRO-013/04</td>
+    </tr>
+  </table>
+
+  <h2 class="doc-section">SECTION 2 — RECHERCHE ET DÉVELOPPEMENT : TEST D'ODEUR, DE GOÛT ET DE TEXTURE</h2>
+
+  <table class="doc-table">
+    <tr><th colspan="2">DESCRIPTION</th></tr>
+    <tr><td style="width: 30%;">Nom du lot :</td><td><span class={`fill ${submission.production_id ? '' : 'empty'}`}>{submission.production_id ?? '(à remplir)'}</span></td></tr>
+    <tr><td>Type de produit :</td><td><span class="fill">{submission.product_type}</span></td></tr>
+    <tr><td>Souche(s) :</td><td><span class="fill">{submission.product_name}</span></td></tr>
+    <tr><td colspan="2">Objectif(s) : <span class="fill">{objective}</span></td></tr>
+  </table>
+
+  <table class="doc-table">
+    <tr><th colspan="2">INFORMATIONS SUR LE TEST</th></tr>
+    <tr><td style="width: 30%;">Quantité à utiliser pour le test :</td><td><span class={`fill ${submission.rnd_quantity_for_test ? '' : 'empty'}`}>{submission.rnd_quantity_for_test ?? '(à remplir)'}</span></td></tr>
+    <tr><td>Date du test (JJ/MM/AAAA) :</td><td><span class="fill">{fmtDateFr(submission.form_date)}</span></td></tr>
+    <tr><td>Personnel impliqué :</td><td><span class="fill">{participant.name}</span></td></tr>
+    <tr><td>Numéro de producteur autorisé :</td><td><span class={`fill ${submission.rnd_lp_number ? '' : 'empty'}`}>{submission.rnd_lp_number ?? '(à remplir)'}</span></td></tr>
+  </table>
+
+  <table class="doc-table">
+    <tr><th colspan="6">CONCLUSION ET COMMENTAIRES SUR LE PRODUIT</th></tr>
+    <tr>
+      <th style="text-align:left;">Note</th>
+      <th style="width: 40px;">1</th><th style="width: 40px;">2</th>
+      <th style="width: 40px;">3</th><th style="width: 40px;">4</th><th style="width: 40px;">5</th>
+    </tr>
+    <tr class="rating-row"><td>Odeur</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr class="rating-row"><td>Goût</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr class="rating-row"><td>Texture</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr class="rating-row"><td>Évaluation globale</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td colspan="6">Rétroaction / Commentaires :</td></tr>
+    <tr><td colspan="6" style="height: 40px;">&nbsp;</td></tr>
+    <tr><td colspan="6" style="height: 40px;">&nbsp;</td></tr>
+    <tr>
+      <td colspan="3">Signature du A/RPIC ({participant.name}) : <div class="sig-line" style="min-width:180px;"></div></td>
+      <td colspan="3">Date (JJ/MM/AAAA) : <span class="fill">{fmtDateFr(submission.form_date)}</span></td>
+    </tr>
+  </table>
+
+  <table class="doc-table" style="margin-top: 10px;">
+    <tr><th colspan="4">VÉRIFICATION DU FORMULAIRE (À remplir par l'AQ)</th></tr>
+    <tr>
+      <td>Révisé par : <span class="fill">{submission.qa.name}</span></td>
+      <td>Date : <span class="fill empty">(à signer)</span></td>
+      <td>Qté détruite (g) : <span class={`fill ${submission.rnd_qty_destroyed ? '' : 'empty'}`}>{submission.rnd_qty_destroyed ?? '(à remplir)'}</span></td>
+      <td>Date destruction : <span class={`fill ${submission.rnd_date_destroyed ? '' : 'empty'}`}>{submission.rnd_date_destroyed ? fmtDateFr(submission.rnd_date_destroyed) : '(à remplir)'}</span></td>
+    </tr>
+  </table>
+</DocPaper>

@@ -16,9 +16,10 @@ dist/
 Thumbs.db
 desktop.ini
 
-# Editor
+# Editor / agent
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 

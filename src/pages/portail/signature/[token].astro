@@ -1,0 +1,360 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { getAnonServerClient } from '../../../lib/supabase';
+import DocSampleRequest from '../../../components/portail/DocSampleRequest.astro';
+import DocRnd from '../../../components/portail/DocRnd.astro';
+import DocConsent from '../../../components/portail/DocConsent.astro';
+import type { SubmissionForRender, StaffLite, DocumentEntry } from '../../../lib/portail-types';
+import { fmtDateFr } from '../../../lib/portail-types';
+
+const { token } = Astro.params;
+const raw = (token ?? '').trim();
+
+const supabase = getAnonServerClient();
+const { data: ctx, error } = await supabase.rpc('get_signer_context', { raw_token: raw });
+if (error) console.error('get_signer_context error:', error);
+
+const kindLabel: Record<string, string> = {
+  sample_request: "Demande d'échantillon",
+  rnd: 'Formulaire R&D (F2-PRO-013/04)',
+  consent: 'Formulaire de consentement éclairé',
+};
+
+type Ctx = {
+  token_id: string;
+  is_qa: boolean;
+  expires_at: string;
+  signer: { staff_id: string; name: string; email: string };
+  submission: SubmissionForRender;
+  participants: StaffLite[];
+  documents: DocumentEntry[];
+  pending_signers: Array<{
+    id: string;
+    role: string;
+    document_kind: string;
+    participant_staff_id: string | null;
+    participant_name: string | null;
+    status: string;
+    signed_at: string | null;
+  }>;
+};
+
+const invalid = !ctx || (ctx as any).error;
+const ctxTyped = invalid ? null : (ctx as Ctx);
+const errorCode: string | null = ctx && (ctx as any).error ? (ctx as any).error : (!ctx ? 'not_found' : null);
+const errorMessages: Record<string, string> = {
+  not_found: 'Ce lien de signature est invalide.',
+  expired: 'Ce lien de signature a expiré. Contactez Oaziz Extracts pour en obtenir un nouveau.',
+  already_signed: 'Ce lien a déjà été utilisé — merci !',
+};
+---
+<PortailLayout title="Signature" minimal>
+  {invalid ? (
+    <div style="max-width: 520px; margin: 40px auto;">
+      <div class="card">
+        <h1>Lien invalide</h1>
+        <p style="color: var(--p-muted); margin-top: 8px;">
+          {errorMessages[errorCode ?? 'not_found']}
+        </p>
+      </div>
+    </div>
+  ) : (
+    <div style="max-width: 840px; margin: 0 auto;">
+      <div class="card" style="margin-bottom: 16px;">
+        <h1 style="margin-bottom: 6px;">Signature requise</h1>
+        <p style="color: var(--p-muted); font-size: .95rem;">
+          Bonjour <strong>{ctxTyped!.signer.name.split(' ')[0]}</strong>, merci de signer {ctxTyped!.documents.length > 1 ? 'les documents suivants' : 'le document suivant'}.
+        </p>
+        <div style="margin-top: 14px; color: var(--p-muted); font-size: .88rem;">
+          <strong style="color: var(--p-text);">{ctxTyped!.submission.product_name}</strong> · {ctxTyped!.submission.product_type} · {fmtDateFr(ctxTyped!.submission.form_date)}
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Documents à signer</h2>
+        <ul style="margin-top: 12px; padding-left: 0; list-style: none;">
+          {ctxTyped!.documents.map((doc, idx) => (
+            <li style="margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--p-border); border-radius: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div>
+                  <strong>{kindLabel[doc.kind] ?? doc.kind}</strong>
+                  {doc.participant && <span style="color: var(--p-muted);"> — pour {doc.participant.name}</span>}
+                </div>
+                <button type="button" class="btn btn-secondary doc-toggle" data-target={`doc-preview-${idx}`} style="font-size: .82rem; padding: 5px 12px;">
+                  Voir le document
+                </button>
+              </div>
+              <div id={`doc-preview-${idx}`} class="doc-preview" style="display: none; margin-top: 14px;">
+                {doc.kind === 'sample_request' && (
+                  <DocSampleRequest submission={ctxTyped!.submission} participants={ctxTyped!.participants} />
+                )}
+                {doc.kind === 'rnd' && doc.participant && (
+                  <DocRnd submission={ctxTyped!.submission} participant={doc.participant} />
+                )}
+                {doc.kind === 'consent' && doc.participant && (
+                  <DocConsent submission={ctxTyped!.submission} participant={doc.participant} />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p class="hint" style="margin-top: 6px;">
+          En signant ci-dessous, votre signature sera apposée sur {ctxTyped!.documents.length > 1 ? 'chacun de ces documents' : 'ce document'}.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Votre signature</h2>
+
+        <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 12px 0 14px; border-bottom: 1px solid var(--p-border);">
+          <button type="button" class="sig-tab active" role="tab" data-method="draw">Dessiner</button>
+          <button type="button" class="sig-tab" role="tab" data-method="type">Taper</button>
+          <button type="button" class="sig-tab" role="tab" data-method="upload">Téléverser</button>
+        </div>
+
+        <!-- Draw mode -->
+        <div class="sig-panel" data-panel="draw">
+          <p class="hint" style="margin-bottom: 10px;">Dessinez ci-dessous avec la souris ou le doigt.</p>
+        </div>
+
+        <!-- Type mode -->
+        <div class="sig-panel" data-panel="type" style="display: none;">
+          <p class="hint" style="margin-bottom: 10px;">Tapez votre nom complet. Il sera rendu dans une police manuscrite.</p>
+          <input type="text" id="type-input" placeholder={ctxTyped!.signer.name} style="margin-bottom: 12px;" autocomplete="name" />
+        </div>
+
+        <!-- Upload mode -->
+        <div class="sig-panel" data-panel="upload" style="display: none;">
+          <p class="hint" style="margin-bottom: 10px;">Téléversez une image de votre signature (PNG, JPG). Fond blanc idéal.</p>
+          <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
+        </div>
+
+        <!-- Shared canvas — the final signature always ends up as PNG on this canvas -->
+        <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
+          <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center;">
+          <button type="button" id="btn-clear" class="btn btn-secondary">Effacer</button>
+          <button type="button" id="btn-submit" class="btn btn-primary" disabled>Signer et envoyer</button>
+          <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
+        </div>
+
+        <div id="flash" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet" />
+
+    <style is:global>
+      .sig-tab {
+        background: none; border: none; border-bottom: 2px solid transparent;
+        padding: 8px 14px; font-family: inherit; font-size: .9rem; font-weight: 500;
+        color: var(--p-muted); cursor: pointer; margin-bottom: -1px;
+      }
+      .sig-tab:hover { color: var(--p-text); }
+      .sig-tab.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+      .doc-preview { animation: fade-in 0.15s ease; }
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+
+    <script is:inline define:vars={{ tokenRaw: raw }}>
+      (function () {
+        const canvas = document.getElementById('sig-pad');
+        const ctx2d = canvas.getContext('2d');
+        const btnClear = document.getElementById('btn-clear');
+        const btnSubmit = document.getElementById('btn-submit');
+        const statusEl = document.getElementById('pad-status');
+        const flashEl = document.getElementById('flash');
+        const typeInput = document.getElementById('type-input');
+        const uploadInput = document.getElementById('upload-input');
+        const tabs = Array.from(document.querySelectorAll('.sig-tab'));
+        const panels = Array.from(document.querySelectorAll('.sig-panel'));
+
+        // Track logical (CSS) pad size for rendering
+        let padW = 0, padH = 0;
+        let method = 'draw';
+        let hasSignature = false;
+
+        function resizeCanvas() {
+          const rect = canvas.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          padW = rect.width; padH = rect.height;
+          canvas.width = padW * dpr;
+          canvas.height = padH * dpr;
+          ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+          ctx2d.scale(dpr, dpr);
+          ctx2d.fillStyle = '#ffffff';
+          ctx2d.fillRect(0, 0, padW, padH);
+          ctx2d.lineWidth = 2;
+          ctx2d.lineCap = 'round';
+          ctx2d.lineJoin = 'round';
+          ctx2d.strokeStyle = '#111';
+        }
+        resizeCanvas();
+
+        function clearCanvas() {
+          ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+          ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+          const dpr = window.devicePixelRatio || 1;
+          ctx2d.scale(dpr, dpr);
+          ctx2d.fillStyle = '#ffffff';
+          ctx2d.fillRect(0, 0, padW, padH);
+          ctx2d.lineWidth = 2;
+          ctx2d.lineCap = 'round';
+          ctx2d.lineJoin = 'round';
+          ctx2d.strokeStyle = '#111';
+          hasSignature = false;
+          btnSubmit.disabled = true;
+          flashEl.innerHTML = '';
+        }
+
+        // ---- DRAW MODE ----
+        let drawing = false, last = null;
+        function pointFrom(evt) {
+          const rect = canvas.getBoundingClientRect();
+          return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+        }
+        function onDown(evt) { if (method !== 'draw') return; evt.preventDefault(); drawing = true; last = pointFrom(evt); }
+        function onMove(evt) {
+          if (!drawing || method !== 'draw') return;
+          evt.preventDefault();
+          const p = pointFrom(evt);
+          ctx2d.beginPath();
+          ctx2d.moveTo(last.x, last.y);
+          ctx2d.lineTo(p.x, p.y);
+          ctx2d.stroke();
+          last = p;
+          hasSignature = true;
+          btnSubmit.disabled = false;
+        }
+        function onUp() { drawing = false; last = null; }
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerup', onUp);
+        canvas.addEventListener('pointercancel', onUp);
+        canvas.addEventListener('pointerleave', onUp);
+
+        // ---- TYPE MODE ----
+        function renderTypedSignature(text) {
+          clearCanvas();
+          if (!text.trim()) return;
+          ctx2d.fillStyle = '#111';
+          ctx2d.textBaseline = 'middle';
+          // Fit font size to width
+          let fontSize = 72;
+          const maxWidth = padW - 40;
+          do {
+            ctx2d.font = `600 ${fontSize}px 'Dancing Script', 'Segoe Script', cursive`;
+            var m = ctx2d.measureText(text);
+            if (m.width <= maxWidth) break;
+            fontSize -= 4;
+          } while (fontSize > 24);
+          ctx2d.fillText(text, (padW - m.width) / 2, padH / 2);
+          hasSignature = true;
+          btnSubmit.disabled = false;
+        }
+        typeInput.addEventListener('input', (e) => renderTypedSignature(e.target.value));
+
+        // ---- UPLOAD MODE ----
+        uploadInput.addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (file.size > 4 * 1024 * 1024) {
+            flashEl.innerHTML = '<div class="flash flash-error">Image trop volumineuse (max 4 Mo).</div>';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+              clearCanvas();
+              // Fit image to canvas keeping aspect
+              const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
+              const w = img.width * ratio;
+              const h = img.height * ratio;
+              const x = (padW - w) / 2;
+              const y = (padH - h) / 2;
+              ctx2d.drawImage(img, x, y, w, h);
+              hasSignature = true;
+              btnSubmit.disabled = false;
+            };
+            img.onerror = () => {
+              flashEl.innerHTML = '<div class="flash flash-error">Impossible de lire l\'image.</div>';
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+
+        // ---- TABS ----
+        tabs.forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-method');
+            method = target;
+            tabs.forEach((t) => t.classList.toggle('active', t === tab));
+            panels.forEach((p) => {
+              p.style.display = p.getAttribute('data-panel') === target ? '' : 'none';
+            });
+            canvas.style.cursor = target === 'draw' ? 'crosshair' : 'default';
+            clearCanvas();
+            if (target === 'type' && typeInput.value.trim()) renderTypedSignature(typeInput.value);
+          });
+        });
+
+        // ---- Doc preview toggles ----
+        Array.from(document.querySelectorAll('.doc-toggle')).forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            const target = document.getElementById(targetId);
+            if (!target) return;
+            const open = target.style.display !== 'none';
+            target.style.display = open ? 'none' : 'block';
+            btn.textContent = open ? 'Voir le document' : 'Masquer';
+          });
+        });
+
+        // ---- Clear + Submit ----
+        btnClear.addEventListener('click', () => {
+          clearCanvas();
+          if (typeInput) typeInput.value = '';
+          if (uploadInput) uploadInput.value = '';
+        });
+
+        btnSubmit.addEventListener('click', async () => {
+          if (!hasSignature) return;
+          btnSubmit.disabled = true;
+          statusEl.textContent = 'Envoi en cours…';
+          const dataUrl = canvas.toDataURL('image/png');
+          try {
+            const res = await fetch('/api/portail/signature/' + encodeURIComponent(tokenRaw), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ signature: dataUrl }),
+            });
+            const body = await res.json();
+            if (!res.ok || body.error) {
+              statusEl.textContent = '';
+              flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'expired' ? 'Ce lien a expiré.' : body.error === 'already_signed' ? 'Déjà signé.' : 'Erreur — réessayez.') + '</div>';
+              btnSubmit.disabled = false;
+              return;
+            }
+            statusEl.textContent = '';
+            flashEl.innerHTML = '<div class="flash flash-success">Merci ! Votre signature a été enregistrée.</div>';
+            canvas.style.pointerEvents = 'none';
+            document.getElementById('pad-wrap').style.opacity = '0.6';
+            btnClear.disabled = true;
+          } catch (e) {
+            statusEl.textContent = '';
+            flashEl.innerHTML = '<div class="flash flash-error">Erreur réseau — réessayez.</div>';
+            btnSubmit.disabled = false;
+          }
+        });
+      })();
+    </script>
+  )}
+</PortailLayout>
