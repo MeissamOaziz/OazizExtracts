@@ -63,14 +63,14 @@ function renderEmailShell(o: ShellOpts): string {
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(16,24,40,0.06);">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(16,24,40,0.06);border-top:4px solid ${OAZIZ_ORANGE};">
 
-        <!-- Orange header bar -->
+        <!-- Header (white) with orange accent bar -->
         <tr>
-          <td style="background:${OAZIZ_ORANGE};padding:22px 28px;text-align:center;">
-            <img src="https://www.oaziz.ca/images/Oaziz-Logo.webp" width="56" height="56" alt="Oaziz Extracts" style="display:inline-block;filter:brightness(0) invert(1);height:56px;width:auto;"/>
-            <div style="color:#ffffff;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:8px;">
-              Portail Oaziz &middot; R&amp;D
+          <td style="background:#ffffff;padding:26px 28px 18px;text-align:center;border-bottom:1px solid #eef0f3;">
+            <img src="https://www.oaziz.ca/icon-192.png" width="56" height="56" alt="Oaziz Extracts" style="display:inline-block;height:56px;width:56px;border:0;"/>
+            <div style="color:${OAZIZ_ORANGE_DEEP};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;">
+              Oaziz Extracts &middot; Portail R&amp;D
             </div>
           </td>
         </tr>
@@ -224,8 +224,8 @@ export async function sendPortalInvite(
   const isInvite = invite.kind === 'invite';
   const badge = isInvite ? 'Bienvenue' : 'Réinitialisation';
   const subject = isInvite
-    ? '[Oaziz] Bienvenue sur le portail R&D — définissez votre mot de passe'
-    : '[Oaziz] Réinitialisation du mot de passe du portail R&D';
+    ? '[Oaziz R&D] Bienvenue - définissez votre mot de passe'
+    : '[Oaziz R&D] Réinitialisation du mot de passe';
 
   const intro = isInvite
     ? `Vous avez été invité(e) à utiliser le <strong>portail interne R&amp;D d'Oaziz Extracts</strong>. Cliquez ci-dessous pour définir votre mot de passe et vous connecter.`
