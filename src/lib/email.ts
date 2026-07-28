@@ -180,7 +180,7 @@ export async function sendSignerInvite(
     footerNote: 'Vous avez reçu ce courriel parce qu\'une demande de signature R&D vous concerne.',
   });
 
-  const subject = `[Oaziz] Signature requise — ${s.product_name}`;
+  const subject = `[Oaziz R&D] Signature requise - ${s.product_name}`;
 
   try {
     const resend = new Resend(apiKey);
