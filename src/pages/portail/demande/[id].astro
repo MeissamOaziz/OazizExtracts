@@ -71,6 +71,7 @@ const revealFor = pageUrl.searchParams.get('reveal_for');
 const revealEmailStatus = pageUrl.searchParams.get('reveal_email_status');
 const infoMessages: Record<string, string> = {
   sent: 'Demande envoyée. Les signataires ont reçu leur lien par courriel.',
+  edited: 'Modifications enregistrées. La demande est repassée en brouillon — cliquez « Envoyer pour signature » pour réémettre les liens.',
 };
 const errorMessages: Record<string, string> = {
   not_creator: 'Seul le créateur de la demande peut l\'envoyer.',
@@ -282,13 +283,31 @@ function fmtDate(iso?: string | null): string {
     )}
   </div>
 
-  {isCreator && isDraft && (
-    <div style="display: flex; gap: 12px;">
-      <form method="POST" action={`/api/portail/submissions/${id}/send`} onsubmit="return confirm('Envoyer les liens de signature à chaque signataire par courriel ?');" style="margin: 0;">
-        <button type="submit" class="btn btn-primary">Envoyer pour signature</button>
-      </form>
-      <form method="POST" action={`/api/portail/submissions/${id}/delete`} onsubmit="return confirm('Supprimer ce brouillon ?');" style="margin: 0;">
-        <button type="submit" class="btn btn-danger">Supprimer le brouillon</button>
+  {isCreator && (
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+      {isDraft && (
+        <form method="POST" action={`/api/portail/submissions/${id}/send`} onsubmit="return confirm('Envoyer les liens de signature à chaque signataire par courriel ?');" style="margin: 0;">
+          <button type="submit" class="btn btn-primary">Envoyer pour signature</button>
+        </form>
+      )}
+
+      <a href={`/portail/demande/${id}/editer`} class="btn btn-secondary">
+        Modifier{!isDraft && ' (efface les signatures)'}
+      </a>
+
+      <form
+        method="POST"
+        action={`/api/portail/submissions/${id}/delete`}
+        onsubmit={
+          isDraft
+            ? "return confirm('Supprimer ce brouillon ?');"
+            : "return confirm('⚠ Cette demande a été envoyée pour signature. Supprimer va effacer définitivement les signatures collectées, le PDF signé, et les liens envoyés. Continuer ?');"
+        }
+        style="margin: 0; margin-left: auto;"
+      >
+        <button type="submit" class="btn btn-danger">
+          Supprimer{!isDraft && ' (définitif)'}
+        </button>
       </form>
     </div>
   )}

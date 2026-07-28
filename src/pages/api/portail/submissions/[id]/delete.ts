@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { createServerClient, currentStaff } from '../../../../../lib/supabase';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
+import { storagePathFor } from '../../../../../lib/pdf';
 
 export const prerender = false;
 
@@ -11,7 +12,16 @@ export const POST: APIRoute = async ({ params, cookies, redirect, request }) => 
   const { id } = params;
   if (!id) return redirect('/portail');
 
-  // RLS enforces "only creator + only draft" — no need to double-check here.
+  // Clean up any finalized PDF in Storage (RLS-guarded delete on the row alone
+  // would orphan it). Ignore errors — the row delete is authoritative.
+  try {
+    const admin = getAdminClient();
+    await admin.storage.from('documents').remove([storagePathFor(id)]);
+  } catch (e) {
+    console.warn('[delete] storage cleanup failed:', e);
+  }
+
+  // RLS enforces "creator only" — no need to double-check here.
   const { error } = await supabase.from('submissions').delete().eq('id', id);
   if (error) {
     console.error('delete failed:', error);
@@ -21,11 +31,11 @@ export const POST: APIRoute = async ({ params, cookies, redirect, request }) => 
   await supabase.from('audit_log').insert({
     submission_id: null,
     actor_email: staff.email,
-    action: 'draft_deleted',
+    action: 'submission_deleted',
     ip_address: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
     user_agent: request.headers.get('user-agent'),
     metadata: { submission_id: id },
   });
 
-  return redirect('/portail', 303);
+  return redirect('/portail?info=deleted', 303);
 };
