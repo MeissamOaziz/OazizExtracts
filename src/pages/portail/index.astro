@@ -21,7 +21,57 @@ if (code) {
 
 const staff = await currentStaff(supabase);
 if (!staff) {
-  return Astro.redirect('/portail/connexion');
+  // Might be a Supabase implicit-flow auth callback (#access_token=… in the
+  // URL fragment). The server can't see the fragment, so render a tiny page
+  // that hands the tokens to /api/portail/auth/hash-callback, which sets the
+  // session cookie server-side. If no fragment is present, redirect to login.
+  return new Response(`<!DOCTYPE html>
+<html lang="fr"><head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Portail Oaziz</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#4b5063;background:#f4f5f7;margin:0;padding:0;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;}
+    .spinner{width:32px;height:32px;border:3px solid #eaecef;border-top-color:#d05826;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+  </style>
+</head>
+<body>
+  <div>
+    <div class="spinner"></div>
+    <div id="msg">Connexion en cours…</div>
+  </div>
+  <script>
+    (function () {
+      var h = window.location.hash || '';
+      if (h.indexOf('access_token=') < 0) {
+        window.location.replace('/portail/connexion');
+        return;
+      }
+      var p = new URLSearchParams(h.replace(/^#/, ''));
+      var body = {
+        access_token: p.get('access_token'),
+        refresh_token: p.get('refresh_token'),
+      };
+      // Wipe the tokens from the URL immediately.
+      history.replaceState({}, '', '/portail');
+      fetch('/api/portail/auth/hash-callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function (r) {
+        if (!r.ok) throw new Error('bad status');
+        window.location.replace('/portail/definir-mot-de-passe?first=1');
+      }).catch(function () {
+        document.getElementById('msg').textContent = 'Lien invalide ou expiré. Redirection…';
+        setTimeout(function () { window.location.replace('/portail/connexion?error=invite_invalid'); }, 1500);
+      });
+    })();
+  </script>
+</body></html>`, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
 }
 
 const { data: submissions } = await supabase
