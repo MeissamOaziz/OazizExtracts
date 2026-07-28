@@ -1,7 +1,9 @@
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import { getAdminClient } from './supabase';
-import type { SubmissionForRender, StaffLite } from './portail-types';
-import { fmtDateFr, INVESTIGATOR_PHONE } from './portail-types';
+import type { SubmissionForRender, StaffLite, RndRatings } from './portail-types';
+import {
+  fmtDateFr, INVESTIGATOR_PHONE, splitQuantity, RATING_KEYS, RATING_LABELS,
+} from './portail-types';
 
 // Minimal server-side PDF generator. Not pixel-matching the on-screen preview —
 // this produces a clean, printable, legible record with signatures embedded.
@@ -42,10 +44,17 @@ export interface SignerRecord {
   ip_address: string | null;
 }
 
+export interface ParticipantRnd {
+  staff_id: string;
+  ratings: RndRatings | null;
+  comments: string | null;
+}
+
 export interface BuildInput {
   submission: SubmissionForRender;
   participants: StaffLite[];
   signers: SignerRecord[];
+  participantRnd?: ParticipantRnd[];
 }
 
 export async function buildSubmissionPdf(input: BuildInput): Promise<Uint8Array> {
@@ -179,23 +188,27 @@ async function renderRndPage(
   keyValueRow(c, 'Nom du lot', input.submission.production_id ?? '—');
   keyValueRow(c, 'Type de produit', input.submission.product_type);
   keyValueRow(c, 'Souche(s)', input.submission.product_name);
-  keyValueRow(c, 'Objectif',
+  paragraphRow(c, 'Objectif',
     input.submission.rnd_objective ??
-    'Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit.');
+    'Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit.',
+    5);
   gap(c, 8);
 
   section(c, "INFORMATIONS SUR LE TEST");
-  keyValueRow(c, 'Quantité pour le test', input.submission.rnd_quantity_for_test ?? '—');
+  const qtyForTest = input.submission.rnd_quantity_for_test
+    ?? splitQuantity(input.submission.quantity, Math.max(1, input.participants.length));
+  keyValueRow(c, 'Quantité pour le test', qtyForTest);
   keyValueRow(c, 'Date du test', fmtDateFr(input.submission.form_date));
   keyValueRow(c, 'Personnel impliqué', participant.name);
   keyValueRow(c, 'N° producteur autorisé', input.submission.rnd_lp_number ?? '—');
   gap(c, 10);
 
   section(c, "CONCLUSION ET COMMENTAIRES");
-  paragraph(c, 'Notation : 1 (faible) — 5 (excellent). Odeur, Goût, Texture, Évaluation globale.', GRAY);
-  gap(c, 4);
-  paragraph(c, "Notes et rétroaction du participant à conserver au dossier interne.", GRAY);
-  gap(c, 18);
+  const pRnd = input.participantRnd?.find((r) => r.staff_id === participant.id);
+  ratingsTable(c, pRnd?.ratings ?? null);
+  gap(c, 6);
+  commentsBox(c, pRnd?.comments ?? '', 4);
+  gap(c, 14);
 
   signaturePair(c,
     { label: 'Signature du A/RPIC (participant)', who: participant.name,
@@ -273,6 +286,83 @@ function keyValueRow(c: Cursor, label: string, value: string) {
   c.page.drawText(label, { x: MARGIN + 8, y: c.y + 2, size: 9, font: c.fonts.bold, color: GRAY });
   c.page.drawText(truncate(value, 90), { x: MARGIN + 8 + labelW, y: c.y + 2, size: 10, font: c.fonts.reg, color: BLACK });
   c.y -= 22;
+}
+
+// Multi-line "key : long paragraph" row. Wraps value across up to maxLines lines,
+// grows the box height accordingly. Used for R&D objectif.
+function paragraphRow(c: Cursor, label: string, value: string, maxLines: number) {
+  const labelW = 170;
+  const valueW = CONTENT_W - labelW - 16;
+  const lineHeight = 13;
+  let lines = wrap(value, c.fonts.reg, 10, valueW);
+  const truncated = lines.length > maxLines;
+  if (truncated) {
+    lines = lines.slice(0, maxLines);
+    // Add ellipsis to last line if we cut off content
+    const last = lines[maxLines - 1];
+    if (last.length > 3) lines[maxLines - 1] = last.slice(0, -1) + '…';
+  }
+  const displayed = Math.max(1, lines.length);
+  const boxH = displayed * lineHeight + 10;
+  c.page.drawRectangle({ x: MARGIN, y: c.y - boxH + 14, width: CONTENT_W, height: boxH, color: LIGHT });
+  c.page.drawText(label, { x: MARGIN + 8, y: c.y + 2, size: 9, font: c.fonts.bold, color: GRAY });
+  for (let i = 0; i < lines.length; i++) {
+    c.page.drawText(lines[i], {
+      x: MARGIN + 8 + labelW, y: c.y + 2 - i * lineHeight,
+      size: 10, font: c.fonts.reg, color: BLACK,
+    });
+  }
+  c.y -= boxH + 4;
+}
+
+function ratingsTable(c: Cursor, ratings: RndRatings | null) {
+  const rowH = 16;
+  const labelW = 130;
+  const cellW = (CONTENT_W - labelW) / 5;
+  // Header
+  c.page.drawRectangle({ x: MARGIN, y: c.y - rowH + 12, width: CONTENT_W, height: rowH, borderColor: SEP, borderWidth: 0.6 });
+  c.page.drawText('Note', { x: MARGIN + 6, y: c.y, size: 9, font: c.fonts.bold, color: GRAY });
+  for (let n = 1; n <= 5; n++) {
+    const x = MARGIN + labelW + (n - 1) * cellW;
+    c.page.drawLine({ start: { x, y: c.y - rowH + 12 }, end: { x, y: c.y + 12 }, thickness: 0.5, color: SEP });
+    c.page.drawText(String(n), { x: x + cellW / 2 - 3, y: c.y, size: 9, font: c.fonts.bold, color: GRAY });
+  }
+  c.y -= rowH + 2;
+  // Rows
+  for (const key of RATING_KEYS) {
+    const val = ratings?.[key] ?? null;
+    c.page.drawRectangle({ x: MARGIN, y: c.y - rowH + 12, width: CONTENT_W, height: rowH, borderColor: SEP, borderWidth: 0.6 });
+    c.page.drawText(RATING_LABELS[key], { x: MARGIN + 6, y: c.y, size: 9, font: c.fonts.reg, color: BLACK });
+    for (let n = 1; n <= 5; n++) {
+      const x = MARGIN + labelW + (n - 1) * cellW;
+      c.page.drawLine({ start: { x, y: c.y - rowH + 12 }, end: { x, y: c.y + 12 }, thickness: 0.5, color: SEP });
+      if (val === n) {
+        c.page.drawText('X', { x: x + cellW / 2 - 3, y: c.y, size: 11, font: c.fonts.bold, color: BLACK });
+      }
+    }
+    c.y -= rowH + 2;
+  }
+}
+
+function commentsBox(c: Cursor, comments: string, minLines: number) {
+  const lineHeight = 13;
+  const lines = comments ? wrap(comments, c.fonts.reg, 10, CONTENT_W - 12) : [];
+  const displayed = Math.max(minLines, lines.length);
+  const boxH = displayed * lineHeight + 12;
+  c.page.drawRectangle({
+    x: MARGIN, y: c.y - boxH + 14, width: CONTENT_W, height: boxH,
+    borderColor: SEP, borderWidth: 0.6,
+  });
+  c.page.drawText('Rétroaction / Commentaires :', {
+    x: MARGIN + 6, y: c.y + 2, size: 8, font: c.fonts.bold, color: GRAY,
+  });
+  for (let i = 0; i < lines.length; i++) {
+    c.page.drawText(lines[i], {
+      x: MARGIN + 6, y: c.y - 12 - i * lineHeight,
+      size: 10, font: c.fonts.reg, color: BLACK,
+    });
+  }
+  c.y -= boxH + 4;
 }
 
 function paragraph(c: Cursor, s: string, color = BLACK) {

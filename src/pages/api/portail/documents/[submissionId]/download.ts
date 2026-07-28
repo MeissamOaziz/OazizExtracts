@@ -4,9 +4,9 @@ import {
 } from '../../../../../lib/supabase';
 import {
   buildSubmissionPdf, storePdf, storagePathFor, signedDownloadUrl,
-  type BuildInput, type SignerRecord,
+  type BuildInput, type SignerRecord, type ParticipantRnd,
 } from '../../../../../lib/pdf';
-import type { SubmissionForRender, StaffLite } from '../../../../../lib/portail-types';
+import type { SubmissionForRender, StaffLite, RndRatings } from '../../../../../lib/portail-types';
 
 export const prerender = false;
 
@@ -81,7 +81,7 @@ async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submis
 
   const { data: partRows } = await admin
     .from('submission_participants')
-    .select('participant:participant_staff_id ( id, full_name )')
+    .select('participant:participant_staff_id ( id, full_name ), rnd_ratings, rnd_comments')
     .eq('submission_id', submissionId);
 
   const { data: signerRows } = await admin
@@ -111,6 +111,12 @@ async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submis
   const participants: StaffLite[] = (partRows ?? [])
     .map((r: any) => ({ id: r.participant.id, name: r.participant.full_name }));
 
+  const participantRnd: ParticipantRnd[] = (partRows ?? []).map((r: any) => ({
+    staff_id: r.participant.id,
+    ratings: (r.rnd_ratings ?? null) as RndRatings | null,
+    comments: r.rnd_comments ?? null,
+  }));
+
   const signers: SignerRecord[] = (signerRows ?? []).map((s: any): SignerRecord => ({
     role: s.role,
     document_kind: s.document_kind,
@@ -121,7 +127,7 @@ async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submis
     ip_address: s.ip_address,
   }));
 
-  const input: BuildInput = { submission, participants, signers };
+  const input: BuildInput = { submission, participants, signers, participantRnd };
   return await buildSubmissionPdf(input);
 }
 

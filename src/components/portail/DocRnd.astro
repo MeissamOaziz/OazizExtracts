@@ -1,14 +1,18 @@
 ---
 import DocPaper from './DocPaper.astro';
-import type { SubmissionForRender, StaffLite } from '../../lib/portail-types';
-import { fmtDateFr } from '../../lib/portail-types';
+import type { SubmissionForRender, StaffLite, RndRatings } from '../../lib/portail-types';
+import { fmtDateFr, splitQuantity, RATING_KEYS, RATING_LABELS } from '../../lib/portail-types';
 
 interface Props {
   submission: SubmissionForRender;
   participant: StaffLite;
+  participantCount: number;
+  ratings?: RndRatings | null;
+  comments?: string | null;
 }
-const { submission, participant } = Astro.props;
-const objective = submission.rnd_objective ?? 'Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit, essai de résistance à la traction';
+const { submission, participant, participantCount, ratings, comments } = Astro.props;
+const objective = submission.rnd_objective ?? 'Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit, essai de résistance à la traction.';
+const quantityForTest = submission.rnd_quantity_for_test ?? splitQuantity(submission.quantity, participantCount);
 ---
 <DocPaper>
   <table class="doc-table" style="margin-bottom: 12px;">
@@ -23,19 +27,26 @@ const objective = submission.rnd_objective ?? 'Contrôle qualité, essai de trac
     </tr>
   </table>
 
-  <h2 class="doc-section">SECTION 2 — RECHERCHE ET DÉVELOPPEMENT : TEST D'ODEUR, DE GOÛT ET DE TEXTURE</h2>
+  <h2 class="doc-section">SECTION 2 — TEST D'ODEUR, DE GOÛT ET DE TEXTURE</h2>
 
   <table class="doc-table">
     <tr><th colspan="2">DESCRIPTION</th></tr>
     <tr><td style="width: 30%;">Nom du lot :</td><td><span class={`fill ${submission.production_id ? '' : 'empty'}`}>{submission.production_id ?? '(à remplir)'}</span></td></tr>
     <tr><td>Type de produit :</td><td><span class="fill">{submission.product_type}</span></td></tr>
     <tr><td>Souche(s) :</td><td><span class="fill">{submission.product_name}</span></td></tr>
-    <tr><td colspan="2">Objectif(s) : <span class="fill">{objective}</span></td></tr>
+    <tr>
+      <td style="vertical-align: top;">Objectif :</td>
+      <td>
+        <div style="min-height: 72px; max-height: 96px; overflow: hidden; padding: 6px 8px; background: #fffbe6; border: 1px dashed #d1d5db; line-height: 1.45; white-space: pre-wrap;">
+          {objective}
+        </div>
+      </td>
+    </tr>
   </table>
 
   <table class="doc-table">
     <tr><th colspan="2">INFORMATIONS SUR LE TEST</th></tr>
-    <tr><td style="width: 30%;">Quantité à utiliser pour le test :</td><td><span class={`fill ${submission.rnd_quantity_for_test ? '' : 'empty'}`}>{submission.rnd_quantity_for_test ?? '(à remplir)'}</span></td></tr>
+    <tr><td style="width: 30%;">Quantité à utiliser pour le test :</td><td><span class="fill">{quantityForTest}</span></td></tr>
     <tr><td>Date du test (JJ/MM/AAAA) :</td><td><span class="fill">{fmtDateFr(submission.form_date)}</span></td></tr>
     <tr><td>Personnel impliqué :</td><td><span class="fill">{participant.name}</span></td></tr>
     <tr><td>Numéro de producteur autorisé :</td><td><span class={`fill ${submission.rnd_lp_number ? '' : 'empty'}`}>{submission.rnd_lp_number ?? '(à remplir)'}</span></td></tr>
@@ -48,13 +59,27 @@ const objective = submission.rnd_objective ?? 'Contrôle qualité, essai de trac
       <th style="width: 40px;">1</th><th style="width: 40px;">2</th>
       <th style="width: 40px;">3</th><th style="width: 40px;">4</th><th style="width: 40px;">5</th>
     </tr>
-    <tr class="rating-row"><td>Odeur</td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr class="rating-row"><td>Goût</td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr class="rating-row"><td>Texture</td><td></td><td></td><td></td><td></td><td></td></tr>
-    <tr class="rating-row"><td>Évaluation globale</td><td></td><td></td><td></td><td></td><td></td></tr>
+    {RATING_KEYS.map((k) => {
+      const val = ratings?.[k] ?? null;
+      return (
+        <tr class="rating-row">
+          <td>{RATING_LABELS[k]}</td>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <td>{val === n ? 'X' : ''}</td>
+          ))}
+        </tr>
+      );
+    })}
     <tr><td colspan="6">Rétroaction / Commentaires :</td></tr>
-    <tr><td colspan="6" style="height: 40px;">&nbsp;</td></tr>
-    <tr><td colspan="6" style="height: 40px;">&nbsp;</td></tr>
+    <tr>
+      <td colspan="6" style="min-height: 60px;">
+        {comments ? (
+          <div style="padding: 4px 2px; white-space: pre-wrap; min-height: 56px;">{comments}</div>
+        ) : (
+          <div style="min-height: 56px;">&nbsp;</div>
+        )}
+      </td>
+    </tr>
     <tr>
       <td colspan="3">Signature du A/RPIC ({participant.name}) : <div class="sig-line" style="min-width:180px;"></div></td>
       <td colspan="3">Date (JJ/MM/AAAA) : <span class="fill">{fmtDateFr(submission.form_date)}</span></td>

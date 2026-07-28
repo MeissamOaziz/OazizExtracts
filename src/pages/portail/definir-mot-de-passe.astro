@@ -15,7 +15,7 @@ const isFirst = url.searchParams.get('first') === '1';
 const errCode = url.searchParams.get('error');
 const errDetail = url.searchParams.get('detail');
 const errorMessages: Record<string, string> = {
-  short: 'Le mot de passe doit contenir au moins 10 caractères.',
+  short: 'Le mot de passe doit contenir au moins 8 caractères.',
   mismatch: 'Les deux mots de passe ne correspondent pas.',
   weak: 'Ce mot de passe a été refusé (trop courant ou déjà compromis dans une fuite connue). Choisissez-en un autre — idéalement une phrase de 3 à 4 mots plus des chiffres.',
   unknown: 'Une erreur est survenue.',
@@ -47,12 +47,15 @@ const errorMessages: Record<string, string> = {
       <form method="POST" action="/api/portail/set-password">
         <div class="form-row">
           <label for="password">Nouveau mot de passe</label>
-          <input type="password" name="password" id="password" required minlength="10" autocomplete="new-password" />
-          <div class="hint">Au moins 10 caractères. Évitez les mots courants.</div>
+          <input type="password" name="password" id="password" required minlength="8" autocomplete="new-password" />
+          <div class="hint">
+            <strong>Minimum 8 caractères.</strong> Les mots de passe très courants (ex. « 12345678 ») sont refusés — ils sont vérifiés contre une base de fuites connues.
+            <br/>Astuce : une phrase de 3 mots + chiffres est facile à retenir et acceptée (ex. <em>Rosin-Kief-2026</em>).
+          </div>
         </div>
         <div class="form-row">
           <label for="confirm">Confirmer</label>
-          <input type="password" name="confirm" id="confirm" required minlength="10" autocomplete="new-password" />
+          <input type="password" name="confirm" id="confirm" required minlength="8" autocomplete="new-password" />
         </div>
         <button type="submit" class="btn btn-primary" style="width: 100%;">
           {isFirst ? 'Définir mon mot de passe' : 'Enregistrer'}

@@ -19,19 +19,21 @@ const { data: allStaff } = await supabase
 const roster = allStaff ?? [];
 const findByEmail = (email: string) => roster.find((s) => s.email === email);
 
-// Sensible defaults sourced from the seeded roster.
-const defaults = {
-  initiator: findByEmail(staff.email)?.id ?? '',
-  production: findByEmail('simon@oaziz.ca')?.id ?? '',
-  qa: findByEmail('stephane@oaziz.ca')?.id ?? '',
-  consent_obtainer: findByEmail('jorge@oaziz.ca')?.id ?? '',
-};
+// Locked-in role holders — the server enforces these too, regardless of what
+// the form submits. Display-only in the UI.
+const jorge = findByEmail('jorge@oaziz.ca');
+const stephane = findByEmail('stephane@oaziz.ca');
+const simon = findByEmail('simon@oaziz.ca');
+
+const DEFAULT_OBJECTIVE = "Contrôle qualité, essai de traction, analyse physique du lot, R&D pour le lancement du produit, essai de résistance à la traction.";
 
 const url = new URL(Astro.request.url);
 const error = url.searchParams.get('error');
 const errorMessages: Record<string, string> = {
   missing: 'Veuillez remplir tous les champs obligatoires.',
   no_participants: 'Sélectionnez au moins un participant.',
+  no_jorge: 'Jorge Sousa doit exister dans la liste du personnel (rôles fixes).',
+  no_stephane: 'Stephane Paquin doit exister dans la liste du personnel (rôle AQ).',
   unknown: 'Une erreur est survenue lors de l\'enregistrement.',
 };
 
@@ -59,12 +61,11 @@ const today = new Date().toISOString().slice(0, 10);
     </div>
 
     <div class="form-row">
-      <label for="initiator_staff_id">Nom de l'initiateur</label>
-      <select name="initiator_staff_id" id="initiator_staff_id" required>
-        {roster.map((s) => (
-          <option value={s.id} selected={s.id === defaults.initiator}>{s.full_name}</option>
-        ))}
-      </select>
+      <label>Nom de l'initiateur</label>
+      <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
+        {jorge?.full_name ?? 'Jorge Sousa'}
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+      </div>
     </div>
 
     <div class="form-row">
@@ -78,8 +79,15 @@ const today = new Date().toISOString().slice(0, 10);
     </div>
 
     <div class="form-row">
-      <label for="quantity">Quantité (g ou unités)</label>
-      <input type="text" name="quantity" id="quantity" required />
+      <label for="quantity">Quantité totale (g ou unités)</label>
+      <input type="text" name="quantity" id="quantity" placeholder="ex: 20 g" required />
+      <div class="hint">Sera automatiquement divisée en parts égales entre les participants sur les formulaires R&D.</div>
+    </div>
+
+    <div class="form-row">
+      <label for="rnd_objective">Objectif de l'étude</label>
+      <textarea name="rnd_objective" id="rnd_objective" rows="4" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{DEFAULT_OBJECTIVE}</textarea>
+      <div class="hint">Modifiable. Apparaîtra dans la section DESCRIPTION du formulaire R&D.</div>
     </div>
 
     <div class="form-row">
@@ -101,7 +109,7 @@ const today = new Date().toISOString().slice(0, 10);
       <label for="production_staff_id">Personnel de production</label>
       <select name="production_staff_id" id="production_staff_id" required>
         {roster.map((s) => (
-          <option value={s.id} selected={s.id === defaults.production}>{s.full_name}</option>
+          <option value={s.id} selected={s.id === simon?.id}>{s.full_name}</option>
         ))}
       </select>
     </div>
@@ -124,34 +132,27 @@ const today = new Date().toISOString().slice(0, 10);
     </div>
 
     <h2 style="margin-top: 28px;">Rôles pour la signature</h2>
-    <p class="hint" style="margin-bottom: 16px;">
-      Modifiables uniquement si un remplacement est nécessaire pour cette demande.
-    </p>
+    <p class="hint" style="margin-bottom: 16px;">Les rôles ci-dessous sont fixés pour toutes les demandes.</p>
 
     <div class="form-row">
-      <label for="qa_staff_id">Vérification AQ</label>
-      <select name="qa_staff_id" id="qa_staff_id" required>
-        {roster.map((s) => (
-          <option value={s.id} selected={s.id === defaults.qa}>{s.full_name}</option>
-        ))}
-      </select>
+      <label>Vérification AQ</label>
+      <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
+        {stephane?.full_name ?? 'Stephane Paquin'}
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+      </div>
     </div>
 
     <div class="form-row">
-      <label for="consent_obtainer_staff_id">Personne obtenant le consentement</label>
-      <select name="consent_obtainer_staff_id" id="consent_obtainer_staff_id" required>
-        {roster.map((s) => (
-          <option value={s.id} selected={s.id === defaults.consent_obtainer}>{s.full_name}</option>
-        ))}
-      </select>
+      <label>Personne obtenant le consentement</label>
+      <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
+        {jorge?.full_name ?? 'Jorge Sousa'}
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+      </div>
     </div>
 
     <div style="display: flex; gap: 12px; margin-top: 28px;">
       <button type="submit" name="action" value="save_draft" class="btn btn-primary">
         Enregistrer le brouillon
-      </button>
-      <button type="button" class="btn btn-secondary" disabled title="Disponible à la prochaine étape (envoi aux signataires)">
-        Envoyer pour signature
       </button>
       <a href="/portail" class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
     </div>

@@ -16,7 +16,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: 'invalid_token' }, { status: 400 });
   }
 
-  let payload: { signature?: string };
+  let payload: {
+    signature?: string;
+    rnd_ratings?: Record<string, number | null> | null;
+    rnd_comments?: string | null;
+  };
   try {
     payload = await request.json();
   } catch {
@@ -27,17 +31,36 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: 'signature_missing' }, { status: 400 });
   }
 
+  // Sanitize ratings to just the four expected keys with 1-5 integers; anything
+  // else becomes null. If any expected key is missing, drop the whole ratings
+  // payload so the RPC won't half-write it.
+  let cleanRatings: Record<string, number> | null = null;
+  if (payload.rnd_ratings && typeof payload.rnd_ratings === 'object') {
+    const acc: Record<string, number> = {};
+    const keys = ['odeur', 'gout', 'texture', 'globale'] as const;
+    let ok = true;
+    for (const k of keys) {
+      const v = payload.rnd_ratings[k];
+      if (typeof v === 'number' && v >= 1 && v <= 5) acc[k] = v;
+      else ok = false;
+    }
+    if (ok) cleanRatings = acc;
+  }
+  const cleanComments = typeof payload.rnd_comments === 'string'
+    ? payload.rnd_comments.trim().slice(0, 4000) || null
+    : null;
+
   const ip = readIp(request);
   const ua = request.headers.get('user-agent') ?? null;
 
-  // Call the SECURITY DEFINER RPC with an anon client — least privilege for
-  // the raw path a browser would take.
   const anon = getAnonServerClient();
   const { data, error } = await anon.rpc('submit_signature', {
     raw_token: raw,
     signature_data: signature,
     signer_ip: ip,
     signer_ua: ua,
+    rnd_ratings: cleanRatings,
+    rnd_comments: cleanComments,
   });
 
   if (error) {

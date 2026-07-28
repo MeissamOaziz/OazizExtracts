@@ -6,8 +6,10 @@ import { getAnonServerClient } from '../../../lib/supabase';
 import DocSampleRequest from '../../../components/portail/DocSampleRequest.astro';
 import DocRnd from '../../../components/portail/DocRnd.astro';
 import DocConsent from '../../../components/portail/DocConsent.astro';
-import type { SubmissionForRender, StaffLite, DocumentEntry } from '../../../lib/portail-types';
-import { fmtDateFr } from '../../../lib/portail-types';
+import type {
+  SubmissionForRender, StaffLite, DocumentEntry, RndRatings,
+} from '../../../lib/portail-types';
+import { fmtDateFr, RATING_KEYS, RATING_LABELS } from '../../../lib/portail-types';
 
 const { token } = Astro.params;
 const raw = (token ?? '').trim();
@@ -39,6 +41,10 @@ type Ctx = {
     status: string;
     signed_at: string | null;
   }>;
+  participant_rnd?: {
+    rnd_ratings: RndRatings | null;
+    rnd_comments: string | null;
+  };
 };
 
 const invalid = !ctx || (ctx as any).error;
@@ -49,6 +55,15 @@ const errorMessages: Record<string, string> = {
   expired: 'Ce lien de signature a expiré. Contactez Oaziz Extracts pour en obtenir un nouveau.',
   already_signed: 'Ce lien a déjà été utilisé — merci !',
 };
+
+// Show the R&D evaluation card only when this token includes a
+// participant→rnd row (i.e. the current signer is one of the participants
+// and is about to sign their own R&D form).
+const needsRndEval = !!ctxTyped?.pending_signers.some(
+  (s) => s.role === 'participant' && s.document_kind === 'rnd',
+);
+const prefill = ctxTyped?.participant_rnd ?? { rnd_ratings: null, rnd_comments: null };
+const participantCount = ctxTyped?.participants.length ?? 1;
 ---
 <PortailLayout title="Signature" minimal>
   {invalid ? (
@@ -91,7 +106,13 @@ const errorMessages: Record<string, string> = {
                   <DocSampleRequest submission={ctxTyped!.submission} participants={ctxTyped!.participants} />
                 )}
                 {doc.kind === 'rnd' && doc.participant && (
-                  <DocRnd submission={ctxTyped!.submission} participant={doc.participant} />
+                  <DocRnd
+                    submission={ctxTyped!.submission}
+                    participant={doc.participant}
+                    participantCount={participantCount}
+                    ratings={prefill.rnd_ratings}
+                    comments={prefill.rnd_comments}
+                  />
                 )}
                 {doc.kind === 'consent' && doc.participant && (
                   <DocConsent submission={ctxTyped!.submission} participant={doc.participant} />
@@ -105,6 +126,50 @@ const errorMessages: Record<string, string> = {
         </p>
       </div>
 
+      {needsRndEval && (
+        <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
+          <h2>Votre évaluation R&D</h2>
+          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">
+            Notez le produit selon vos observations (obligatoire pour signer).
+          </p>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">Critère</th>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <th style="text-align:center;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;width:56px;">{n}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {RATING_KEYS.map((k) => (
+                <tr>
+                  <td style="padding:8px 6px;font-size:.92rem;">{RATING_LABELS[k]}</td>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <td style="text-align:center;padding:8px 6px;">
+                      <input
+                        type="radio"
+                        name={`rating_${k}`}
+                        value={n}
+                        checked={prefill.rnd_ratings?.[k] === n}
+                        style="cursor:pointer;width:18px;height:18px;"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div class="form-row" style="margin-top: 16px;">
+            <label for="rnd-comments">Rétroaction / Commentaires</label>
+            <textarea id="rnd-comments" rows="4" placeholder="Vos observations sur le produit (odeur, goût, texture, effet…)" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
+          </div>
+          <div id="rnd-eval-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
+            Veuillez noter chaque critère avant de signer.
+          </div>
+        </div>
+      )}
+
       <div class="card">
         <h2>Votre signature</h2>
 
@@ -114,24 +179,20 @@ const errorMessages: Record<string, string> = {
           <button type="button" class="sig-tab" role="tab" data-method="upload">Téléverser</button>
         </div>
 
-        <!-- Draw mode -->
         <div class="sig-panel" data-panel="draw">
           <p class="hint" style="margin-bottom: 10px;">Dessinez ci-dessous avec la souris ou le doigt.</p>
         </div>
 
-        <!-- Type mode -->
         <div class="sig-panel" data-panel="type" style="display: none;">
           <p class="hint" style="margin-bottom: 10px;">Tapez votre nom complet. Il sera rendu dans une police manuscrite.</p>
           <input type="text" id="type-input" placeholder={ctxTyped!.signer.name} style="margin-bottom: 12px;" autocomplete="name" />
         </div>
 
-        <!-- Upload mode -->
         <div class="sig-panel" data-panel="upload" style="display: none;">
           <p class="hint" style="margin-bottom: 10px;">Téléversez une image de votre signature (PNG, JPG). Fond blanc idéal.</p>
           <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
         </div>
 
-        <!-- Shared canvas — the final signature always ends up as PNG on this canvas -->
         <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
           <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
         </div>
@@ -162,7 +223,7 @@ const errorMessages: Record<string, string> = {
       @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
     </style>
 
-    <script is:inline define:vars={{ tokenRaw: raw }}>
+    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval }}>
       (function () {
         const canvas = document.getElementById('sig-pad');
         const ctx2d = canvas.getContext('2d');
@@ -174,8 +235,10 @@ const errorMessages: Record<string, string> = {
         const uploadInput = document.getElementById('upload-input');
         const tabs = Array.from(document.querySelectorAll('.sig-tab'));
         const panels = Array.from(document.querySelectorAll('.sig-panel'));
+        const ratingKeys = ['odeur', 'gout', 'texture', 'globale'];
+        const commentsEl = document.getElementById('rnd-comments');
+        const evalErrorEl = document.getElementById('rnd-eval-error');
 
-        // Track logical (CSS) pad size for rendering
         let padW = 0, padH = 0;
         let method = 'draw';
         let hasSignature = false;
@@ -213,7 +276,6 @@ const errorMessages: Record<string, string> = {
           flashEl.innerHTML = '';
         }
 
-        // ---- DRAW MODE ----
         let drawing = false, last = null;
         function pointFrom(evt) {
           const rect = canvas.getBoundingClientRect();
@@ -239,13 +301,11 @@ const errorMessages: Record<string, string> = {
         canvas.addEventListener('pointercancel', onUp);
         canvas.addEventListener('pointerleave', onUp);
 
-        // ---- TYPE MODE ----
         function renderTypedSignature(text) {
           clearCanvas();
           if (!text.trim()) return;
           ctx2d.fillStyle = '#111';
           ctx2d.textBaseline = 'middle';
-          // Fit font size to width
           let fontSize = 72;
           const maxWidth = padW - 40;
           do {
@@ -260,7 +320,6 @@ const errorMessages: Record<string, string> = {
         }
         typeInput.addEventListener('input', (e) => renderTypedSignature(e.target.value));
 
-        // ---- UPLOAD MODE ----
         uploadInput.addEventListener('change', (e) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
@@ -273,7 +332,6 @@ const errorMessages: Record<string, string> = {
             const img = new Image();
             img.onload = () => {
               clearCanvas();
-              // Fit image to canvas keeping aspect
               const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
               const w = img.width * ratio;
               const h = img.height * ratio;
@@ -291,7 +349,6 @@ const errorMessages: Record<string, string> = {
           reader.readAsDataURL(file);
         });
 
-        // ---- TABS ----
         tabs.forEach((tab) => {
           tab.addEventListener('click', () => {
             const target = tab.getAttribute('data-method');
@@ -306,7 +363,6 @@ const errorMessages: Record<string, string> = {
           });
         });
 
-        // ---- Doc preview toggles ----
         Array.from(document.querySelectorAll('.doc-toggle')).forEach((btn) => {
           btn.addEventListener('click', () => {
             const targetId = btn.getAttribute('data-target');
@@ -318,15 +374,38 @@ const errorMessages: Record<string, string> = {
           });
         });
 
-        // ---- Clear + Submit ----
         btnClear.addEventListener('click', () => {
           clearCanvas();
           if (typeInput) typeInput.value = '';
           if (uploadInput) uploadInput.value = '';
         });
 
+        function collectRatings() {
+          const out = {};
+          for (const k of ratingKeys) {
+            const chosen = document.querySelector('input[name="rating_' + k + '"]:checked');
+            out[k] = chosen ? parseInt(chosen.value, 10) : null;
+          }
+          return out;
+        }
+
         btnSubmit.addEventListener('click', async () => {
           if (!hasSignature) return;
+
+          let ratings = null;
+          let comments = null;
+          if (needsRndEval) {
+            ratings = collectRatings();
+            const missing = ratingKeys.some((k) => ratings[k] == null);
+            if (missing) {
+              evalErrorEl.style.display = 'block';
+              document.getElementById('rnd-eval-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return;
+            }
+            evalErrorEl.style.display = 'none';
+            comments = (commentsEl && commentsEl.value ? commentsEl.value : '').slice(0, 4000);
+          }
+
           btnSubmit.disabled = true;
           statusEl.textContent = 'Envoi en cours…';
           const dataUrl = canvas.toDataURL('image/png');
@@ -334,7 +413,7 @@ const errorMessages: Record<string, string> = {
             const res = await fetch('/api/portail/signature/' + encodeURIComponent(tokenRaw), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ signature: dataUrl }),
+              body: JSON.stringify({ signature: dataUrl, rnd_ratings: ratings, rnd_comments: comments }),
             });
             const body = await res.json();
             if (!res.ok || body.error) {

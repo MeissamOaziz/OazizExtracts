@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   const confirm = String(form.get('confirm') ?? '');
   const dest = '/portail/definir-mot-de-passe';
 
-  if (password.length < 10) return redirectWithDetail(dest, 'short');
+  if (password.length < 8) return redirectWithDetail(dest, 'short');
   if (password !== confirm) return redirectWithDetail(dest, 'mismatch');
   if (BANNED_PASSWORDS.has(password.toLowerCase())) return redirectWithDetail(dest, 'weak');
 
