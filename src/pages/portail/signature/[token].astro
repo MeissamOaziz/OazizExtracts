@@ -69,6 +69,14 @@ const needsRndEval = !!ctxTyped?.pending_signers.some(
 );
 const prefill = ctxTyped?.participant_rnd ?? { rnd_ratings: null, rnd_comments: null };
 const participantCount = ctxTyped?.participants.length ?? 1;
+
+// QA card: shown when this is Stéphane's just-in-time QA token.
+const needsQaVerification = !!ctxTyped?.is_qa;
+const qaPrefill = {
+  rnd_destruction_id: ctxTyped?.submission.rnd_destruction_id ?? '',
+  rnd_qty_destroyed: ctxTyped?.submission.rnd_qty_destroyed ?? '',
+  rnd_date_destroyed: ctxTyped?.submission.rnd_date_destroyed ?? '',
+};
 ---
 <PortailLayout title="Signature" minimal>
   {invalid ? (
@@ -130,6 +138,30 @@ const participantCount = ctxTyped?.participants.length ?? 1;
           En signant ci-dessous, votre signature sera apposée sur {ctxTyped!.documents.length > 1 ? 'chacun de ces documents' : 'ce document'}.
         </p>
       </div>
+
+      {needsQaVerification && (
+        <div class="card" id="qa-verif-card" style="margin-bottom: 16px;">
+          <h2>Vérification AQ — Destruction</h2>
+          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">
+            À remplir avant de signer. Ces champs seront apposés sur tous les formulaires R&D.
+          </p>
+          <div class="form-row">
+            <label for="qa-destruction-id">ID de destruction</label>
+            <input type="text" id="qa-destruction-id" required maxlength="200" placeholder="ex: DEST-2026-0042" value={qaPrefill.rnd_destruction_id} />
+          </div>
+          <div class="form-row">
+            <label for="qa-qty-destroyed">Quantité de cannabis détruite (en g)</label>
+            <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder="ex: 5 g" value={qaPrefill.rnd_qty_destroyed} />
+          </div>
+          <div class="form-row">
+            <label for="qa-date-destroyed">Date de destruction</label>
+            <input type="date" id="qa-date-destroyed" required value={qaPrefill.rnd_date_destroyed} />
+          </div>
+          <div id="qa-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
+            Veuillez remplir les trois champs de destruction avant de signer.
+          </div>
+        </div>
+      )}
 
       {needsRndEval && (
         <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
@@ -238,7 +270,7 @@ const participantCount = ctxTyped?.participants.length ?? 1;
       @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
     </style>
 
-    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval, savedSig: ctxTyped!.signer.saved_signature }}>
+    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval, needsQaVerification, savedSig: ctxTyped!.signer.saved_signature }}>
       (function () {
         const canvas = document.getElementById('sig-pad');
         const ctx2d = canvas.getContext('2d');
@@ -254,6 +286,10 @@ const participantCount = ctxTyped?.participants.length ?? 1;
         const commentsEl = document.getElementById('rnd-comments');
         const evalErrorEl = document.getElementById('rnd-eval-error');
         const saveSigCheckbox = document.getElementById('save-sig-checkbox');
+        const qaDestId = document.getElementById('qa-destruction-id');
+        const qaQty = document.getElementById('qa-qty-destroyed');
+        const qaDate = document.getElementById('qa-date-destroyed');
+        const qaErrorEl = document.getElementById('qa-error');
 
         let padW = 0, padH = 0;
         let method = 'draw';
@@ -440,6 +476,19 @@ const participantCount = ctxTyped?.participants.length ?? 1;
             comments = (commentsEl && commentsEl.value ? commentsEl.value : '').slice(0, 4000);
           }
 
+          let destId = null, destQty = null, destDate = null;
+          if (needsQaVerification) {
+            destId = (qaDestId && qaDestId.value || '').trim();
+            destQty = (qaQty && qaQty.value || '').trim();
+            destDate = (qaDate && qaDate.value || '').trim();
+            if (!destId || !destQty || !destDate) {
+              qaErrorEl.style.display = 'block';
+              document.getElementById('qa-verif-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return;
+            }
+            qaErrorEl.style.display = 'none';
+          }
+
           btnSubmit.disabled = true;
           statusEl.textContent = 'Envoi en cours…';
           const dataUrl = canvas.toDataURL('image/png');
@@ -453,6 +502,9 @@ const participantCount = ctxTyped?.participants.length ?? 1;
                 rnd_ratings: ratings,
                 rnd_comments: comments,
                 save_signature: saveSig,
+                rnd_destruction_id: destId,
+                rnd_qty_destroyed: destQty,
+                rnd_date_destroyed: destDate,
               }),
             });
             const body = await res.json();

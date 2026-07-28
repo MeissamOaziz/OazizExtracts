@@ -116,6 +116,68 @@ export async function signedDownloadUrl(path: string, ttlSeconds = 60): Promise<
   return data.signedUrl;
 }
 
+// Load a submission from the DB and build the PDF. Shared by the download
+// endpoint and the finalize email pipeline so both render identical output.
+export async function loadAndBuildPdf(submissionId: string): Promise<Uint8Array> {
+  const admin = getAdminClient();
+  const { data: subRow, error: subErr } = await admin
+    .from('submissions')
+    .select(`
+      id, form_date, product_name, product_type, quantity, production_state, production_id,
+      rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
+      rnd_destruction_id,
+      initiator:initiator_staff_id ( id, full_name, email ),
+      production:production_staff_id ( id, full_name, email ),
+      qa:qa_staff_id ( id, full_name, email ),
+      consent_obtainer:consent_obtainer_staff_id ( id, full_name, email )
+    `)
+    .eq('id', submissionId)
+    .maybeSingle();
+  if (subErr || !subRow) throw new Error('submission not found');
+
+  const { data: partRows } = await admin
+    .from('submission_participants')
+    .select('participant:participant_staff_id ( id, full_name ), rnd_ratings, rnd_comments')
+    .eq('submission_id', submissionId);
+
+  const { data: signerRows } = await admin
+    .from('signers')
+    .select('role, document_kind, participant_staff_id, signature_image, signed_at, ip_address, staff:staff_id ( full_name )')
+    .eq('submission_id', submissionId);
+
+  const toLite = (o: any): StaffLite => ({ id: o?.id ?? '', name: o?.full_name ?? '—', email: o?.email });
+
+  const submission: SubmissionForRender = {
+    id: subRow.id, form_date: subRow.form_date, product_name: subRow.product_name,
+    product_type: subRow.product_type, quantity: subRow.quantity,
+    production_state: subRow.production_state, production_id: subRow.production_id,
+    rnd_objective: subRow.rnd_objective, rnd_quantity_for_test: subRow.rnd_quantity_for_test,
+    rnd_lp_number: subRow.rnd_lp_number, rnd_qty_destroyed: subRow.rnd_qty_destroyed,
+    rnd_date_destroyed: subRow.rnd_date_destroyed,
+    rnd_destruction_id: subRow.rnd_destruction_id,
+    initiator: toLite(subRow.initiator), production: toLite(subRow.production),
+    qa: toLite(subRow.qa), consent_obtainer: toLite(subRow.consent_obtainer),
+  };
+
+  const participants: StaffLite[] = (partRows ?? [])
+    .map((r: any) => ({ id: r.participant.id, name: r.participant.full_name }));
+
+  const participantRnd: ParticipantRnd[] = (partRows ?? []).map((r: any) => ({
+    staff_id: r.participant.id,
+    ratings: (r.rnd_ratings ?? null) as any,
+    comments: r.rnd_comments ?? null,
+  }));
+
+  const signers: SignerRecord[] = (signerRows ?? []).map((s: any): SignerRecord => ({
+    role: s.role, document_kind: s.document_kind, participant_id: s.participant_staff_id,
+    staff_name: s.staff?.full_name ?? '',
+    signature_image: s.signature_image,
+    signed_at: s.signed_at, ip_address: s.ip_address,
+  }));
+
+  return await buildSubmissionPdf({ submission, participants, signers, participantRnd });
+}
+
 // ============================================================
 // Page renderers
 // ============================================================
@@ -216,6 +278,19 @@ async function renderRndPage(
     { label: 'Signature AQ (vérification)', who: input.submission.qa.name,
       image: sigs.get(`qa_verifier|rnd|${participant.id}`), when: findSignedAt(input, 'qa_verifier', 'rnd', participant.id) },
   );
+
+  // VÉRIFICATION DU FORMULAIRE — Stephane's destruction record
+  gap(c, 8);
+  section(c, "VÉRIFICATION DU FORMULAIRE (À remplir par l'AQ)");
+  keyValueRow(c, 'Révisé par', input.submission.qa.name);
+  keyValueRow(c, 'Date de vérification',
+    findSignedAt(input, 'qa_verifier', 'rnd', participant.id)
+      ? fmtDateFr(findSignedAt(input, 'qa_verifier', 'rnd', participant.id)!)
+      : '—');
+  keyValueRow(c, 'ID de destruction', input.submission.rnd_destruction_id ?? '—');
+  keyValueRow(c, 'Quantité détruite (g)', input.submission.rnd_qty_destroyed ?? '—');
+  keyValueRow(c, 'Date de destruction',
+    input.submission.rnd_date_destroyed ? fmtDateFr(input.submission.rnd_date_destroyed) : '—');
 }
 
 async function renderConsentPage(

@@ -199,6 +199,76 @@ export async function sendSignerInvite(
 }
 
 // ============================================================
+// Finalized R&D — sent to the distribution list when Stéphane signs QA
+// ============================================================
+
+export interface FinalizedRndEmail {
+  submission: {
+    id: string;
+    form_date: string;
+    product_name: string;
+    product_type: string;
+    initiator_name: string;
+    qa_name: string;
+    participants: string[];   // just names, for display
+  };
+  pdfBytes: Uint8Array;
+  recipients: string[];       // deduped emails
+}
+
+export async function sendFinalizedRnd(
+  input: FinalizedRndEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string; id?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[finalized-email] RESEND_API_KEY not set; would-have-sent to ${input.recipients.join(', ')}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
+  const s = input.submission;
+
+  const html = renderEmailShell({
+    preheader: `Le formulaire R&D pour ${s.product_name} a été signé par tous les intervenants. Le PDF est joint.`,
+    badge: 'Formulaire finalisé',
+    greeting: 'Formulaire R&D finalisé',
+    intro: `Le formulaire R&D pour <strong>${escapeHtml(s.product_name)}</strong> a été signé par tous les intervenants (initiateur, personnel de production, participants, personne obtenant le consentement, vérification AQ). <strong>Le document PDF final est joint à ce courriel</strong> — conservez-le pour vos dossiers.`,
+    rows: [
+      { label: 'Produit', value: `${s.product_name} · ${s.product_type}` },
+      { label: 'Date du formulaire', value: formatDateFr(s.form_date) },
+      { label: 'Initiateur', value: s.initiator_name },
+      { label: 'Vérification AQ', value: s.qa_name },
+      { label: 'Participants', value: s.participants.join(', ') || '—' },
+    ],
+    ctaLabel: 'Ouvrir dans le portail',
+    ctaUrl: `${siteUrl}/portail/demande/${s.id}`,
+    fallbackNote: 'Copie archivée dans le portail. Le PDF signé est en pièce jointe.',
+    footerNote: 'Diffusion automatique du portail R&D d\'Oaziz Extracts.',
+  });
+
+  const subject = `[Oaziz R&D] Formulaire finalisé - ${s.product_name}`;
+  const filename = `oaziz-rd-${s.product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${s.id.slice(0, 8)}.pdf`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: input.recipients, replyTo, subject, html,
+      attachments: [{ filename, content: Buffer.from(input.pdfBytes) }],
+    });
+    if (error) {
+      console.error('[finalized-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id, id: data?.id };
+  } catch (e) {
+    console.error('[finalized-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
 // Portal invite / password reset (Kyle-style first-time or forgot-password)
 // ============================================================
 

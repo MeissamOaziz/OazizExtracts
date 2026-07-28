@@ -87,10 +87,11 @@ const quantityForTest = submission.rnd_quantity_for_test ?? splitQuantity(submis
   </table>
 
   <table class="doc-table" style="margin-top: 10px;">
-    <tr><th colspan="4">VÉRIFICATION DU FORMULAIRE (À remplir par l'AQ)</th></tr>
+    <tr><th colspan="5">VÉRIFICATION DU FORMULAIRE (À remplir par l'AQ)</th></tr>
     <tr>
       <td>Révisé par : <span class="fill">{submission.qa.name}</span></td>
       <td>Date : <span class="fill empty">(à signer)</span></td>
+      <td>ID de destruction : <span class={`fill ${submission.rnd_destruction_id ? '' : 'empty'}`}>{submission.rnd_destruction_id ?? '(à remplir)'}</span></td>
       <td>Qté détruite (g) : <span class={`fill ${submission.rnd_qty_destroyed ? '' : 'empty'}`}>{submission.rnd_qty_destroyed ?? '(à remplir)'}</span></td>
       <td>Date destruction : <span class={`fill ${submission.rnd_date_destroyed ? '' : 'empty'}`}>{submission.rnd_date_destroyed ? fmtDateFr(submission.rnd_date_destroyed) : '(à remplir)'}</span></td>
     </tr>

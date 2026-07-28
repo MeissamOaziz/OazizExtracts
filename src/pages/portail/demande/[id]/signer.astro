@@ -37,6 +37,7 @@ const { data: subRow } = await admin
   .select(`
     id, form_date, product_name, product_type, quantity, production_state, production_id,
     rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
+    rnd_destruction_id,
     initiator:initiator_staff_id ( id, full_name, email ),
     production:production_staff_id ( id, full_name, email ),
     qa:qa_staff_id ( id, full_name, email ),
@@ -67,6 +68,7 @@ const submission: SubmissionForRender = {
   rnd_objective: subRow.rnd_objective, rnd_quantity_for_test: subRow.rnd_quantity_for_test,
   rnd_lp_number: subRow.rnd_lp_number, rnd_qty_destroyed: subRow.rnd_qty_destroyed,
   rnd_date_destroyed: subRow.rnd_date_destroyed,
+  rnd_destruction_id: subRow.rnd_destruction_id,
   initiator: toStaffLite(subRow.initiator), production: toStaffLite(subRow.production),
   qa: toStaffLite(subRow.qa), consent_obtainer: toStaffLite(subRow.consent_obtainer),
 };
@@ -93,6 +95,12 @@ for (const s of pendingSignerRows ?? []) {
 const needsRndEval = (pendingSignerRows ?? []).some(
   (s: any) => s.role === 'participant' && s.document_kind === 'rnd',
 );
+const needsQaVerification = token.is_qa === true;
+const qaPrefill = {
+  rnd_destruction_id: subRow.rnd_destruction_id ?? '',
+  rnd_qty_destroyed: subRow.rnd_qty_destroyed ?? '',
+  rnd_date_destroyed: subRow.rnd_date_destroyed ?? '',
+};
 
 // Prefill for this signer if they're a participant
 const myParticipantRow = (partRows ?? []).find((r: any) => r.participant.id === staff.id) as any;
@@ -162,6 +170,28 @@ const kindLabel: Record<string, string> = {
         ))}
       </ul>
     </div>
+
+    {needsQaVerification && (
+      <div class="card" id="qa-verif-card" style="margin-bottom: 16px;">
+        <h2>Vérification AQ — Destruction</h2>
+        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">À remplir avant de signer. Ces champs seront apposés sur tous les formulaires R&D.</p>
+        <div class="form-row">
+          <label for="qa-destruction-id">ID de destruction</label>
+          <input type="text" id="qa-destruction-id" required maxlength="200" placeholder="ex: DEST-2026-0042" value={qaPrefill.rnd_destruction_id} />
+        </div>
+        <div class="form-row">
+          <label for="qa-qty-destroyed">Quantité de cannabis détruite (en g)</label>
+          <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder="ex: 5 g" value={qaPrefill.rnd_qty_destroyed} />
+        </div>
+        <div class="form-row">
+          <label for="qa-date-destroyed">Date de destruction</label>
+          <input type="date" id="qa-date-destroyed" required value={qaPrefill.rnd_date_destroyed} />
+        </div>
+        <div id="qa-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
+          Veuillez remplir les trois champs de destruction avant de signer.
+        </div>
+      </div>
+    )}
 
     {needsRndEval && (
       <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
@@ -244,7 +274,7 @@ const kindLabel: Record<string, string> = {
     @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   </style>
 
-  <script is:inline define:vars={{ submissionId: id, needsRndEval, savedSig: savedSignature }}>
+  <script is:inline define:vars={{ submissionId: id, needsRndEval, needsQaVerification, savedSig: savedSignature }}>
     (function () {
       const canvas = document.getElementById('sig-pad');
       const ctx2d = canvas.getContext('2d');
@@ -260,6 +290,10 @@ const kindLabel: Record<string, string> = {
       const commentsEl = document.getElementById('rnd-comments');
       const evalErrorEl = document.getElementById('rnd-eval-error');
       const saveSigCheckbox = document.getElementById('save-sig-checkbox');
+      const qaDestId = document.getElementById('qa-destruction-id');
+      const qaQty = document.getElementById('qa-qty-destroyed');
+      const qaDate = document.getElementById('qa-date-destroyed');
+      const qaErrorEl = document.getElementById('qa-error');
 
       let padW = 0, padH = 0, method = 'draw', hasSignature = false;
 
@@ -380,6 +414,18 @@ const kindLabel: Record<string, string> = {
           evalErrorEl.style.display = 'none';
           comments = (commentsEl && commentsEl.value ? commentsEl.value : '').slice(0, 4000);
         }
+        let destId = null, destQty = null, destDate = null;
+        if (needsQaVerification) {
+          destId = (qaDestId && qaDestId.value || '').trim();
+          destQty = (qaQty && qaQty.value || '').trim();
+          destDate = (qaDate && qaDate.value || '').trim();
+          if (!destId || !destQty || !destDate) {
+            qaErrorEl.style.display = 'block';
+            document.getElementById('qa-verif-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+          qaErrorEl.style.display = 'none';
+        }
         btnSubmit.disabled = true;
         statusEl.textContent = 'Envoi en cours…';
         const dataUrl = canvas.toDataURL('image/png');
@@ -388,7 +434,10 @@ const kindLabel: Record<string, string> = {
           const res = await fetch('/api/portail/submissions/' + encodeURIComponent(submissionId) + '/sign-as-me', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ signature: dataUrl, rnd_ratings: ratings, rnd_comments: comments, save_signature: saveSig }),
+            body: JSON.stringify({
+              signature: dataUrl, rnd_ratings: ratings, rnd_comments: comments, save_signature: saveSig,
+              rnd_destruction_id: destId, rnd_qty_destroyed: destQty, rnd_date_destroyed: destDate,
+            }),
           });
           const body = await res.json();
           if (!res.ok || body.error) {

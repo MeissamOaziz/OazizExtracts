@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getAnonServerClient, getAdminClient } from '../../../../lib/supabase';
 import { signerUrl } from '../../../../lib/tokens';
 import { sendSignerInvite } from '../../../../lib/email';
+import { finalizeIfNeeded } from '../../../../lib/finalize';
 
 export const prerender = false;
 
@@ -21,6 +22,10 @@ export const POST: APIRoute = async ({ params, request }) => {
     rnd_ratings?: Record<string, number | null> | null;
     rnd_comments?: string | null;
     save_signature?: boolean;
+    // QA-only: destruction record fields
+    rnd_destruction_id?: string | null;
+    rnd_qty_destroyed?: string | null;
+    rnd_date_destroyed?: string | null;
   };
   try {
     payload = await request.json();
@@ -73,9 +78,34 @@ export const POST: APIRoute = async ({ params, request }) => {
     return Response.json({ error: data.error }, { status: 400 });
   }
 
+  // If the RPC confirms this signer was the QA verifier AND the caller sent
+  // destruction fields, persist them onto the submission (admin client since
+  // signers can't edit submissions directly via RLS).
+  if (data?.is_qa === true) {
+    const destroyId = typeof payload.rnd_destruction_id === 'string'
+      ? payload.rnd_destruction_id.trim().slice(0, 200) : '';
+    const destroyQty = typeof payload.rnd_qty_destroyed === 'string'
+      ? payload.rnd_qty_destroyed.trim().slice(0, 100) : '';
+    const destroyDate = typeof payload.rnd_date_destroyed === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(payload.rnd_date_destroyed)
+      ? payload.rnd_date_destroyed : '';
+    if (destroyId || destroyQty || destroyDate) {
+      const admin = getAdminClient();
+      const update: Record<string, unknown> = {};
+      if (destroyId)   update.rnd_destruction_id = destroyId;
+      if (destroyQty)  update.rnd_qty_destroyed  = destroyQty;
+      if (destroyDate) update.rnd_date_destroyed = destroyDate;
+      const { error: destErr } = await admin
+        .from('submissions').update(update).eq('id', data.submission_id);
+      if (destErr) console.error('[signature] QA destruction update failed:', destErr);
+    }
+  }
+
   // Post-signature: check for any newly-minted QA tokens that need emailing.
-  // The trigger stashes the raw QA token in audit_log; we drain it here.
   await dispatchPendingQaEmails(data?.submission_id ?? null);
+  // And: if this signature just finalized the submission (QA signed last),
+  // build + email the final PDF to the distribution list.
+  await finalizeIfNeeded(data?.submission_id ?? null);
 
   return Response.json({ ok: true, submission_id: data?.submission_id });
 };

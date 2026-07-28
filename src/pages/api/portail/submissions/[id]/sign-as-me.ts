@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { signerUrl } from '../../../../../lib/tokens';
 import { sendSignerInvite } from '../../../../../lib/email';
+import { finalizeIfNeeded } from '../../../../../lib/finalize';
 
 export const prerender = false;
 
@@ -27,6 +28,9 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
     rnd_ratings?: Record<string, number | null> | null;
     rnd_comments?: string | null;
     save_signature?: boolean;
+    rnd_destruction_id?: string | null;
+    rnd_qty_destroyed?: string | null;
+    rnd_date_destroyed?: string | null;
   };
   try { payload = await request.json(); }
   catch { return Response.json({ error: 'invalid_body' }, { status: 400 }); }
@@ -119,6 +123,25 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
     await admin.from('staff').update({ saved_signature: signature }).eq('id', staff.id);
   }
 
+  // 4b. If this signer is the QA verifier AND destruction fields were provided,
+  // persist them on the submission row.
+  if (token.is_qa === true) {
+    const destroyId = typeof payload.rnd_destruction_id === 'string'
+      ? payload.rnd_destruction_id.trim().slice(0, 200) : '';
+    const destroyQty = typeof payload.rnd_qty_destroyed === 'string'
+      ? payload.rnd_qty_destroyed.trim().slice(0, 100) : '';
+    const destroyDate = typeof payload.rnd_date_destroyed === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(payload.rnd_date_destroyed)
+      ? payload.rnd_date_destroyed : '';
+    if (destroyId || destroyQty || destroyDate) {
+      const update: Record<string, unknown> = {};
+      if (destroyId)   update.rnd_destruction_id = destroyId;
+      if (destroyQty)  update.rnd_qty_destroyed  = destroyQty;
+      if (destroyDate) update.rnd_date_destroyed = destroyDate;
+      await admin.from('submissions').update(update).eq('id', id);
+    }
+  }
+
   // 5. Complete the token — this fires on_signer_token_completed trigger
   //    which handles just-in-time QA token creation + status transitions.
   const { error: complErr } = await admin
@@ -143,6 +166,9 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   // 7. Same post-signature dispatch as the tokenized flow: send QA email if
   //    a new QA token was minted by the trigger.
   await dispatchPendingQaEmails(id);
+  // 8. If Stéphane just signed QA, the trigger flipped status to 'finalized'.
+  //    Build + email the final PDF to the distribution list.
+  await finalizeIfNeeded(id);
 
   return Response.json({ ok: true, submission_id: id });
 };
