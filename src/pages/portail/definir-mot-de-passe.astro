@@ -13,11 +13,12 @@ if (!staff) {
 const url = new URL(Astro.request.url);
 const isFirst = url.searchParams.get('first') === '1';
 const errCode = url.searchParams.get('error');
+const errDetail = url.searchParams.get('detail');
 const errorMessages: Record<string, string> = {
   short: 'Le mot de passe doit contenir au moins 10 caractères.',
   mismatch: 'Les deux mots de passe ne correspondent pas.',
-  weak: 'Ce mot de passe est trop courant. Choisissez-en un autre.',
-  unknown: 'Une erreur est survenue. Réessayez.',
+  weak: 'Ce mot de passe a été refusé (trop courant ou déjà compromis dans une fuite connue). Choisissez-en un autre — idéalement une phrase de 3 à 4 mots plus des chiffres.',
+  unknown: 'Une erreur est survenue.',
 };
 ---
 <PortailLayout title="Définir votre mot de passe" staffName={staff.full_name} minimal>
@@ -33,7 +34,14 @@ const errorMessages: Record<string, string> = {
       </p>
 
       {errCode && (
-        <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+        <div class="flash flash-error">
+          {errorMessages[errCode] ?? errorMessages.unknown}
+          {errDetail && (
+            <div style="margin-top: 6px; font-size: .82rem; opacity: .85;">
+              <strong>Détail :</strong> {errDetail}
+            </div>
+          )}
+        </div>
       )}
 
       <form method="POST" action="/api/portail/set-password">

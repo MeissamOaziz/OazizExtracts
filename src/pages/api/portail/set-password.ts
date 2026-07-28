@@ -3,36 +3,51 @@ import { createServerClient, currentStaff } from '../../../lib/supabase';
 
 export const prerender = false;
 
-// Very common passwords we won't accept. Leaked-password protection on Supabase
-// covers the deep list; this is a low-effort guard for the very worst.
 const BANNED_PASSWORDS = new Set([
   '1234567890', 'qwertyuiop', 'password12', 'letmein123', 'motdepasse',
   '0987654321', 'welcome123', 'oazizportail', 'abcdef1234',
 ]);
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+function redirectWithDetail(dest: string, code: string, detail?: string): Response {
+  const qs = new URLSearchParams({ error: code });
+  if (detail) qs.set('detail', detail.slice(0, 200));
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `${dest}?${qs.toString()}` },
+  });
+}
+
+export const POST: APIRoute = async ({ request, cookies }) => {
   const supabase = createServerClient(request, cookies);
   const staff = await currentStaff(supabase);
-  if (!staff) return redirect('/portail/connexion?error=no_session', 303);
+  if (!staff) {
+    return new Response(null, { status: 303, headers: { Location: '/portail/connexion?error=no_session' } });
+  }
 
   const form = await request.formData();
   const password = String(form.get('password') ?? '');
   const confirm = String(form.get('confirm') ?? '');
+  const dest = '/portail/definir-mot-de-passe';
 
-  if (password.length < 10) return redirect('/portail/definir-mot-de-passe?error=short', 303);
-  if (password !== confirm) return redirect('/portail/definir-mot-de-passe?error=mismatch', 303);
-  if (BANNED_PASSWORDS.has(password.toLowerCase())) {
-    return redirect('/portail/definir-mot-de-passe?error=weak', 303);
-  }
+  if (password.length < 10) return redirectWithDetail(dest, 'short');
+  if (password !== confirm) return redirectWithDetail(dest, 'mismatch');
+  if (BANNED_PASSWORDS.has(password.toLowerCase())) return redirectWithDetail(dest, 'weak');
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
-    // Supabase's leaked-password check (if enabled) surfaces here.
-    if (/pwned|leaked|compromised|weak/i.test(error.message ?? '')) {
-      return redirect('/portail/definir-mot-de-passe?error=weak', 303);
+    console.error('[set-password] updateUser failed:', {
+      code: (error as any).code,
+      status: (error as any).status,
+      message: error.message,
+    });
+    // Supabase's leaked-password / complexity checks all surface as weak_password.
+    const errCode = (error as any).code as string | undefined;
+    const isWeak = errCode === 'weak_password'
+      || /weak|pwned|leaked|compromised|breach|common|dictionary|previously used/i.test(error.message ?? '');
+    if (isWeak) {
+      return redirectWithDetail(dest, 'weak', error.message);
     }
-    console.error('[set-password] updateUser failed:', error);
-    return redirect('/portail/definir-mot-de-passe?error=unknown', 303);
+    return redirectWithDetail(dest, 'unknown', error.message);
   }
 
   await supabase.from('audit_log').insert({
@@ -43,5 +58,5 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     user_agent: request.headers.get('user-agent'),
   });
 
-  return redirect('/portail', 303);
+  return new Response(null, { status: 303, headers: { Location: '/portail' } });
 };
