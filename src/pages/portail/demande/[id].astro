@@ -86,13 +86,15 @@ const infoMessages: Record<string, string> = {
   sent: 'Demande envoyée. Les signataires ont reçu leur lien par courriel.',
   edited: 'Modifications enregistrées. La demande est repassée en brouillon — cliquez « Envoyer pour signature » pour réémettre les liens.',
   signed: 'Merci, votre signature a été enregistrée.',
+  resent: 'Courriel finalisé renvoyé à la liste de distribution.',
 };
 const errorMessages: Record<string, string> = {
-  not_creator: 'Seul le créateur de la demande peut l\'envoyer.',
+  not_creator: 'Seul le créateur de la demande peut effectuer cette action.',
   already_sent: 'Cette demande a déjà été envoyée.',
   already_signed_row: 'Ce signataire a déjà signé — pas besoin de régénérer.',
   no_participants: 'Ajoutez au moins un participant avant d\'envoyer.',
   not_found: 'Demande introuvable.',
+  not_finalized: 'La demande doit être entièrement signée avant de renvoyer le courriel finalisé.',
   nothing_to_sign: 'Vous n\'avez aucune signature en attente sur cette demande.',
   unknown: 'Une erreur est survenue.',
   token_insert: 'Impossible de créer les jetons de signature. Réessayez.',
@@ -156,6 +158,13 @@ function fmtDate(iso?: string | null): string {
         <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title="Télécharger le PDF (partiel tant que la demande n'est pas finalisée)">
           ⬇ Télécharger le PDF
         </a>
+      )}
+      {isCreator && submission.status === 'finalized' && (
+        <form method="POST" action={`/api/portail/submissions/${id}/resend-final`} style="margin: 0;">
+          <button type="submit" class="btn btn-secondary" title="Renvoyer le courriel avec PDF signé à la liste de distribution">
+            📧 Renvoyer le courriel finalisé
+          </button>
+        </form>
       )}
       <span class={`badge badge-${submission.status}`}>{statusLabel[submission.status]}</span>
     </div>
