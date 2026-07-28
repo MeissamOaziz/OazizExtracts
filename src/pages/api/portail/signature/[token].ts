@@ -20,6 +20,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     signature?: string;
     rnd_ratings?: Record<string, number | null> | null;
     rnd_comments?: string | null;
+    save_signature?: boolean;
   };
   try {
     payload = await request.json();
@@ -61,6 +62,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     signer_ua: ua,
     rnd_ratings: cleanRatings,
     rnd_comments: cleanComments,
+    save_signature: payload.save_signature === true,
   });
 
   if (error) {

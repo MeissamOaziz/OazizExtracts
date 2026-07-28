@@ -28,7 +28,12 @@ type Ctx = {
   token_id: string;
   is_qa: boolean;
   expires_at: string;
-  signer: { staff_id: string; name: string; email: string };
+  signer: {
+    staff_id: string;
+    name: string;
+    email: string;
+    saved_signature: string | null;
+  };
   submission: SubmissionForRender;
   participants: StaffLite[];
   documents: DocumentEntry[];
@@ -197,9 +202,19 @@ const participantCount = ctxTyped?.participants.length ?? 1;
           <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center;">
+        {ctxTyped!.signer.saved_signature && (
+          <p class="hint" style="margin-top: 10px;">
+            ✓ Votre signature enregistrée précédemment est déjà chargée. Cliquez « Effacer » pour en dessiner une nouvelle.
+          </p>
+        )}
+
+        <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap;">
           <button type="button" id="btn-clear" class="btn btn-secondary">Effacer</button>
           <button type="button" id="btn-submit" class="btn btn-primary" disabled>Signer et envoyer</button>
+          <label style="display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--p-muted);margin-left:6px;cursor:pointer;">
+            <input type="checkbox" id="save-sig-checkbox" checked={!ctxTyped!.signer.saved_signature} />
+            <span>Enregistrer ma signature pour la prochaine fois</span>
+          </label>
           <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
         </div>
 
@@ -223,7 +238,7 @@ const participantCount = ctxTyped?.participants.length ?? 1;
       @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
     </style>
 
-    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval }}>
+    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval, savedSig: ctxTyped!.signer.saved_signature }}>
       (function () {
         const canvas = document.getElementById('sig-pad');
         const ctx2d = canvas.getContext('2d');
@@ -238,6 +253,7 @@ const participantCount = ctxTyped?.participants.length ?? 1;
         const ratingKeys = ['odeur', 'gout', 'texture', 'globale'];
         const commentsEl = document.getElementById('rnd-comments');
         const evalErrorEl = document.getElementById('rnd-eval-error');
+        const saveSigCheckbox = document.getElementById('save-sig-checkbox');
 
         let padW = 0, padH = 0;
         let method = 'draw';
@@ -259,6 +275,24 @@ const participantCount = ctxTyped?.participants.length ?? 1;
           ctx2d.strokeStyle = '#111';
         }
         resizeCanvas();
+
+        // Pre-fill from previously-saved signature, if any.
+        function loadSavedSignature() {
+          if (!savedSig) return;
+          const img = new Image();
+          img.onload = function () {
+            const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
+            const w = img.width * ratio;
+            const h = img.height * ratio;
+            const x = (padW - w) / 2;
+            const y = (padH - h) / 2;
+            ctx2d.drawImage(img, x, y, w, h);
+            hasSignature = true;
+            btnSubmit.disabled = false;
+          };
+          img.src = savedSig;
+        }
+        loadSavedSignature();
 
         function clearCanvas() {
           ctx2d.setTransform(1, 0, 0, 1, 0, 0);
@@ -409,11 +443,17 @@ const participantCount = ctxTyped?.participants.length ?? 1;
           btnSubmit.disabled = true;
           statusEl.textContent = 'Envoi en cours…';
           const dataUrl = canvas.toDataURL('image/png');
+          const saveSig = !!(saveSigCheckbox && saveSigCheckbox.checked);
           try {
             const res = await fetch('/api/portail/signature/' + encodeURIComponent(tokenRaw), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ signature: dataUrl, rnd_ratings: ratings, rnd_comments: comments }),
+              body: JSON.stringify({
+                signature: dataUrl,
+                rnd_ratings: ratings,
+                rnd_comments: comments,
+                save_signature: saveSig,
+              }),
             });
             const body = await res.json();
             if (!res.ok || body.error) {
