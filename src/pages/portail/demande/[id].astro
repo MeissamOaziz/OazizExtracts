@@ -63,6 +63,19 @@ for (const row of signerRowList) {
 const isCreator = submission.created_by_email === staff.email;
 const isDraft = submission.status === 'draft';
 
+// Does the CURRENT user have a pending signer_token on this submission?
+// If yes, offer the in-app "Signer" button.
+const { getAdminClient } = await import('../../../lib/supabase');
+const adminForPending = getAdminClient();
+const { data: myPendingToken } = await adminForPending
+  .from('signer_tokens')
+  .select('id')
+  .eq('submission_id', id)
+  .eq('staff_id', staff.id)
+  .is('completed_at', null)
+  .maybeSingle();
+const hasPendingForMe = !!myPendingToken;
+
 const pageUrl = new URL(Astro.request.url);
 const info = pageUrl.searchParams.get('info');
 const errCode = pageUrl.searchParams.get('error');
@@ -72,6 +85,7 @@ const revealEmailStatus = pageUrl.searchParams.get('reveal_email_status');
 const infoMessages: Record<string, string> = {
   sent: 'Demande envoyée. Les signataires ont reçu leur lien par courriel.',
   edited: 'Modifications enregistrées. La demande est repassée en brouillon — cliquez « Envoyer pour signature » pour réémettre les liens.',
+  signed: 'Merci, votre signature a été enregistrée.',
 };
 const errorMessages: Record<string, string> = {
   not_creator: 'Seul le créateur de la demande peut l\'envoyer.',
@@ -79,6 +93,7 @@ const errorMessages: Record<string, string> = {
   already_signed_row: 'Ce signataire a déjà signé — pas besoin de régénérer.',
   no_participants: 'Ajoutez au moins un participant avant d\'envoyer.',
   not_found: 'Demande introuvable.',
+  nothing_to_sign: 'Vous n\'avez aucune signature en attente sur cette demande.',
   unknown: 'Une erreur est survenue.',
   token_insert: 'Impossible de créer les jetons de signature. Réessayez.',
   signer_insert: 'Impossible de créer les signataires. Réessayez.',
@@ -131,9 +146,14 @@ function fmtDate(iso?: string | null): string {
         {submission.product_type} · Créé le {fmtDate(submission.created_at)}
       </p>
     </div>
-    <div style="display: flex; gap: 10px; align-items: center;">
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      {hasPendingForMe && (
+        <a href={`/portail/demande/${id}/signer`} class="btn btn-primary" title="Signer directement dans le portail">
+          ✍ Signer maintenant
+        </a>
+      )}
       {['finalized', 'complete', 'signing', 'sent'].includes(submission.status) && (
-        <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title="Télécharger le PDF (signé si tous ont signé, sinon partiel)">
+        <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title="Télécharger le PDF (partiel tant que la demande n'est pas finalisée)">
           ⬇ Télécharger le PDF
         </a>
       )}

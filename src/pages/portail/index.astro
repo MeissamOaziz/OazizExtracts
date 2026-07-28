@@ -102,6 +102,21 @@ if (submissionIds.length > 0) {
   docRows = (dr ?? []) as DocRow[];
 }
 
+// Which submissions have a pending signer_token for the CURRENT user?
+// signer_tokens is RLS-denied so we go through the admin client.
+import { getAdminClient } from '../../lib/supabase';
+const admin = getAdminClient();
+const pendingSignSet = new Set<string>();
+if (submissionIds.length > 0) {
+  const { data: myPending } = await admin
+    .from('signer_tokens')
+    .select('submission_id')
+    .eq('staff_id', staff.id)
+    .is('completed_at', null)
+    .in('submission_id', submissionIds);
+  for (const row of myPending ?? []) pendingSignSet.add(row.submission_id);
+}
+
 const signerBySubmission = new Map<string, { signed: number; total: number }>();
 for (const row of signerRows) {
   const cur = signerBySubmission.get(row.submission_id) ?? { signed: 0, total: 0 };
@@ -185,8 +200,8 @@ function formatDate(iso: string): string {
                   <span class={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
                 </td>
                 <td>
-                  {docs.length > 0 ? (
-                    <a href={`/api/portail/documents/${s.id}/download`} class="btn btn-secondary" style="font-size: .78rem; padding: 4px 10px;" title="Télécharger le PDF signé">
+                  {['finalized', 'complete', 'signing', 'sent'].includes(s.status) ? (
+                    <a href={`/api/portail/documents/${s.id}/download`} class="btn btn-secondary" style="font-size: .78rem; padding: 4px 10px;" title="Télécharger le PDF">
                       ⬇ PDF
                     </a>
                   ) : (
@@ -194,6 +209,11 @@ function formatDate(iso: string): string {
                   )}
                 </td>
                 <td style="text-align: right;">
+                  {pendingSignSet.has(s.id) && (
+                    <a href={`/portail/demande/${s.id}/signer`} class="btn btn-primary" style="font-size: .82rem; padding: 6px 14px; margin-right: 8px;">
+                      Signer
+                    </a>
+                  )}
                   <a href={`/portail/demande/${s.id}`} style="font-size: .85rem;">Ouvrir →</a>
                 </td>
               </tr>

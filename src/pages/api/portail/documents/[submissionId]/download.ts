@@ -35,33 +35,57 @@ export const GET: APIRoute = async ({ params, request, cookies, redirect }) => {
     return redirect(`/portail/demande/${submissionId}?error=nothing_to_download`, 303);
   }
 
-  // Reuse existing PDF if we already generated one; else build it.
   const path = storagePathFor(submissionId);
-  const { data: existing } = await admin.storage.from('documents').list(submissionId, { limit: 5 });
-  const hasExisting = (existing ?? []).some((f) => f.name === `${submissionId}.pdf`);
+  const isFinalized = sub.status === 'finalized';
 
-  if (!hasExisting) {
-    const bytes = await generateFreshPdf(admin, submissionId);
+  // FAST PATH: finalized submissions have an immutable PDF — serve the cached
+  // copy if it exists.
+  if (isFinalized) {
+    const { data: existing } = await admin.storage.from('documents').list(submissionId, { limit: 5 });
+    const hasExisting = (existing ?? []).some((f) => f.name === `${submissionId}.pdf`);
+    if (hasExisting) {
+      const url = await signedDownloadUrl(path, 60);
+      return redirect(url, 302);
+    }
+  }
+
+  // Otherwise regenerate from live DB state — a submission still in signing
+  // gains signatures over time, so a stale cache would show incomplete data
+  // (which is exactly the bug that lost Kyle a downloaded PDF earlier).
+  const bytes = await generateFreshPdf(admin, submissionId);
+
+  if (isFinalized) {
+    // Cache once the workflow is done — all signatures locked in.
     await storePdf(submissionId, bytes);
-
-    // Record in documents table
-    await admin.from('documents').insert({
+    await admin.from('documents').upsert({
       submission_id: submissionId,
-      kind: 'sample_request',   // one merged PDF; use sample_request as kind
+      kind: 'sample_request',
       participant_staff_id: null,
       pdf_path: path,
-    });
-
+    }, { onConflict: 'submission_id' });
     await admin.from('audit_log').insert({
       submission_id: submissionId,
       actor_email: staff.email,
-      action: 'pdf_generated',
+      action: 'pdf_finalized',
     });
+    const url = await signedDownloadUrl(path, 60);
+    return redirect(url, 302);
   }
 
-  // Redirect through a short-lived signed URL so the browser gets the PDF directly.
-  const url = await signedDownloadUrl(path, 60);
-  return redirect(url, 302);
+  // Not finalized yet — serve the fresh bytes directly, don't cache.
+  await admin.from('audit_log').insert({
+    submission_id: submissionId,
+    actor_email: staff.email,
+    action: 'pdf_preview_downloaded',
+  });
+  return new Response(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="oaziz-rd-${submissionId}.pdf"`,
+      'Cache-Control': 'no-store',
+    },
+  });
 };
 
 async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submissionId: string): Promise<Uint8Array> {

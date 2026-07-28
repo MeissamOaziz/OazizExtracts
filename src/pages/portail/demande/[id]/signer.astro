@@ -1,0 +1,411 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import DocSampleRequest from '../../../../components/portail/DocSampleRequest.astro';
+import DocRnd from '../../../../components/portail/DocRnd.astro';
+import DocConsent from '../../../../components/portail/DocConsent.astro';
+import type { SubmissionForRender, StaffLite, RndRatings } from '../../../../lib/portail-types';
+import { fmtDateFr, RATING_KEYS, RATING_LABELS } from '../../../../lib/portail-types';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/portail');
+
+// Session identifies WHICH pending signer — no token needed. Use admin client
+// because signer_tokens is RLS-denied to all client roles.
+const admin = getAdminClient();
+const { data: token } = await admin
+  .from('signer_tokens')
+  .select('id, is_qa, staff_id')
+  .eq('submission_id', id)
+  .eq('staff_id', staff.id)
+  .is('completed_at', null)
+  .maybeSingle();
+
+if (!token) {
+  return Astro.redirect(`/portail/demande/${id}?error=nothing_to_sign`);
+}
+
+// Load the same context shape the tokenized signer page uses.
+const { data: subRow } = await admin
+  .from('submissions')
+  .select(`
+    id, form_date, product_name, product_type, quantity, production_state, production_id,
+    rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
+    initiator:initiator_staff_id ( id, full_name, email ),
+    production:production_staff_id ( id, full_name, email ),
+    qa:qa_staff_id ( id, full_name, email ),
+    consent_obtainer:consent_obtainer_staff_id ( id, full_name, email )
+  `)
+  .eq('id', id).maybeSingle();
+
+if (!subRow) return Astro.redirect('/portail');
+
+const { data: partRows } = await admin
+  .from('submission_participants')
+  .select('participant:participant_staff_id ( id, full_name ), rnd_ratings, rnd_comments')
+  .eq('submission_id', id);
+
+const { data: pendingSignerRows } = await admin
+  .from('signers')
+  .select('id, role, document_kind, participant_staff_id, participant:participant_staff_id ( full_name )')
+  .eq('signer_token_id', token.id);
+
+const { data: savedSig } = await admin
+  .from('staff').select('saved_signature').eq('id', staff.id).maybeSingle();
+
+function toStaffLite(o: any): StaffLite { return { id: o?.id ?? '', name: o?.full_name ?? '—', email: o?.email }; }
+const submission: SubmissionForRender = {
+  id: subRow.id, form_date: subRow.form_date, product_name: subRow.product_name,
+  product_type: subRow.product_type, quantity: subRow.quantity,
+  production_state: subRow.production_state, production_id: subRow.production_id,
+  rnd_objective: subRow.rnd_objective, rnd_quantity_for_test: subRow.rnd_quantity_for_test,
+  rnd_lp_number: subRow.rnd_lp_number, rnd_qty_destroyed: subRow.rnd_qty_destroyed,
+  rnd_date_destroyed: subRow.rnd_date_destroyed,
+  initiator: toStaffLite(subRow.initiator), production: toStaffLite(subRow.production),
+  qa: toStaffLite(subRow.qa), consent_obtainer: toStaffLite(subRow.consent_obtainer),
+};
+
+const participants: StaffLite[] = (partRows ?? []).map((r: any) => ({
+  id: r.participant.id, name: r.participant.full_name,
+}));
+
+// Dedupe pending signer rows into documents by (kind, participant)
+type DocKey = { kind: string; participant: StaffLite | null };
+const seen = new Set<string>();
+const documents: DocKey[] = [];
+for (const s of pendingSignerRows ?? []) {
+  const pid = s.participant_staff_id ?? '';
+  const key = `${s.document_kind}|${pid}`;
+  if (seen.has(key)) continue;
+  seen.add(key);
+  documents.push({
+    kind: s.document_kind,
+    participant: pid ? { id: pid, name: (s.participant as any)?.full_name ?? '' } : null,
+  });
+}
+
+const needsRndEval = (pendingSignerRows ?? []).some(
+  (s: any) => s.role === 'participant' && s.document_kind === 'rnd',
+);
+
+// Prefill for this signer if they're a participant
+const myParticipantRow = (partRows ?? []).find((r: any) => r.participant.id === staff.id) as any;
+const prefill = {
+  rnd_ratings: (myParticipantRow?.rnd_ratings ?? null) as RndRatings | null,
+  rnd_comments: (myParticipantRow?.rnd_comments ?? null) as string | null,
+};
+
+const savedSignature = savedSig?.saved_signature ?? null;
+
+const kindLabel: Record<string, string> = {
+  sample_request: "Demande d'échantillon",
+  rnd: 'Formulaire R&D (F2-PRO-013/04)',
+  consent: 'Formulaire de consentement éclairé',
+};
+---
+<PortailLayout title="Signer" staffName={staff.full_name}>
+  <div style="max-width: 840px; margin: 0 auto;">
+    <div style="margin-bottom: 16px;">
+      <a href={`/portail/demande/${id}`} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour à la demande
+      </a>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h1 style="margin-bottom: 6px;">Signature en ligne</h1>
+      <p style="color: var(--p-muted); font-size: .95rem;">
+        Bonjour <strong>{staff.full_name.split(' ')[0]}</strong>, merci de signer {documents.length > 1 ? 'les documents suivants' : 'le document suivant'}.
+      </p>
+      <div style="margin-top: 14px; color: var(--p-muted); font-size: .88rem;">
+        <strong style="color: var(--p-text);">{submission.product_name}</strong> · {submission.product_type} · {fmtDateFr(submission.form_date)}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Documents à signer</h2>
+      <ul style="margin-top: 12px; padding-left: 0; list-style: none;">
+        {documents.map((doc, idx) => (
+          <li style="margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--p-border); border-radius: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div>
+                <strong>{kindLabel[doc.kind] ?? doc.kind}</strong>
+                {doc.participant && <span style="color: var(--p-muted);"> — pour {doc.participant.name}</span>}
+              </div>
+              <button type="button" class="btn btn-secondary doc-toggle" data-target={`doc-preview-${idx}`} style="font-size: .82rem; padding: 5px 12px;">
+                Voir le document
+              </button>
+            </div>
+            <div id={`doc-preview-${idx}`} class="doc-preview" style="display: none; margin-top: 14px;">
+              {doc.kind === 'sample_request' && (
+                <DocSampleRequest submission={submission} participants={participants} />
+              )}
+              {doc.kind === 'rnd' && doc.participant && (
+                <DocRnd
+                  submission={submission}
+                  participant={doc.participant}
+                  participantCount={participants.length || 1}
+                  ratings={prefill.rnd_ratings}
+                  comments={prefill.rnd_comments}
+                />
+              )}
+              {doc.kind === 'consent' && doc.participant && (
+                <DocConsent submission={submission} participant={doc.participant} />
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    {needsRndEval && (
+      <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
+        <h2>Votre évaluation R&D</h2>
+        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">Notez le produit selon vos observations (obligatoire pour signer).</p>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">Critère</th>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <th style="text-align:center;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;width:56px;">{n}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {RATING_KEYS.map((k) => (
+              <tr>
+                <td style="padding:8px 6px;font-size:.92rem;">{RATING_LABELS[k]}</td>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <td style="text-align:center;padding:8px 6px;">
+                    <input type="radio" name={`rating_${k}`} value={n} checked={prefill.rnd_ratings?.[k] === n} style="cursor:pointer;width:18px;height:18px;" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div class="form-row" style="margin-top: 16px;">
+          <label for="rnd-comments">Rétroaction / Commentaires</label>
+          <textarea id="rnd-comments" rows="4" placeholder="Vos observations sur le produit…" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
+        </div>
+        <div id="rnd-eval-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
+          Veuillez noter chaque critère avant de signer.
+        </div>
+      </div>
+    )}
+
+    <div class="card">
+      <h2>Votre signature</h2>
+      <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 12px 0 14px; border-bottom: 1px solid var(--p-border);">
+        <button type="button" class="sig-tab active" role="tab" data-method="draw">Dessiner</button>
+        <button type="button" class="sig-tab" role="tab" data-method="type">Taper</button>
+        <button type="button" class="sig-tab" role="tab" data-method="upload">Téléverser</button>
+      </div>
+      <div class="sig-panel" data-panel="draw"><p class="hint" style="margin-bottom: 10px;">Dessinez ci-dessous avec la souris ou le doigt.</p></div>
+      <div class="sig-panel" data-panel="type" style="display: none;">
+        <p class="hint" style="margin-bottom: 10px;">Tapez votre nom complet.</p>
+        <input type="text" id="type-input" placeholder={staff.full_name} style="margin-bottom: 12px;" autocomplete="name" />
+      </div>
+      <div class="sig-panel" data-panel="upload" style="display: none;">
+        <p class="hint" style="margin-bottom: 10px;">Téléversez une image de votre signature (PNG, JPG).</p>
+        <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
+      </div>
+      <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
+        <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
+      </div>
+      {savedSignature && <p class="hint" style="margin-top: 10px;">✓ Votre signature enregistrée est chargée. Cliquez « Effacer » pour en dessiner une nouvelle.</p>}
+      <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap;">
+        <button type="button" id="btn-clear" class="btn btn-secondary">Effacer</button>
+        <button type="button" id="btn-submit" class="btn btn-primary" disabled>Signer et envoyer</button>
+        <label style="display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--p-muted);margin-left:6px;cursor:pointer;">
+          <input type="checkbox" id="save-sig-checkbox" checked={!savedSignature} />
+          <span>Enregistrer ma signature pour la prochaine fois</span>
+        </label>
+        <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
+      </div>
+      <div id="flash" style="margin-top: 16px;"></div>
+    </div>
+  </div>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet" />
+
+  <style is:global>
+    .sig-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-family: inherit; font-size: .9rem; font-weight: 500; color: var(--p-muted); cursor: pointer; margin-bottom: -1px; }
+    .sig-tab:hover { color: var(--p-text); }
+    .sig-tab.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+    .doc-preview { animation: fade-in 0.15s ease; }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+
+  <script is:inline define:vars={{ submissionId: id, needsRndEval, savedSig: savedSignature }}>
+    (function () {
+      const canvas = document.getElementById('sig-pad');
+      const ctx2d = canvas.getContext('2d');
+      const btnClear = document.getElementById('btn-clear');
+      const btnSubmit = document.getElementById('btn-submit');
+      const statusEl = document.getElementById('pad-status');
+      const flashEl = document.getElementById('flash');
+      const typeInput = document.getElementById('type-input');
+      const uploadInput = document.getElementById('upload-input');
+      const tabs = Array.from(document.querySelectorAll('.sig-tab'));
+      const panels = Array.from(document.querySelectorAll('.sig-panel'));
+      const ratingKeys = ['odeur', 'gout', 'texture', 'globale'];
+      const commentsEl = document.getElementById('rnd-comments');
+      const evalErrorEl = document.getElementById('rnd-eval-error');
+      const saveSigCheckbox = document.getElementById('save-sig-checkbox');
+
+      let padW = 0, padH = 0, method = 'draw', hasSignature = false;
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        padW = rect.width; padH = rect.height;
+        canvas.width = padW * dpr; canvas.height = padH * dpr;
+        ctx2d.setTransform(1, 0, 0, 1, 0, 0); ctx2d.scale(dpr, dpr);
+        ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+        ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+      }
+      resizeCanvas();
+
+      function clearCanvas() {
+        ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+        ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+        const dpr = window.devicePixelRatio || 1; ctx2d.scale(dpr, dpr);
+        ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+        ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+        hasSignature = false; btnSubmit.disabled = true; flashEl.innerHTML = '';
+      }
+
+      function loadSavedSignature() {
+        if (!savedSig) return;
+        const img = new Image();
+        img.onload = function () {
+          const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
+          const w = img.width * ratio, h = img.height * ratio;
+          ctx2d.drawImage(img, (padW - w) / 2, (padH - h) / 2, w, h);
+          hasSignature = true; btnSubmit.disabled = false;
+        };
+        img.src = savedSig;
+      }
+      loadSavedSignature();
+
+      let drawing = false, last = null;
+      function pointFrom(evt) { const r = canvas.getBoundingClientRect(); return { x: evt.clientX - r.left, y: evt.clientY - r.top }; }
+      canvas.addEventListener('pointerdown', (e) => { if (method !== 'draw') return; e.preventDefault(); drawing = true; last = pointFrom(e); });
+      canvas.addEventListener('pointermove', (e) => {
+        if (!drawing || method !== 'draw') return; e.preventDefault();
+        const p = pointFrom(e); ctx2d.beginPath(); ctx2d.moveTo(last.x, last.y); ctx2d.lineTo(p.x, p.y); ctx2d.stroke();
+        last = p; hasSignature = true; btnSubmit.disabled = false;
+      });
+      const stopDraw = () => { drawing = false; last = null; };
+      canvas.addEventListener('pointerup', stopDraw); canvas.addEventListener('pointercancel', stopDraw); canvas.addEventListener('pointerleave', stopDraw);
+
+      function renderTypedSignature(text) {
+        clearCanvas();
+        if (!text.trim()) return;
+        ctx2d.fillStyle = '#111'; ctx2d.textBaseline = 'middle';
+        let fontSize = 72; const maxW = padW - 40;
+        do { ctx2d.font = `600 ${fontSize}px 'Dancing Script', 'Segoe Script', cursive`;
+             var m = ctx2d.measureText(text); if (m.width <= maxW) break; fontSize -= 4;
+        } while (fontSize > 24);
+        ctx2d.fillText(text, (padW - m.width) / 2, padH / 2);
+        hasSignature = true; btnSubmit.disabled = false;
+      }
+      typeInput.addEventListener('input', (e) => renderTypedSignature(e.target.value));
+
+      uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) { flashEl.innerHTML = '<div class="flash flash-error">Image trop volumineuse.</div>'; return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            clearCanvas();
+            const r = Math.min(padW / img.width, padH / img.height) * 0.92;
+            const w = img.width * r, h = img.height * r;
+            ctx2d.drawImage(img, (padW - w) / 2, (padH - h) / 2, w, h);
+            hasSignature = true; btnSubmit.disabled = false;
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      tabs.forEach((tab) => tab.addEventListener('click', () => {
+        method = tab.getAttribute('data-method');
+        tabs.forEach((t) => t.classList.toggle('active', t === tab));
+        panels.forEach((p) => p.style.display = p.getAttribute('data-panel') === method ? '' : 'none');
+        canvas.style.cursor = method === 'draw' ? 'crosshair' : 'default';
+        clearCanvas();
+        if (method === 'type' && typeInput.value.trim()) renderTypedSignature(typeInput.value);
+      }));
+
+      Array.from(document.querySelectorAll('.doc-toggle')).forEach((btn) => btn.addEventListener('click', () => {
+        const t = document.getElementById(btn.getAttribute('data-target'));
+        if (!t) return;
+        const open = t.style.display !== 'none';
+        t.style.display = open ? 'none' : 'block';
+        btn.textContent = open ? 'Voir le document' : 'Masquer';
+      }));
+
+      btnClear.addEventListener('click', () => { clearCanvas(); if (typeInput) typeInput.value = ''; if (uploadInput) uploadInput.value = ''; });
+
+      function collectRatings() {
+        const out = {};
+        for (const k of ratingKeys) {
+          const chosen = document.querySelector('input[name="rating_' + k + '"]:checked');
+          out[k] = chosen ? parseInt(chosen.value, 10) : null;
+        }
+        return out;
+      }
+
+      btnSubmit.addEventListener('click', async () => {
+        if (!hasSignature) return;
+        let ratings = null, comments = null;
+        if (needsRndEval) {
+          ratings = collectRatings();
+          if (ratingKeys.some((k) => ratings[k] == null)) {
+            evalErrorEl.style.display = 'block';
+            document.getElementById('rnd-eval-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+          evalErrorEl.style.display = 'none';
+          comments = (commentsEl && commentsEl.value ? commentsEl.value : '').slice(0, 4000);
+        }
+        btnSubmit.disabled = true;
+        statusEl.textContent = 'Envoi en cours…';
+        const dataUrl = canvas.toDataURL('image/png');
+        const saveSig = !!(saveSigCheckbox && saveSigCheckbox.checked);
+        try {
+          const res = await fetch('/api/portail/submissions/' + encodeURIComponent(submissionId) + '/sign-as-me', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ signature: dataUrl, rnd_ratings: ratings, rnd_comments: comments, save_signature: saveSig }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.error) {
+            statusEl.textContent = '';
+            flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'nothing_to_sign' ? 'Rien à signer.' : 'Erreur — réessayez.') + '</div>';
+            btnSubmit.disabled = false;
+            return;
+          }
+          statusEl.textContent = '';
+          flashEl.innerHTML = '<div class="flash flash-success">Signature enregistrée. Redirection…</div>';
+          setTimeout(() => window.location.href = '/portail/demande/' + submissionId + '?info=signed', 1200);
+        } catch (e) {
+          statusEl.textContent = '';
+          flashEl.innerHTML = '<div class="flash flash-error">Erreur réseau — réessayez.</div>';
+          btnSubmit.disabled = false;
+        }
+      });
+    })();
+  </script>
+</PortailLayout>
