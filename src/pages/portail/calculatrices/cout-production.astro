@@ -11,307 +11,523 @@ if (!staff) {
 }
 ---
 <PortailLayout title="Calculatrice de coût de production" staffName={staff.full_name}>
-  <div style="margin-bottom: 20px;">
-    <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour aux calculatrices
-    </a>
-  </div>
-  <h1>Calculatrice de coût de production</h1>
-  <p style="color: var(--p-muted); margin-bottom: 24px; max-width: 760px;">
-    Reproduit le modèle « Oaziz Extraction &amp; Hash Calculator v2 ». Remplissez les variables du
-    lot ci-dessous — le décompte de coûts et les prix de vente se mettent à jour automatiquement.
-    Les hypothèses de matières et de main-d'œuvre sont pré-remplies avec les valeurs par défaut du
-    modèle ; ajustez-les au besoin.
-  </p>
+  <div class="calc-wizard">
+    <div style="margin-bottom: 20px;">
+      <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour aux calculatrices
+      </a>
+    </div>
+    <h1>Calculatrice de coût de production</h1>
+    <p style="color: var(--p-muted); margin-bottom: 24px;">
+      Répondez aux questions ci-dessous pour obtenir le coût et le prix de vente suggéré de votre lot.
+      Basé sur le modèle « Oaziz Extraction &amp; Hash Calculator v2 ».
+    </p>
 
-  <div class="calc-grid">
-    <div class="calc-inputs">
-
-      <div class="card" style="margin-bottom: 16px;">
-        <h2>Lot &amp; coûts de base</h2>
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Paramètres généraux</h2>
+      <div class="form-row">
+        <label for="batch">Taille du lot désirée (g)</label>
+        <input type="number" id="batch" value="10000" min="1" step="1" />
+      </div>
+      <div class="two-col">
         <div class="form-row">
-          <label for="batch">Taille du lot désirée (g)</label>
-          <input type="number" id="batch" value="10000" min="1" step="1" />
-        </div>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="distCost">Coût distillat ($/g)</label>
-            <input type="number" id="distCost" value="1.40" step="0.01" />
-          </div>
-          <div class="form-row">
-            <label for="trimCost">Coût trim ($/g)</label>
-            <input type="number" id="trimCost" value="0" step="0.01" />
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="flowerCost">Coût fleur ($/g) — High Yield seulement</label>
-            <input type="number" id="flowerCost" value="0" step="0.01" />
-          </div>
-          <div class="form-row">
-            <label for="terpCost">Coût terpènes ($/g)</label>
-            <input type="number" id="terpCost" value="0" step="0.01" />
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="cbgcbnCost">Coût CBG / CBN ($/g moy.)</label>
-            <input type="number" id="cbgcbnCost" value="4.50" step="0.01" />
-          </div>
-          <div class="form-row">
-            <label for="overheadPct">Frais généraux (% des ventes)</label>
-            <input type="number" id="overheadPct" value="24" step="0.1" />
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="coaCost">Coût COA complet ($/lot, fixe)</label>
-            <input type="number" id="coaCost" value="1600" step="1" />
-          </div>
-          <div class="form-row">
-            <label for="unitsToPackage">Unités à emballer (#)</label>
-            <input type="number" id="unitsToPackage" value="2500" step="1" />
-          </div>
+          <label for="overheadPct">Frais généraux (% des ventes)</label>
+          <input type="number" id="overheadPct" value="24" step="0.1" />
         </div>
         <div class="form-row">
-          <label for="topicalsCost">Coût des ingrédients Topiques ($/lot)</label>
-          <input type="number" id="topicalsCost" value="231" step="1" />
+          <label for="coaCost">Coût COA complet ($/lot, fixe)</label>
+          <input type="number" id="coaCost" value="1600" step="1" />
         </div>
       </div>
-
-      <div class="card" style="margin-bottom: 16px;">
-        <h2>Paliers de marge</h2>
-        <p class="hint" style="margin-bottom: 12px;">Appliqués au coût / gramme de chaque produit pour obtenir le prix de vente.</p>
-        <div class="four-col">
-          <div class="form-row">
-            <label for="m1">Palier 1 (%)</label>
-            <input type="number" id="m1" value="25" step="0.5" />
-          </div>
-          <div class="form-row">
-            <label for="m2">Palier 2 (%)</label>
-            <input type="number" id="m2" value="30" step="0.5" />
-          </div>
-          <div class="form-row">
-            <label for="m3">Palier 3 (%)</label>
-            <input type="number" id="m3" value="35" step="0.5" />
-          </div>
-          <div class="form-row">
-            <label for="m4">Palier 4 (%)</label>
-            <input type="number" id="m4" value="40" step="0.5" />
-          </div>
+      <label style="margin-bottom: 8px;">Paliers de marge à comparer</label>
+      <div class="four-col">
+        <div class="form-row">
+          <label for="m1" class="sublabel">Palier 1 (%)</label>
+          <input type="number" id="m1" value="25" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="m2" class="sublabel">Palier 2 (%)</label>
+          <input type="number" id="m2" value="30" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="m3" class="sublabel">Palier 3 (%)</label>
+          <input type="number" id="m3" value="35" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="m4" class="sublabel">Palier 4 (%)</label>
+          <input type="number" id="m4" value="40" step="0.5" />
         </div>
       </div>
+    </div>
 
-      <details class="card" style="margin-bottom: 16px;">
-        <summary>Hypothèses d'utilisation des matières (avancé)</summary>
-        <div class="details-body">
-          <div class="two-col">
-            <div class="form-row">
-              <label for="pctDistUsed">Distillat — % utilisé du lot</label>
-              <input type="number" id="pctDistUsed" value="20" step="0.5" />
-            </div>
-            <div class="form-row">
-              <label for="pctTrimUsed">Trim — % utilisé (base Dry Sift)</label>
-              <input type="number" id="pctTrimUsed" value="80" step="0.5" />
-            </div>
+    <div class="card question-card" style="margin-bottom: 16px;">
+      <h2>1. Quel produit voulez-vous fabriquer&nbsp;?</h2>
+      <div class="choice-grid" data-question="productType"></div>
+    </div>
+
+    <div class="card question-card" id="q-hashSource" hidden style="margin-bottom: 16px;">
+      <h2>2. À partir de quelle matière première&nbsp;?</h2>
+      <div class="choice-grid" data-question="hashSource"></div>
+    </div>
+
+    <div class="card question-card" id="q-hashMethod" hidden style="margin-bottom: 16px;">
+      <h2>3. Quelle méthode d'extraction&nbsp;?</h2>
+      <div class="choice-grid" data-question="hashMethod"></div>
+    </div>
+
+    <!-- Leaf input cards — exactly one visible at a time, once the questions above resolve to a product. -->
+
+    <div class="card leaf-card" id="leaf-kief" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Kief (Dry Sift)</h2>
+      <div class="form-row">
+        <label for="kief_trimCost">Coût trim ($/g)</label>
+        <input type="number" id="kief_trimCost" value="0" step="0.01" />
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="kief_pctTrimUsed">Trim — % utilisé du lot</label>
+            <input type="number" id="kief_pctTrimUsed" value="80" step="0.5" />
           </div>
           <div class="form-row">
-            <label for="pctFlowerUsed">Fleur — % utilisé (High Yield)</label>
-            <input type="number" id="pctFlowerUsed" value="70" step="0.5" />
+            <label for="kief_rateTumble">Cadence tumble (g/hr)</label>
+            <input type="number" id="kief_rateTumble" value="3500" step="1" />
           </div>
-          <p class="hint" style="margin: 12px 0 8px;">Composition du Mix Hash (IWE &amp; DrySift) — doit totaliser ~100 %</p>
-          <div class="four-col">
-            <div class="form-row">
-              <label for="mixPctDist">Distillat (%)</label>
-              <input type="number" id="mixPctDist" value="4" step="0.5" />
-            </div>
-            <div class="form-row">
-              <label for="mixPctDrysift">DrySift Kief (%)</label>
-              <input type="number" id="mixPctDrysift" value="70" step="0.5" />
-            </div>
-            <div class="form-row">
-              <label for="mixPctIwe">IWE (%)</label>
-              <input type="number" id="mixPctIwe" value="16" step="0.5" />
-            </div>
-            <div class="form-row">
-              <label for="mixPctTerp">Terpènes (%)</label>
-              <input type="number" id="mixPctTerp" value="10" step="0.5" />
-            </div>
+          <div class="form-row">
+            <label for="kief_costTumble">Coût tumble ($/hr)</label>
+            <input type="number" id="kief_costTumble" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-iweRaw" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — IWE brut</h2>
+      <div class="form-row">
+        <label for="iweRaw_trimCost">Coût trim ($/g)</label>
+        <input type="number" id="iweRaw_trimCost" value="0" step="0.01" />
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="iweRaw_rateIwe">Cadence lavage IWE (g/hr)</label>
+            <input type="number" id="iweRaw_rateIwe" value="1700" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="iweRaw_costIwe">Coût lavage IWE ($/hr)</label>
+            <input type="number" id="iweRaw_costIwe" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-drysift" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Hash Dry Sift (Trim → Fini)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="drysift_distCost">Coût distillat ($/g)</label>
+          <input type="number" id="drysift_distCost" value="1.40" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="drysift_trimCost">Coût trim ($/g)</label>
+          <input type="number" id="drysift_trimCost" value="0" step="0.01" />
+        </div>
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="drysift_pctDistUsed">Distillat — % utilisé du lot</label>
+            <input type="number" id="drysift_pctDistUsed" value="20" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="drysift_pctTrimUsed">Trim — % utilisé du lot</label>
+            <input type="number" id="drysift_pctTrimUsed" value="80" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="drysift_rateTumble">Cadence tumble (g/hr)</label>
+            <input type="number" id="drysift_rateTumble" value="3500" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="drysift_costTumble">Coût tumble ($/hr)</label>
+            <input type="number" id="drysift_costTumble" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="drysift_rateGrind">Cadence grind (g/hr)</label>
+            <input type="number" id="drysift_rateGrind" value="800" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="drysift_costGrind">Coût grind ($/hr)</label>
+            <input type="number" id="drysift_costGrind" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-iweHash" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Hash IWE (Trim → Fini)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="iweHash_distCost">Coût distillat ($/g)</label>
+          <input type="number" id="iweHash_distCost" value="1.40" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="iweHash_trimCost">Coût trim ($/g)</label>
+          <input type="number" id="iweHash_trimCost" value="0" step="0.01" />
+        </div>
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="iweHash_pctDistUsed">Distillat — % utilisé du lot</label>
+            <input type="number" id="iweHash_pctDistUsed" value="20" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="iweHash_rateIwe">Cadence lavage IWE (g/hr)</label>
+            <input type="number" id="iweHash_rateIwe" value="1700" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="iweHash_costIwe">Coût lavage IWE ($/hr)</label>
+            <input type="number" id="iweHash_costIwe" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="iweHash_rateCure">Cadence cure (g/hr)</label>
+            <input type="number" id="iweHash_rateCure" value="1000" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="iweHash_costCure">Coût cure ($/hr)</label>
+            <input type="number" id="iweHash_costCure" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-mix" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Mix Hash (IWE &amp; DrySift)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="mix_distCost">Coût distillat ($/g)</label>
+          <input type="number" id="mix_distCost" value="1.40" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="mix_trimCost">Coût trim ($/g)</label>
+          <input type="number" id="mix_trimCost" value="0" step="0.01" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="mix_terpCost">Coût terpènes ($/g)</label>
+        <input type="number" id="mix_terpCost" value="0" step="0.01" />
+      </div>
+      <label style="margin-bottom: 8px;">Composition du mélange (% du lot) — doit totaliser ~100 %</label>
+      <div class="four-col">
+        <div class="form-row">
+          <label for="mix_pctDist" class="sublabel">Distillat (%)</label>
+          <input type="number" id="mix_pctDist" value="4" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="mix_pctDrysift" class="sublabel">DrySift Kief (%)</label>
+          <input type="number" id="mix_pctDrysift" value="70" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="mix_pctIwe" class="sublabel">IWE (%)</label>
+          <input type="number" id="mix_pctIwe" value="16" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="mix_pctTerp" class="sublabel">Terpènes (%)</label>
+          <input type="number" id="mix_pctTerp" value="10" step="0.5" />
+        </div>
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="mix_pctTrimUsedBase">Trim — % utilisé (base kief)</label>
+            <input type="number" id="mix_pctTrimUsedBase" value="80" step="0.5" />
+          </div>
+          <div class="form-row"></div>
+          <div class="form-row">
+            <label for="mix_rateTumble">Cadence tumble (g/hr)</label>
+            <input type="number" id="mix_rateTumble" value="3500" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="mix_costTumble">Coût tumble ($/hr)</label>
+            <input type="number" id="mix_costTumble" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="mix_rateIwe">Cadence lavage IWE (g/hr)</label>
+            <input type="number" id="mix_rateIwe" value="1700" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="mix_costIwe">Coût lavage IWE ($/hr)</label>
+            <input type="number" id="mix_costIwe" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="mix_rateGrind">Cadence grind/mélange (g/hr)</label>
+            <input type="number" id="mix_rateGrind" value="800" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="mix_costGrind">Coût grind/mélange ($/hr)</label>
+            <input type="number" id="mix_costGrind" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-highyield" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — High Yield Hash (Fleur)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="hy_distCost">Coût distillat ($/g)</label>
+          <input type="number" id="hy_distCost" value="1.40" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="hy_flowerCost">Coût fleur ($/g)</label>
+          <input type="number" id="hy_flowerCost" value="0" step="0.01" />
+        </div>
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="hy_pctDistUsed">Distillat — % utilisé du lot</label>
+            <input type="number" id="hy_pctDistUsed" value="20" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="hy_pctFlowerUsed">Fleur — % utilisé du lot</label>
+            <input type="number" id="hy_pctFlowerUsed" value="70" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="hy_rateShred">Cadence déchiquetage (g/hr)</label>
+            <input type="number" id="hy_rateShred" value="1000" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="hy_costShred">Coût déchiquetage ($/hr)</label>
+            <input type="number" id="hy_costShred" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="hy_rateGrind">Cadence grind (g/hr)</label>
+            <input type="number" id="hy_rateGrind" value="1250" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="hy_costGrind">Coût grind ($/hr)</label>
+            <input type="number" id="hy_costGrind" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card leaf-card" id="leaf-purchasedKief" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Hash à partir de kief acheté</h2>
+      <p class="hint" style="margin-bottom: 12px;">
+        Le kief est acheté déjà fait — les coûts de trim/tumble/dry sift sont exclus. Seuls les coûts
+        à partir du kief (mélange, cure, tests, frais généraux) sont comptés.
+      </p>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="pk_kiefBuyPrice">Prix d'achat du kief ($/g)</label>
+          <input type="number" id="pk_kiefBuyPrice" value="0.75" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="pk_distCost">Coût distillat ($/g)</label>
+          <input type="number" id="pk_distCost" value="1.40" step="0.01" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="pk_distPct">Distillat — % du poids du lot</label>
+          <input type="number" id="pk_distPct" value="20" step="0.5" />
+        </div>
+        <div class="form-row">
+          <label for="pk_cbgcbnCost">Coût CBG / CBN ($/g moy.)</label>
+          <input type="number" id="pk_cbgcbnCost" value="4.50" step="0.01" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="pk_cbgG">CBG dans le lot (g)</label>
+          <input type="number" id="pk_cbgG" value="0" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="pk_cbnG">CBN dans le lot (g)</label>
+          <input type="number" id="pk_cbnG" value="0" step="1" />
+        </div>
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="pk_rateKiefHash">Cadence kief → hash (g/hr)</label>
+            <input type="number" id="pk_rateKiefHash" value="800" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="pk_costKiefHash">Coût kief → hash ($/hr)</label>
+            <input type="number" id="pk_costKiefHash" value="28" step="0.5" />
           </div>
         </div>
       </details>
 
-      <details class="card" style="margin-bottom: 16px;">
-        <summary>Hypothèses de main-d'œuvre (avancé)</summary>
-        <div class="details-body">
-          <table class="data labour-inputs">
-            <thead>
-              <tr><th>Procédé</th><th>g / hr</th><th>$ / hr</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Trim → Dry Sift (Tumble)</td>
-                <td><input type="number" id="rate_tumble" value="3500" step="1" /></td>
-                <td><input type="number" id="cost_tumble" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Trim → IWE</td>
-                <td><input type="number" id="rate_iwe" value="1700" step="1" /></td>
-                <td><input type="number" id="cost_iwe" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Dry Sift → Hash (Grind)</td>
-                <td><input type="number" id="rate_grindDS" value="800" step="1" /></td>
-                <td><input type="number" id="cost_grindDS" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>IWE → Hash final (Cure)</td>
-                <td><input type="number" id="rate_cureIWE" value="1000" step="1" /></td>
-                <td><input type="number" id="cost_cureIWE" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>High Yield — Déchiquetage</td>
-                <td><input type="number" id="rate_shredHY" value="1000" step="1" /></td>
-                <td><input type="number" id="cost_shredHY" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>High Yield — Hash (Grind)</td>
-                <td><input type="number" id="rate_grindHY" value="1250" step="1" /></td>
-                <td><input type="number" id="cost_grindHY" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>IWE → Rosin (Presse)</td>
-                <td><input type="number" id="rate_press" value="250" step="1" /></td>
-                <td><input type="number" id="cost_press" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Mélange Distillat + Terpènes</td>
-                <td><input type="number" id="rate_distMix" value="1000" step="1" /></td>
-                <td><input type="number" id="cost_distMix" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Xaman (Topiques)</td>
-                <td><input type="number" id="rate_xaman" value="4166.67" step="1" /></td>
-                <td><input type="number" id="cost_xaman" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Kief → Hash (kief acheté)</td>
-                <td><input type="number" id="rate_kiefHash" value="800" step="1" /></td>
-                <td><input type="number" id="cost_kiefHash" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Emballage <span class="hint">(info seulement)</span></td>
-                <td><input type="number" id="rate_packaging" value="75" step="1" /></td>
-                <td><input type="number" id="cost_packaging" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Remplissage cartouches vape <span class="hint">(info seulement)</span></td>
-                <td><input type="number" id="rate_vapeFill" value="166" step="1" /></td>
-                <td><input type="number" id="cost_vapeFill" value="28" step="0.5" /></td>
-              </tr>
-              <tr>
-                <td>Main-d'œuvre AUBE <span class="hint">(info seulement)</span></td>
-                <td><input type="number" id="rate_aube" value="375" step="1" /></td>
-                <td><input type="number" id="cost_aube" value="168" step="0.5" /></td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="hint" style="margin-top:8px;">
-            Emballage, remplissage de cartouches et main-d'œuvre AUBE sont suivis séparément et ne sont
-            PAS inclus dans les coûts par produit ci-dessous (convention du modèle original).
-          </p>
+      <div class="reverse-solve">
+        <h3>Solveur inverse — prix maximal du kief</h3>
+        <p class="hint" style="margin-bottom: 10px;">
+          À partir d'un prix de vente cible, calcule le prix maximal payable pour le kief par gramme,
+          pour chaque palier de marge ci-dessus.
+        </p>
+        <div class="form-row" style="max-width: 260px;">
+          <label for="pk_targetSellPrice">Prix de vente cible ($/g)</label>
+          <input type="number" id="pk_targetSellPrice" value="1.90" step="0.01" />
+        </div>
+        <div id="reverseSolveResult"></div>
+      </div>
+    </div>
+
+    <div class="card leaf-card" id="leaf-rosin" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Rosin</h2>
+      <div class="form-row">
+        <label for="rosin_trimCost">Coût trim ($/g)</label>
+        <input type="number" id="rosin_trimCost" value="0" step="0.01" />
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="rosin_rateIwe">Cadence lavage IWE (g/hr)</label>
+            <input type="number" id="rosin_rateIwe" value="1700" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="rosin_costIwe">Coût lavage IWE ($/hr)</label>
+            <input type="number" id="rosin_costIwe" value="28" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="rosin_ratePress">Cadence presse (g/hr)</label>
+            <input type="number" id="rosin_ratePress" value="250" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="rosin_costPress">Coût presse ($/hr)</label>
+            <input type="number" id="rosin_costPress" value="28" step="0.5" />
+          </div>
         </div>
       </details>
-
-      <div class="card" style="margin-bottom: 16px;">
-        <h2>Hash à partir de kief acheté</h2>
-        <p class="hint" style="margin-bottom: 12px;">
-          Le kief est acheté déjà fait — les coûts de trim/tumble/dry sift sont exclus. Seuls les coûts
-          à partir du kief (mélange, cure, tests, frais généraux) sont comptés.
-        </p>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="kiefBuyPrice">Prix d'achat du kief ($/g)</label>
-            <input type="number" id="kiefBuyPrice" value="0.75" step="0.01" />
-          </div>
-          <div class="form-row">
-            <label for="kiefDistPct">Distillat — % du poids du lot</label>
-            <input type="number" id="kiefDistPct" value="20" step="0.5" />
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="form-row">
-            <label for="kiefCbgG">CBG dans le lot (g)</label>
-            <input type="number" id="kiefCbgG" value="0" step="1" />
-          </div>
-          <div class="form-row">
-            <label for="kiefCbnG">CBN dans le lot (g)</label>
-            <input type="number" id="kiefCbnG" value="0" step="1" />
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom: 16px;">
-        <h2>Solveur inverse — prix maximal du kief</h2>
-        <p class="hint" style="margin-bottom: 12px;">
-          À partir d'un prix de vente cible, calcule le prix maximal que l'on peut payer pour le kief
-          par gramme, pour chaque palier de marge — les hypothèses ci-dessus (distillat, CBG/CBN,
-          main-d'œuvre) restent constantes.
-        </p>
-        <div class="form-row">
-          <label for="targetSellPrice">Prix de vente cible ($/g)</label>
-          <input type="number" id="targetSellPrice" value="1.90" step="0.01" />
-        </div>
-      </div>
-
     </div>
 
-    <div class="calc-results">
-      <div id="results"></div>
+    <div class="card leaf-card" id="leaf-vape" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Vape (Distillat + Terpènes)</h2>
+      <div class="form-row">
+        <label for="vape_distCost">Coût distillat ($/g)</label>
+        <input type="number" id="vape_distCost" value="1.40" step="0.01" />
+      </div>
+      <div class="form-row">
+        <label for="vape_pctDist">Distillat — % du lot</label>
+        <input type="number" id="vape_pctDist" value="4" step="0.5" />
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="vape_rateMix">Cadence mélange (g/hr)</label>
+            <input type="number" id="vape_rateMix" value="1000" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="vape_costMix">Coût mélange ($/hr)</label>
+            <input type="number" id="vape_costMix" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
     </div>
+
+    <div class="card leaf-card" id="leaf-topicals" hidden style="margin-bottom: 16px;">
+      <h2>Coûts — Topiques (Baume &amp; Lotion)</h2>
+      <div class="form-row">
+        <label for="topicals_ingredientCost">Coût des ingrédients ($/lot)</label>
+        <input type="number" id="topicals_ingredientCost" value="231" step="1" />
+      </div>
+      <details>
+        <summary>Hypothèses avancées</summary>
+        <div class="details-body two-col">
+          <div class="form-row">
+            <label for="topicals_rateXaman">Cadence Xaman (g/hr)</label>
+            <input type="number" id="topicals_rateXaman" value="4166.67" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="topicals_costXaman">Coût Xaman ($/hr)</label>
+            <input type="number" id="topicals_costXaman" value="28" step="0.5" />
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div id="result"></div>
   </div>
-
 </PortailLayout>
 
-<style>
-  .calc-grid {
-    display: grid;
-    grid-template-columns: minmax(360px, 480px) 1fr;
-    gap: 24px;
-    align-items: start;
-  }
-  @media (max-width: 900px) {
-    .calc-grid { grid-template-columns: 1fr; }
-  }
-  .calc-results { position: sticky; top: 20px; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-  .four-col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 12px; }
-  @media (max-width: 520px) {
-    .two-col, .four-col { grid-template-columns: 1fr 1fr; }
-  }
-  details.card summary {
+<style is:global>
+  /* Guided question buttons */
+  .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .choice-btn {
+    display: block;
+    text-align: left;
+    border: 1px solid var(--p-border);
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px 14px;
     cursor: pointer;
+    font-family: inherit;
+    font-size: .9rem;
     font-weight: 600;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    color: var(--p-text);
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
   }
-  details.card summary::before { content: '▸'; color: var(--p-muted); transition: transform .15s ease; }
-  details.card[open] summary::before { transform: rotate(90deg); }
-  details.card summary::-webkit-details-marker { display: none; }
-  .details-body { margin-top: 16px; }
-  table.labour-inputs th, table.labour-inputs td { padding: 6px 8px; font-size: .85rem; }
-  table.labour-inputs input { padding: 6px 8px; font-size: .85rem; }
-  .results-section { margin-bottom: 20px; }
-  .results-section h2 { font-size: 1rem; }
-  table.results { width: 100%; border-collapse: collapse; font-size: .86rem; }
-  table.results th, table.results td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--p-border); white-space: nowrap; }
-  table.results th:first-child, table.results td:first-child { text-align: left; white-space: normal; }
-  table.results th { font-weight: 600; color: var(--p-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .3px; }
-  table.results tbody tr:hover { background: var(--p-bg); }
-  table.results td.muted { color: var(--p-muted); }
-  .warn-banner { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; padding: 10px 14px; border-radius: 8px; font-size: .85rem; margin-bottom: 16px; }
+  .choice-btn span { display: block; font-weight: 400; font-size: .78rem; color: var(--p-muted); margin-top: 4px; line-height: 1.35; }
+  .choice-btn:hover { border: 1px solid #d05826; }
+  .choice-btn.selected {
+    border: 1px solid #d05826;
+    background: rgba(208, 88, 38, .06);
+    box-shadow: 0 0 0 1px #d05826 inset;
+  }
+  .choice-btn.selected span { color: var(--p-text); }
+
+  .question-card h2 { margin-bottom: 14px; }
+
+  .reverse-solve { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--p-border); }
+  .reverse-solve h3 { font-size: .95rem; font-weight: 600; margin-bottom: 6px; }
+
+  /* Result hero */
+  .result-placeholder {
+    text-align: center;
+    padding: 40px 24px;
+    color: var(--p-muted);
+    border: 1px dashed var(--p-border);
+    border-radius: 10px;
+    font-size: .95rem;
+  }
+  .result-hero { padding: 28px; }
+  .result-hero-title { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--p-accent); margin-bottom: 6px; }
+  .result-hero-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 20px; }
+  .result-stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .result-stat { flex: 1; min-width: 140px; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 14px 16px; }
+  .result-stat-label { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; color: var(--p-muted); margin-bottom: 4px; }
+  .result-stat-value { display: block; font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .result-stat.accent { background: rgba(208, 88, 38, .08); border-color: rgba(208, 88, 38, .3); }
+  .result-stat.accent .result-stat-value { color: var(--p-accent); }
+
+  .result-margins-label { font-size: .78rem; font-weight: 600; color: var(--p-muted); margin-bottom: 8px; }
+  .result-margins { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .result-margin-chip { text-align: center; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 12px 8px; }
+  .result-margin-pct { display: block; font-size: .7rem; color: var(--p-muted); text-transform: uppercase; margin-bottom: 4px; }
+  .result-margin-price { display: block; font-size: 1.05rem; font-weight: 700; color: var(--p-success); font-variant-numeric: tabular-nums; }
+
+  .result-breakdown { border-top: 1px solid var(--p-border); padding-top: 16px; }
+  .result-breakdown summary { color: var(--p-text); font-size: .88rem; }
+  .breakdown-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: .85rem; border-bottom: 1px solid var(--p-border); }
+  .breakdown-line:last-child { border-bottom: none; font-weight: 700; padding-top: 10px; }
+  .breakdown-line .label { color: var(--p-muted); }
+
+  .reverse-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .87rem; }
+  .reverse-table th, .reverse-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--p-border); }
+  .reverse-table th { font-weight: 600; color: var(--p-muted); font-size: .72rem; text-transform: uppercase; }
+  .reverse-table td { font-weight: 700; color: var(--p-success); font-variant-numeric: tabular-nums; }
 </style>
 
 <script>
@@ -333,311 +549,454 @@ if (!staff) {
     return num(id) / 100;
   }
 
-  const fmtMoney = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtMoney2 = (n: number) =>
     isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPct = (n: number) => (isFinite(n) ? (n * 100).toFixed(0) + '%' : '—');
 
-  function compute() {
+  function generalParams() {
     const batch = num('batch');
-    const distCost = num('distCost');
-    const trimCost = num('trimCost');
-    const flowerCost = num('flowerCost');
-    const terpCost = num('terpCost');
-    const cbgcbnCost = num('cbgcbnCost');
     const overhead = pct('overheadPct');
     const coaCost = num('coaCost');
-    const unitsToPackage = num('unitsToPackage');
-    const topicalsCost = num('topicalsCost');
+    const coaPerG = batch > 0 ? coaCost / batch : 0;
     const margins = [pct('m1'), pct('m2'), pct('m3'), pct('m4')];
+    return { batch, overhead, coaPerG, margins };
+  }
 
-    const pctDistUsed = pct('pctDistUsed');
-    const pctTrimUsed = pct('pctTrimUsed');
-    const pctFlowerUsed = pct('pctFlowerUsed');
-    const mixPctDist = pct('mixPctDist');
-    const mixPctDrysift = pct('mixPctDrysift');
-    const mixPctIwe = pct('mixPctIwe');
-    const mixPctTerp = pct('mixPctTerp');
+  const LEAVES: Record<string, { label: string; compute: (g: ReturnType<typeof generalParams>) => { batchCost: number; perG: number; lines: Array<{ label: string; value: number }> } }> = {
+    kief: {
+      label: 'Kief (Dry Sift)',
+      compute: (g) => {
+        const trimCost = num('kief_trimCost');
+        const pctTrimUsed = pct('kief_pctTrimUsed');
+        const trimNeed = g.batch * pctTrimUsed * 5;
+        const trimCostTotal = trimNeed * trimCost;
+        const l = labor(trimNeed, num('kief_rateTumble'), num('kief_costTumble'));
+        const batchCost = (trimCostTotal + l.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Trim', value: trimCostTotal },
+            { label: "Main-d'œuvre (Tumble)", value: l.cost },
+            { label: 'Frais généraux + COA', value: batchCost - trimCostTotal - l.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    iweRaw: {
+      label: 'IWE brut',
+      compute: (g) => {
+        const trimCost = num('iweRaw_trimCost');
+        const trimNeed = g.batch * 10;
+        const trimCostTotal = trimNeed * trimCost;
+        const l = labor(trimNeed, num('iweRaw_rateIwe'), num('iweRaw_costIwe'));
+        const batchCost = (trimCostTotal + l.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Trim', value: trimCostTotal },
+            { label: "Main-d'œuvre (lavage IWE)", value: l.cost },
+            { label: 'Frais généraux + COA', value: batchCost - trimCostTotal - l.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    drysift: {
+      label: 'Hash Dry Sift — Trim to Finish',
+      compute: (g) => {
+        const distCost = num('drysift_distCost');
+        const trimCost = num('drysift_trimCost');
+        const distNeed = g.batch * pct('drysift_pctDistUsed');
+        const distCostTotal = distNeed * distCost;
+        const trimNeed = g.batch * pct('drysift_pctTrimUsed') * 5;
+        const trimCostTotal = trimNeed * trimCost;
+        const lTumble = labor(trimNeed, num('drysift_rateTumble'), num('drysift_costTumble'));
+        const lGrind = labor(g.batch, num('drysift_rateGrind'), num('drysift_costGrind'));
+        const batchCost = (distCostTotal + trimCostTotal + lTumble.cost + lGrind.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Distillat', value: distCostTotal },
+            { label: 'Trim', value: trimCostTotal },
+            { label: "Main-d'œuvre (Tumble)", value: lTumble.cost },
+            { label: "Main-d'œuvre (Grind)", value: lGrind.cost },
+            { label: 'Frais généraux + COA', value: batchCost - distCostTotal - trimCostTotal - lTumble.cost - lGrind.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    iweHash: {
+      label: 'Hash IWE — Trim to Finish',
+      compute: (g) => {
+        const distCost = num('iweHash_distCost');
+        const trimCost = num('iweHash_trimCost');
+        const distNeed = g.batch * pct('iweHash_pctDistUsed');
+        const distCostTotal = distNeed * distCost;
+        const trimNeed = g.batch * 10;
+        const trimCostTotal = trimNeed * trimCost;
+        const lIwe = labor(trimNeed, num('iweHash_rateIwe'), num('iweHash_costIwe'));
+        const lCure = labor(g.batch, num('iweHash_rateCure'), num('iweHash_costCure'));
+        const batchCost = (distCostTotal + trimCostTotal + lIwe.cost + lCure.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Distillat', value: distCostTotal },
+            { label: 'Trim', value: trimCostTotal },
+            { label: "Main-d'œuvre (lavage IWE)", value: lIwe.cost },
+            { label: "Main-d'œuvre (Cure)", value: lCure.cost },
+            { label: 'Frais généraux + COA', value: batchCost - distCostTotal - trimCostTotal - lIwe.cost - lCure.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    mix: {
+      label: 'Mix Hash (IWE & DrySift)',
+      compute: (g) => {
+        const distCost = num('mix_distCost');
+        const trimCost = num('mix_trimCost');
+        const terpCost = num('mix_terpCost');
 
-    const kiefBuyPrice = num('kiefBuyPrice');
-    const kiefDistPct = pct('kiefDistPct');
-    const kiefCbgG = num('kiefCbgG');
-    const kiefCbnG = num('kiefCbnG');
-    const targetSellPrice = num('targetSellPrice');
+        const trimNeedDS = g.batch * pct('mix_pctTrimUsedBase') * 5;
+        const trimCostDS = trimNeedDS * trimCost;
+        const lTumble = labor(trimNeedDS, num('mix_rateTumble'), num('mix_costTumble'));
+        const dsKiefBatch = (trimCostDS + lTumble.cost) * (1 + g.overhead);
+        const dsKiefPerG = dsKiefBatch / g.batch + g.coaPerG;
 
-    if (batch <= 0) {
-      return { error: "La taille du lot doit être supérieure à 0." };
+        const trimNeedIwe = g.batch * 10;
+        const trimCostIwe = trimNeedIwe * trimCost;
+        const lIwe = labor(trimNeedIwe, num('mix_rateIwe'), num('mix_costIwe'));
+        const iweBatch = (trimCostIwe + lIwe.cost) * (1 + g.overhead);
+        const iwePerG = iweBatch / g.batch + g.coaPerG;
+
+        const mixDistCost = g.batch * pct('mix_pctDist') * distCost;
+        const mixDrysiftCost = g.batch * pct('mix_pctDrysift') * dsKiefPerG;
+        const mixIweCost = g.batch * pct('mix_pctIwe') * iwePerG;
+        const mixTerpCost = g.batch * pct('mix_pctTerp') * terpCost;
+        const mixTotal = mixDistCost + mixDrysiftCost + mixIweCost + mixTerpCost;
+
+        const lGrind = labor(g.batch, num('mix_rateGrind'), num('mix_costGrind'));
+        const batchCost = (mixTotal + lGrind.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Distillat (dans le mélange)', value: mixDistCost },
+            { label: 'DrySift Kief (dans le mélange)', value: mixDrysiftCost },
+            { label: 'IWE (dans le mélange)', value: mixIweCost },
+            { label: 'Terpènes (dans le mélange)', value: mixTerpCost },
+            { label: "Main-d'œuvre (mélange/grind)", value: lGrind.cost },
+            { label: 'Frais généraux + COA', value: batchCost - mixTotal - lGrind.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    highyield: {
+      label: 'High Yield Hash',
+      compute: (g) => {
+        const distCost = num('hy_distCost');
+        const flowerCost = num('hy_flowerCost');
+        const distNeed = g.batch * pct('hy_pctDistUsed');
+        const distCostTotal = distNeed * distCost;
+        const flowerNeed = g.batch * pct('hy_pctFlowerUsed') * 0.9999;
+        const flowerCostTotal = flowerNeed * flowerCost;
+        const lShred = labor(flowerNeed, num('hy_rateShred'), num('hy_costShred'));
+        const lGrind = labor(g.batch, num('hy_rateGrind'), num('hy_costGrind'));
+        const batchCost = (distCostTotal + flowerCostTotal + lShred.cost + lGrind.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Distillat', value: distCostTotal },
+            { label: 'Fleur', value: flowerCostTotal },
+            { label: "Main-d'œuvre (déchiquetage)", value: lShred.cost },
+            { label: "Main-d'œuvre (Grind)", value: lGrind.cost },
+            { label: 'Frais généraux + COA', value: batchCost - distCostTotal - flowerCostTotal - lShred.cost - lGrind.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    purchasedKief: {
+      label: 'Hash à partir de kief acheté',
+      compute: (g) => {
+        const kiefBuyPrice = num('pk_kiefBuyPrice');
+        const distCost = num('pk_distCost');
+        const cbgcbnCost = num('pk_cbgcbnCost');
+        const cbgG = num('pk_cbgG');
+        const cbnG = num('pk_cbnG');
+        const distWeight = g.batch * pct('pk_distPct');
+        const kiefWeight = g.batch - distWeight - cbgG - cbnG;
+        const kiefCostTotal = kiefWeight * kiefBuyPrice;
+        const distCostTotal = distWeight * distCost;
+        const cbgCost = cbgG * cbgcbnCost;
+        const cbnCost = cbnG * cbgcbnCost;
+        const materialsTotal = kiefCostTotal + distCostTotal + cbgCost + cbnCost;
+        const l = labor(kiefWeight, num('pk_rateKiefHash'), num('pk_costKiefHash'));
+        const batchCost = (materialsTotal + l.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Kief acheté', value: kiefCostTotal },
+            { label: 'Distillat', value: distCostTotal },
+            { label: 'CBG', value: cbgCost },
+            { label: 'CBN', value: cbnCost },
+            { label: "Main-d'œuvre (kief → hash)", value: l.cost },
+            { label: 'Frais généraux + COA', value: batchCost - materialsTotal - l.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    rosin: {
+      label: 'Rosin',
+      compute: (g) => {
+        const trimCost = num('rosin_trimCost');
+        const trimNeedIwe = g.batch * 10;
+        const lIwe = labor(trimNeedIwe, num('rosin_rateIwe'), num('rosin_costIwe'));
+        const rosinTrimNeed = g.batch / (0.1 * 0.6);
+        const rosinTrimCost = rosinTrimNeed * trimCost;
+        const rosinIweNeed = rosinTrimNeed * 0.1;
+        const lPress = labor(rosinIweNeed, num('rosin_ratePress'), num('rosin_costPress'));
+        const labourPortion = (lPress.cost + lIwe.cost) * (1 + g.overhead);
+        const batchCost = labourPortion + rosinTrimCost * 1.1;
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Trim (feed, +10% perte)', value: rosinTrimCost * 1.1 },
+            { label: "Main-d'œuvre (lavage IWE)", value: lIwe.cost },
+            { label: "Main-d'œuvre (Presse)", value: lPress.cost },
+            { label: 'Frais généraux + COA', value: batchCost - (rosinTrimCost * 1.1 + lIwe.cost + lPress.cost) + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    vape: {
+      label: 'THC Distillate + Terpenes (Vape)',
+      compute: (g) => {
+        const distCost = num('vape_distCost');
+        const mixDistCost = g.batch * pct('vape_pctDist') * distCost;
+        const l = labor(g.batch, num('vape_rateMix'), num('vape_costMix'));
+        const batchCost = (mixDistCost + l.cost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Distillat', value: mixDistCost },
+            { label: "Main-d'œuvre (mélange)", value: l.cost },
+            { label: 'Frais généraux + COA', value: batchCost - mixDistCost - l.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+    topicals: {
+      label: 'Topicals (Balm & Lotion)',
+      compute: (g) => {
+        const ingredientCost = num('topicals_ingredientCost');
+        const l = labor(g.batch, num('topicals_rateXaman'), num('topicals_costXaman'));
+        const batchCost = (l.cost + ingredientCost) * (1 + g.overhead);
+        return {
+          batchCost,
+          perG: batchCost / g.batch + g.coaPerG,
+          lines: [
+            { label: 'Ingrédients', value: ingredientCost },
+            { label: "Main-d'œuvre (Xaman)", value: l.cost },
+            { label: 'Frais généraux + COA', value: batchCost - ingredientCost - l.cost + g.coaPerG * g.batch },
+          ],
+        };
+      },
+    },
+  };
+
+  type QuestionKey = 'productType' | 'hashSource' | 'hashMethod';
+
+  const QUESTIONS: Record<QuestionKey, Array<{ value: string; label: string; desc: string }>> = {
+    productType: [
+      { value: 'kief', label: 'Kief', desc: 'Tamisé à sec, non transformé' },
+      { value: 'iweRaw', label: 'IWE brut', desc: "Lavé à l'eau, avant cure" },
+      { value: 'hash', label: 'Hash', desc: 'Produit fini, pressé et curé' },
+      { value: 'rosin', label: 'Rosin', desc: 'Pressé à chaud (IWE → Rosin)' },
+      { value: 'vape', label: 'Vape', desc: 'Distillat + terpènes' },
+      { value: 'topicals', label: 'Topiques', desc: 'Baume et lotion' },
+    ],
+    hashSource: [
+      { value: 'trim', label: 'Trim', desc: 'Vous partez de trim brut' },
+      { value: 'fleur', label: 'Fleur (High Yield)', desc: 'Vous partez de fleur entière' },
+      { value: 'kiefAchete', label: 'Kief déjà acheté', desc: 'Vous achetez le kief tout fait' },
+    ],
+    hashMethod: [
+      { value: 'drysift', label: 'Dry Sift', desc: 'Tamisage à sec' },
+      { value: 'iwe', label: 'IWE', desc: "Lavé à l'eau (bubble hash)" },
+      { value: 'mix', label: 'Mix Hash', desc: 'Combinaison Dry Sift + IWE' },
+    ],
+  };
+
+  const state: { productType: string | null; hashSource: string | null; hashMethod: string | null } = {
+    productType: null,
+    hashSource: null,
+    hashMethod: null,
+  };
+
+  function renderChoiceGrid(question: QuestionKey) {
+    const container = document.querySelector<HTMLElement>(`.choice-grid[data-question="${question}"]`);
+    if (!container) return;
+    const selected = state[question];
+    container.innerHTML = QUESTIONS[question]
+      .map(
+        (opt) => `
+        <button type="button" class="choice-btn${opt.value === selected ? ' selected' : ''}" data-value="${opt.value}">
+          ${opt.label}<span>${opt.desc}</span>
+        </button>`
+      )
+      .join('');
+  }
+
+  function leafFromState(): string | null {
+    switch (state.productType) {
+      case 'kief':
+      case 'iweRaw':
+      case 'rosin':
+      case 'vape':
+      case 'topicals':
+        return state.productType;
+      case 'hash':
+        if (state.hashSource === 'fleur') return 'highyield';
+        if (state.hashSource === 'kiefAchete') return 'purchasedKief';
+        if (state.hashSource === 'trim') {
+          if (state.hashMethod === 'drysift') return 'drysift';
+          if (state.hashMethod === 'iwe') return 'iweHash';
+          if (state.hashMethod === 'mix') return 'mix';
+        }
+        return null;
+      default:
+        return null;
     }
+  }
 
-    const coaPerG = coaCost / batch;
+  function updateVisibility() {
+    const hashSourceCard = document.getElementById('q-hashSource') as HTMLElement;
+    const hashMethodCard = document.getElementById('q-hashMethod') as HTMLElement;
+    hashSourceCard.hidden = state.productType !== 'hash';
+    hashMethodCard.hidden = !(state.productType === 'hash' && state.hashSource === 'trim');
 
-    // Material table 1: Distillate / Trim / Flower need & cost (DrySift / IWE / High Yield)
-    const distNeed = batch * pctDistUsed;
-    const distCost1 = distNeed * distCost; // identical across DrySift / IWE / HY columns
+    renderChoiceGrid('productType');
+    renderChoiceGrid('hashSource');
+    renderChoiceGrid('hashMethod');
 
-    const trimNeedDS = batch * pctTrimUsed * 5;
-    const trimCostDS = trimNeedDS * trimCost;
-    const trimNeedIWE = batch * 10;
-    const trimCostIWE = trimNeedIWE * trimCost;
-
-    const flowerNeedHY = batch * pctFlowerUsed * 0.9999;
-    const flowerCostHY = flowerNeedHY * flowerCost;
-
-    // Labour
-    const lTumble = labor(trimNeedDS, num('rate_tumble'), num('cost_tumble'));
-    const lIWE = labor(trimNeedIWE, num('rate_iwe'), num('cost_iwe'));
-    const lGrindDS = labor(batch, num('rate_grindDS'), num('cost_grindDS'));
-    const lCureIWE = labor(batch, num('rate_cureIWE'), num('cost_cureIWE'));
-    const lShredHY = labor(flowerNeedHY, num('rate_shredHY'), num('cost_shredHY'));
-    const lGrindHY = labor(batch, num('rate_grindHY'), num('cost_grindHY'));
-    const lDistMix = labor(batch, num('rate_distMix'), num('cost_distMix'));
-    const lXaman = labor(batch, num('rate_xaman'), num('cost_xaman'));
-    const lPackaging = labor(unitsToPackage, num('rate_packaging'), num('cost_packaging'));
-    const lVapeFill = labor(batch, num('rate_vapeFill'), num('cost_vapeFill'));
-    const lAube = labor(batch, num('rate_aube'), num('cost_aube'));
-
-    // Rosin feed (independent of the material-table-1 trim %)
-    const rosinTrimNeed = batch / (0.1 * 0.6);
-    const rosinTrimCost = rosinTrimNeed * trimCost;
-    const rosinIweNeed = rosinTrimNeed * 0.1;
-    const lPress = labor(rosinIweNeed, num('rate_press'), num('cost_press'));
-
-    // Dry Sift Kief (row 6) & IWE (row 7) — needed before the Mix Hash table
-    const dsKiefBatch = (trimCostDS + lTumble.cost) * (1 + overhead);
-    const dsKiefPerG = dsKiefBatch / batch + coaPerG;
-
-    const iweBatch = (trimCostIWE + lIWE.cost) * (1 + overhead);
-    const iwePerG = iweBatch / batch + coaPerG;
-
-    // DrySift Hash — Trim to Finish (row 8)
-    const dsHashBatch = (distCost1 + trimCostDS + lTumble.cost + lGrindDS.cost) * (1 + overhead);
-    const dsHashPerG = dsHashBatch / batch + coaPerG;
-
-    // IWE Hash — Trim to Finish (row 9)
-    const iweHashBatch = (distCost1 + trimCostIWE + lIWE.cost + lCureIWE.cost) * (1 + overhead);
-    const iweHashPerG = iweHashBatch / batch + coaPerG;
-
-    // High Yield Hash (row 10)
-    const hyHashBatch = (distCost1 + flowerCostHY + lShredHY.cost + lGrindHY.cost) * (1 + overhead);
-    const hyHashPerG = hyHashBatch / batch + coaPerG;
-
-    // Mix Hash & Rosin/Vape feed material table
-    const mixDistUsed = batch * mixPctDist;
-    const mixDistCost = mixDistUsed * distCost;
-    const mixDrysiftUsed = batch * mixPctDrysift;
-    const mixDrysiftCost = mixDrysiftUsed * dsKiefPerG;
-    const mixIweUsed = batch * mixPctIwe;
-    const mixIweCost = mixIweUsed * iwePerG;
-    const mixTerpUsed = batch * mixPctTerp;
-    const mixTerpCost = mixTerpUsed * terpCost;
-    const mixTotal = mixDistCost + mixDrysiftCost + mixIweCost + mixTerpCost;
-
-    // Mix Hash (row 11) — reuses the Dry Sift grind labour rate
-    const mixHashBatch = (mixTotal + lGrindDS.cost) * (1 + overhead);
-    const mixHashPerG = mixHashBatch / batch + coaPerG;
-
-    // Rosin (row 12) — press + IWE-trim labour, overhead-loaded, plus a 10% loss buffer on feed trim cost
-    const rosinBatch = (lPress.cost + lIWE.cost) * (1 + overhead) + rosinTrimCost * 1.1;
-    const rosinPerG = rosinBatch / batch + coaPerG;
-
-    // THC Distillate + Terpenes / Vape (row 13)
-    const vapeBatch = (mixDistCost + lDistMix.cost) * (1 + overhead);
-    const vapePerG = vapeBatch / batch + coaPerG;
-
-    // Topicals (row 14)
-    const topicalsBatch = (lXaman.cost + topicalsCost) * (1 + overhead);
-    const topicalsPerG = topicalsBatch / batch + coaPerG;
-
-    // Hash from Purchased Kief
-    const pkDistWeight = batch * kiefDistPct;
-    const pkKiefWeight = batch - pkDistWeight - kiefCbgG - kiefCbnG;
-    const pkKiefCost = pkKiefWeight * kiefBuyPrice;
-    const pkDistCost = pkDistWeight * distCost;
-    const pkCbgCost = kiefCbgG * cbgcbnCost;
-    const pkCbnCost = kiefCbnG * cbgcbnCost;
-    const pkMaterialsTotal = pkKiefCost + pkDistCost + pkCbgCost + pkCbnCost;
-    const lKiefHash = labor(pkKiefWeight, num('rate_kiefHash'), num('cost_kiefHash'));
-    const pkBatch = (pkMaterialsTotal + lKiefHash.cost) * (1 + overhead);
-    const pkPerG = pkBatch / batch + coaPerG;
-
-    const products = [
-      { name: 'Dry Sift Kief', batchCost: dsKiefBatch, perG: dsKiefPerG },
-      { name: 'IWE', batchCost: iweBatch, perG: iwePerG },
-      { name: 'DrySift Hash — Trim to Finish', batchCost: dsHashBatch, perG: dsHashPerG },
-      { name: 'IWE Hash — Trim to Finish', batchCost: iweHashBatch, perG: iweHashPerG },
-      { name: 'High Yield Hash', batchCost: hyHashBatch, perG: hyHashPerG },
-      { name: 'Mix Hash (IWE & DrySift)', batchCost: mixHashBatch, perG: mixHashPerG },
-      { name: 'Rosin', batchCost: rosinBatch, perG: rosinPerG },
-      { name: 'THC Distillate + Terpenes (Vape)', batchCost: vapeBatch, perG: vapePerG },
-      { name: 'Topicals (Balm & Lotion)', batchCost: topicalsBatch, perG: topicalsPerG },
-      { name: 'Hash from Purchased Kief', batchCost: pkBatch, perG: pkPerG },
-    ];
-
-    // Reverse solve
-    const reverseSolve = margins.map((m) => {
-      if (pkKiefWeight === 0) return null;
-      const maxKief =
-        ((((targetSellPrice / (1 + m) - coaPerG) * batch) / (1 + overhead) -
-          lKiefHash.cost -
-          pkDistCost -
-          pkCbgCost -
-          pkCbnCost) /
-        pkKiefWeight);
-      return isFinite(maxKief) ? maxKief : null;
+    const leaf = leafFromState();
+    document.querySelectorAll<HTMLElement>('.leaf-card').forEach((el) => {
+      el.hidden = el.id !== `leaf-${leaf}`;
     });
-
-    return {
-      batch, overhead, coaPerG, margins,
-      products,
-      labour: {
-        'Trim → Dry Sift (Tumble)': lTumble,
-        'Trim → IWE': lIWE,
-        'Dry Sift → Hash (Grind)': lGrindDS,
-        'IWE → Hash final (Cure)': lCureIWE,
-        'High Yield — Déchiquetage': lShredHY,
-        'High Yield — Hash (Grind)': lGrindHY,
-        'IWE → Rosin (Presse)': lPress,
-        'Mélange Distillat + Terpènes': lDistMix,
-        'Xaman (Topiques)': lXaman,
-        "Kief → Hash (kief acheté)": lKiefHash,
-        'Emballage (info)': lPackaging,
-        'Remplissage vape (info)': lVapeFill,
-        "Main-d'œuvre AUBE (info)": lAube,
-      },
-      materials: {
-        distNeed, distCost1, trimNeedDS, trimCostDS, trimNeedIWE, trimCostIWE, flowerNeedHY, flowerCostHY,
-        mixDistUsed, mixDistCost, mixDrysiftUsed, mixDrysiftCost, mixIweUsed, mixIweCost, mixTerpUsed, mixTerpCost, mixTotal,
-        rosinTrimNeed, rosinTrimCost, rosinIweNeed,
-      },
-      purchasedKief: { pkDistWeight, pkKiefWeight, pkKiefCost, pkDistCost, pkCbgCost, pkCbnCost, pkMaterialsTotal },
-      reverseSolve,
-    };
+    render();
   }
 
-  function render() {
-    const out = document.getElementById('results');
-    if (!out) return;
-    const r: any = compute();
-
-    if (r.error) {
-      out.innerHTML = `<div class="warn-banner">${r.error}</div>`;
-      return;
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement)?.closest('.choice-btn') as HTMLElement | null;
+    if (!btn) return;
+    const grid = btn.closest<HTMLElement>('.choice-grid[data-question]');
+    if (!grid) return;
+    const key = grid.dataset.question as QuestionKey;
+    (state as any)[key] = btn.dataset.value;
+    if (key === 'productType') {
+      state.hashSource = null;
+      state.hashMethod = null;
     }
-
-    const marginHeaders = r.margins.map((m: number) => `<th>Vente @ ${fmtPct(m)}</th>`).join('');
-    const productRows = r.products
-      .map((p: any) => {
-        const sellCells = r.margins.map((m: number) => `<td>${fmtPerG(p.perG * (1 + m))}/g</td>`).join('');
-        return `<tr><td>${p.name}</td><td>${fmtMoney2(p.batchCost)}</td><td>${fmtPerG(p.perG)}/g</td>${sellCells}</tr>`;
-      })
-      .join('');
-
-    const labourRows = Object.entries(r.labour)
-      .map(([name, l]: [string, any]) => `<tr><td>${name}</td><td>${l.hrs.toFixed(2)} hr</td><td>${fmtMoney2(l.cost)}</td></tr>`)
-      .join('');
-
-    const m = r.materials;
-    const materialsRows = `
-      <tr><td>Distillat (base DrySift/IWE/HY)</td><td>${m.distNeed.toFixed(0)} g</td><td>${fmtMoney2(m.distCost1)}</td></tr>
-      <tr><td>Trim (Dry Sift)</td><td>${m.trimNeedDS.toFixed(0)} g</td><td>${fmtMoney2(m.trimCostDS)}</td></tr>
-      <tr><td>Trim (IWE)</td><td>${m.trimNeedIWE.toFixed(0)} g</td><td>${fmtMoney2(m.trimCostIWE)}</td></tr>
-      <tr><td>Fleur (High Yield)</td><td>${m.flowerNeedHY.toFixed(0)} g</td><td>${fmtMoney2(m.flowerCostHY)}</td></tr>
-      <tr><td>Trim (feed Rosin)</td><td>${m.rosinTrimNeed.toFixed(0)} g</td><td>${fmtMoney2(m.rosinTrimCost)}</td></tr>
-      <tr class="muted"><td>↳ dont IWE pressé (Rosin)</td><td>${m.rosinIweNeed.toFixed(0)} g</td><td>—</td></tr>
-    `;
-
-    const mixRows = `
-      <tr><td>Distillat</td><td>${m.mixDistUsed.toFixed(0)} g</td><td>${fmtMoney2(m.mixDistCost)}</td></tr>
-      <tr><td>DrySift Kief</td><td>${m.mixDrysiftUsed.toFixed(0)} g</td><td>${fmtMoney2(m.mixDrysiftCost)}</td></tr>
-      <tr><td>IWE</td><td>${m.mixIweUsed.toFixed(0)} g</td><td>${fmtMoney2(m.mixIweCost)}</td></tr>
-      <tr><td>Terpènes</td><td>${m.mixTerpUsed.toFixed(0)} g</td><td>${fmtMoney2(m.mixTerpCost)}</td></tr>
-      <tr><td><strong>Total matières Mix Hash</strong></td><td></td><td><strong>${fmtMoney2(m.mixTotal)}</strong></td></tr>
-    `;
-
-    const pk = r.purchasedKief;
-    const pkRows = `
-      <tr><td>Poids kief</td><td>${pk.pkKiefWeight.toFixed(0)} g</td><td>${fmtMoney2(pk.pkKiefCost)}</td></tr>
-      <tr><td>Poids distillat</td><td>${pk.pkDistWeight.toFixed(0)} g</td><td>${fmtMoney2(pk.pkDistCost)}</td></tr>
-      <tr><td>CBG</td><td></td><td>${fmtMoney2(pk.pkCbgCost)}</td></tr>
-      <tr><td>CBN</td><td></td><td>${fmtMoney2(pk.pkCbnCost)}</td></tr>
-      <tr><td><strong>Total matières</strong></td><td></td><td><strong>${fmtMoney2(pk.pkMaterialsTotal)}</strong></td></tr>
-    `;
-
-    const reverseRow = r.reverseSolve
-      .map((v: number | null) => `<td>${v === null ? 'n/d' : fmtPerG(v) + '/g'}</td>`)
-      .join('');
-
-    out.innerHTML = `
-      <div class="results-section card">
-        <h2>Coût &amp; prix de vente par produit</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th>Produit</th><th>Coût / lot</th><th>Coût / g</th>${marginHeaders}</tr></thead>
-            <tbody>${productRows}</tbody>
-          </table>
-        </div>
-        <p class="hint" style="margin-top:10px;">
-          Frais généraux ${fmtPct(r.overhead)} appliqués, plus ${fmtPerG(r.coaPerG)}/g de COA sur ${fmtMoney(r.batch)} de lot (${r.batch.toLocaleString('fr-CA')} g).
-        </p>
-      </div>
-
-      <div class="results-section card">
-        <h2>Décompte des matières premières</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th>Matière</th><th>Qté</th><th>Coût</th></tr></thead>
-            <tbody>${materialsRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="results-section card">
-        <h2>Composition Mix Hash / Vape (matière première)</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th>Matière</th><th>Qté</th><th>Coût</th></tr></thead>
-            <tbody>${mixRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="results-section card">
-        <h2>Décompte de la main-d'œuvre</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th>Procédé</th><th>Temps</th><th>Coût</th></tr></thead>
-            <tbody>${labourRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="results-section card">
-        <h2>Hash à partir de kief acheté — détail</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th>Poste</th><th>Qté</th><th>Coût</th></tr></thead>
-            <tbody>${pkRows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="results-section card">
-        <h2>Solveur inverse — prix maximal du kief par palier</h2>
-        <div style="overflow-x:auto;">
-          <table class="results">
-            <thead><tr><th></th>${marginHeaders}</tr></thead>
-            <tbody><tr><td>Prix max. kief</td>${reverseRow}</tr></tbody>
-          </table>
-        </div>
-        <p class="hint" style="margin-top:10px;">« n/d » signifie que le prix de vente cible est trop bas pour couvrir la main-d'œuvre, le COA et les frais généraux, même à coût de kief nul.</p>
-      </div>
-    `;
-  }
+    if (key === 'hashSource') {
+      state.hashMethod = null;
+    }
+    updateVisibility();
+  });
 
   document.addEventListener('input', (e) => {
-    if ((e.target as HTMLElement)?.closest('.calc-inputs')) render();
+    if ((e.target as HTMLElement)?.closest('.calc-wizard')) render();
   });
+
+  function render() {
+    const out = document.getElementById('result');
+    if (!out) return;
+    const leafKey = leafFromState();
+    if (!leafKey) {
+      out.innerHTML = `<div class="result-placeholder">👆 Répondez aux questions ci-dessus pour voir le coût et le prix de vente.</div>`;
+      return;
+    }
+    const g = generalParams();
+    if (g.batch <= 0) {
+      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      return;
+    }
+    const leaf = LEAVES[leafKey];
+    const result = leaf.compute(g);
+
+    const marginChips = g.margins
+      .map(
+        (m) => `
+        <div class="result-margin-chip">
+          <span class="result-margin-pct">${fmtPct(m)}</span>
+          <span class="result-margin-price">${fmtPerG(result.perG * (1 + m))}/g</span>
+        </div>`
+      )
+      .join('');
+
+    const breakdownLines = result.lines
+      .map((l) => `<div class="breakdown-line"><span class="label">${l.label}</span><span>${fmtMoney2(l.value)}</span></div>`)
+      .join('');
+
+    if (leafKey === 'purchasedKief') {
+      const kiefWeight = g.batch - g.batch * pct('pk_distPct') - num('pk_cbgG') - num('pk_cbnG');
+      const distCostTotal = g.batch * pct('pk_distPct') * num('pk_distCost');
+      const cbgCost = num('pk_cbgG') * num('pk_cbgcbnCost');
+      const cbnCost = num('pk_cbnG') * num('pk_cbgcbnCost');
+      const lKiefHash = labor(kiefWeight, num('pk_rateKiefHash'), num('pk_costKiefHash'));
+      const targetSellPrice = num('pk_targetSellPrice');
+      const cells = g.margins
+        .map((m) => {
+          if (kiefWeight === 0) return '<td>n/d</td>';
+          const maxKief =
+            ((((targetSellPrice / (1 + m) - g.coaPerG) * g.batch) / (1 + g.overhead) - lKiefHash.cost - distCostTotal - cbgCost - cbnCost) /
+              kiefWeight);
+          return `<td>${isFinite(maxKief) ? fmtPerG(maxKief) + '/g' : 'n/d'}</td>`;
+        })
+        .join('');
+      const headers = g.margins.map((m) => `<th>${fmtPct(m)}</th>`).join('');
+      const reverseSolveEl = document.getElementById('reverseSolveResult');
+      if (reverseSolveEl) {
+        reverseSolveEl.innerHTML = `
+          <table class="reverse-table">
+            <thead><tr>${headers}</tr></thead>
+            <tbody><tr>${cells}</tr></tbody>
+          </table>`;
+      }
+    }
+
+    out.innerHTML = `
+      <div class="card result-hero">
+        <div class="result-hero-title">Résultat</div>
+        <div class="result-hero-name">${leaf.label}</div>
+        <div class="result-stats">
+          <div class="result-stat">
+            <span class="result-stat-label">Coût / lot</span>
+            <span class="result-stat-value">${fmtMoney2(result.batchCost)}</span>
+          </div>
+          <div class="result-stat accent">
+            <span class="result-stat-label">Coût / g</span>
+            <span class="result-stat-value">${fmtPerG(result.perG)}</span>
+          </div>
+        </div>
+        <div class="result-margins-label">Prix de vente suggéré par palier de marge</div>
+        <div class="result-margins">${marginChips}</div>
+        <details class="result-breakdown">
+          <summary>Voir le détail du calcul</summary>
+          <div class="details-body">${breakdownLines}</div>
+        </details>
+      </div>
+    `;
+  }
+
+  renderChoiceGrid('productType');
+  renderChoiceGrid('hashSource');
+  renderChoiceGrid('hashMethod');
   render();
 </script>
