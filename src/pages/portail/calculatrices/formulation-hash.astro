@@ -10,106 +10,198 @@ if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
 ---
-<PortailLayout title="Calculatrice de formulation de Hash (SQDC)" staffName={staff.full_name}>
+<PortailLayout title="Calculatrice de formulation de Hash" staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
         ← Retour aux calculatrices
       </a>
     </div>
-    <h1>Formulation de Hash (SQDC)</h1>
-    <p style="color: var(--p-muted); margin-bottom: 24px;">
-      Entrez les puissances réelles (COA) de ce lot — la recette se recalcule pour respecter les cibles
-      de conformité avec le moins d'isolat/terpène possible. Basé sur le modèle « Oaziz Hash Formulation Calculator ».
+    <h1>Formulation de Hash</h1>
+    <p style="color: var(--p-muted); margin-bottom: 20px;">
+      Basé sur le modèle « Oaziz Hash Formulation Calculator ».
     </p>
 
-    <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts &amp; puissances des matières premières</h2>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="kiefCost">Coût kief ($/g)</label>
-          <input type="number" id="kiefCost" value="0.80" step="0.01" />
-        </div>
-        <div class="form-row">
-          <label for="kiefThc">Puissance THC du kief, ce lot — COA (%)</label>
-          <input type="number" id="kiefThc" value="33.5" step="0.1" />
-        </div>
-      </div>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="distCost">Coût distillat CBD ($/g)</label>
-          <input type="number" id="distCost" value="1.00" step="0.01" />
-        </div>
-        <div class="form-row">
-          <label for="distCbd">Puissance CBD du distillat, ce lot — COA (%)</label>
-          <input type="number" id="distCbd" value="84.5" step="0.1" />
-        </div>
-      </div>
-      <div class="form-row">
-        <label for="isolateCost">Coût isolat CBN/CBG ($/g)</label>
-        <input type="number" id="isolateCost" value="4.50" step="0.01" />
-      </div>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="terpCostMl">Coût terpène ($/mL)</label>
-          <input type="number" id="terpCostMl" value="30" step="0.5" />
-        </div>
-        <div class="form-row">
-          <label for="terpDensity">Densité terpène (g/mL)</label>
-          <input type="number" id="terpDensity" value="0.90" step="0.01" />
-        </div>
-      </div>
-      <p class="hint">⚠ Densité estimée — confirmer avec le fournisseur, c'est le plus gros facteur de variation de coût si un terpène est utilisé.</p>
+    <div class="tab-bar" role="tablist">
+      <button type="button" class="tab-btn selected" data-tab="sqdc">SQDC — dilution</button>
+      <button type="button" class="tab-btn" data-tab="dom">DOM — boost</button>
     </div>
 
-    <div class="card" style="margin-bottom: 16px;">
-      <h2>Cibles de conformité</h2>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="maxThc">THC max autorisé, produit fini (%)</label>
-          <input type="number" id="maxThc" value="29.5" step="0.1" />
+    <div id="tab-sqdc">
+      <p style="color: var(--p-muted); margin-bottom: 24px;">
+        Le kief (33–34 % THC) dépasse déjà le cap SQDC — le distillat CBD, l'isolat et le terpène diluent
+        vers le bas. Entrez les puissances réelles (COA) de ce lot ; la recette se recalcule pour respecter
+        les cibles avec le moins d'isolat/terpène possible.
+      </p>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Coûts &amp; puissances des matières premières</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="kiefCost">Coût kief ($/g)</label>
+            <input type="number" id="kiefCost" value="0.80" step="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="kiefThc">Puissance THC du kief, ce lot — COA (%)</label>
+            <input type="number" id="kiefThc" value="33.5" step="0.1" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="distCost">Coût distillat CBD ($/g)</label>
+            <input type="number" id="distCost" value="1.00" step="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="distCbd">Puissance CBD du distillat, ce lot — COA (%)</label>
+            <input type="number" id="distCbd" value="84.5" step="0.1" />
+          </div>
         </div>
         <div class="form-row">
-          <label for="maxCbd">CBD max autorisé, produit fini — cap (%)</label>
-          <input type="number" id="maxCbd" value="4.0" step="0.1" />
+          <label for="isolateCost">Coût isolat CBN/CBG ($/g)</label>
+          <input type="number" id="isolateCost" value="4.50" step="0.01" />
+        </div>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="terpCostMl">Coût terpène ($/mL)</label>
+            <input type="number" id="terpCostMl" value="30" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="terpDensity">Densité terpène (g/mL)</label>
+            <input type="number" id="terpDensity" value="0.90" step="0.01" />
+          </div>
+        </div>
+        <p class="hint">⚠ Densité estimée — confirmer avec le fournisseur, c'est le plus gros facteur de variation de coût si un terpène est utilisé.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Cibles de conformité</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="maxThc">THC max autorisé, produit fini (%)</label>
+            <input type="number" id="maxThc" value="29.5" step="0.1" />
+          </div>
+          <div class="form-row">
+            <label for="maxCbd">CBD max autorisé, produit fini — cap (%)</label>
+            <input type="number" id="maxCbd" value="4.0" step="0.1" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="cbdFillLevel">Niveau de remplissage CBD visé (%)</label>
+            <input type="number" id="cbdFillLevel" value="3.75" step="0.05" />
+          </div>
+          <div class="form-row">
+            <label for="terpFraction">Fraction de terpène à utiliser (% du lot)</label>
+            <input type="number" id="terpFraction" value="0" step="0.1" />
+          </div>
+        </div>
+        <p class="hint">Réglez le remplissage CBD = au cap pour minimiser le coût d'isolat ; baissez-le pour une marge de sécurité.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Lot &amp; prix</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="batchKg">Taille du lot (kg)</label>
+            <input type="number" id="batchKg" value="50" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="sellPrice">Prix de vente ($/g, produit fini)</label>
+            <input type="number" id="sellPrice" value="1.50" step="0.01" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="currentCost">Coût actuel tout compris ($/g) — méthode trim → kief, référence</label>
+          <input type="number" id="currentCost" value="0.97" step="0.01" />
         </div>
       </div>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="cbdFillLevel">Niveau de remplissage CBD visé (%)</label>
-          <input type="number" id="cbdFillLevel" value="3.75" step="0.05" />
-        </div>
-        <div class="form-row">
-          <label for="terpFraction">Fraction de terpène à utiliser (% du lot)</label>
-          <input type="number" id="terpFraction" value="0" step="0.1" />
-        </div>
-      </div>
-      <p class="hint">Réglez le remplissage CBD = au cap pour minimiser le coût d'isolat ; baissez-le pour une marge de sécurité.</p>
+
+      <div id="result-sqdc"></div>
     </div>
 
-    <div class="card" style="margin-bottom: 16px;">
-      <h2>Lot &amp; prix</h2>
-      <div class="two-col">
-        <div class="form-row">
-          <label for="batchKg">Taille du lot (kg)</label>
-          <input type="number" id="batchKg" value="50" step="1" />
-        </div>
-        <div class="form-row">
-          <label for="sellPrice">Prix de vente ($/g, produit fini)</label>
-          <input type="number" id="sellPrice" value="1.50" step="0.01" />
-        </div>
-      </div>
-      <div class="form-row">
-        <label for="currentCost">Coût actuel tout compris ($/g) — méthode trim → kief, référence</label>
-        <input type="number" id="currentCost" value="0.97" step="0.01" />
-      </div>
-    </div>
+    <div id="tab-dom" hidden>
+      <p style="color: var(--p-muted); margin-bottom: 24px;">
+        Mélange de <strong>boost</strong>, pas de dilution : le kief (33–34 % THC) est sous la cible, donc
+        du distillat THC (bien plus puissant) est ajouté pour monter la moyenne — l'inverse du hash SQDC.
+      </p>
 
-    <div id="result"></div>
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Coûts &amp; puissances des matières premières</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="dom_kiefCost">Coût kief ($/g)</label>
+            <input type="number" id="dom_kiefCost" value="0.80" step="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="dom_kiefThc">Puissance THC du kief, ce lot — COA (%)</label>
+            <input type="number" id="dom_kiefThc" value="33.5" step="0.1" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="dom_distCost">Coût distillat THC ($/g)</label>
+            <input type="number" id="dom_distCost" value="1.60" step="0.01" />
+          </div>
+          <div class="form-row">
+            <label for="dom_distThc">Puissance THC du distillat, ce lot — COA (%)</label>
+            <input type="number" id="dom_distThc" value="84" step="0.1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Cibles de conformité / spécification</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="dom_thcTarget">THC cible de conception (%)</label>
+            <input type="number" id="dom_thcTarget" value="48" step="0.5" />
+          </div>
+          <div class="form-row">
+            <label for="dom_maxThc">THC max autorisé, produit fini — cap (%)</label>
+            <input type="number" id="dom_maxThc" value="50" step="0.5" />
+          </div>
+        </div>
+        <p class="hint">Une cible plus basse = plus de kief (bon marché), moins de distillat (cher) = coût plus bas.</p>
+        <p class="hint">CBD max autorisé, produit fini — cap : 10 %. Toujours respecté : ni le kief ni le distillat THC ne portent de CBD significatif.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Lot &amp; prix</h2>
+        <div class="two-col">
+          <div class="form-row">
+            <label for="dom_batchKg">Taille du lot (kg)</label>
+            <input type="number" id="dom_batchKg" value="10" step="1" />
+          </div>
+          <div class="form-row">
+            <label for="dom_sellPrice">Prix de vente ($/g, produit fini) — optionnel</label>
+            <input type="number" id="dom_sellPrice" value="0" step="0.01" />
+          </div>
+        </div>
+      </div>
+
+      <div id="result-dom"></div>
+    </div>
   </div>
 </PortailLayout>
 
 <style is:global>
+  .tab-bar { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--p-border); }
+  .tab-btn {
+    border: none;
+    background: none;
+    padding: 10px 4px;
+    margin-bottom: -1px;
+    font-family: inherit;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--p-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn + .tab-btn { margin-left: 12px; }
+  .tab-btn:hover { color: var(--p-text); }
+  .tab-btn.selected { color: var(--p-accent); border-bottom-color: #d05826; }
+
   .formulation-recipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .formulation-ingredient { background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 12px 14px; }
   .formulation-ingredient-name { font-size: .78rem; font-weight: 600; color: var(--p-muted); margin-bottom: 6px; }
@@ -142,6 +234,11 @@ if (!staff) {
   table.scenario-table th:first-child, table.scenario-table td:first-child { text-align: left; white-space: normal; min-width: 150px; }
   table.scenario-table th { font-weight: 600; color: var(--p-muted); font-size: .68rem; text-transform: uppercase; }
   table.scenario-table tbody tr.benchmark-row { background: var(--p-bg); font-style: italic; }
+
+  table.batch-compare { width: 100%; border-collapse: collapse; font-size: .87rem; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  table.batch-compare th, table.batch-compare td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--p-border); }
+  table.batch-compare th:first-child, table.batch-compare td:first-child { text-align: left; }
+  table.batch-compare th { font-weight: 600; color: var(--p-muted); font-size: .72rem; text-transform: uppercase; }
 </style>
 
 <script>
@@ -164,6 +261,18 @@ if (!staff) {
   const fmtPct2 = (n: number) => (isFinite(n) ? (n * 100).toFixed(2) + '%' : '—');
   const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
 
+  // ---------- Tabs ----------
+  document.querySelectorAll<HTMLElement>('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll<HTMLElement>('.tab-btn').forEach((b) => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      const tab = btn.dataset.tab;
+      (document.getElementById('tab-sqdc') as HTMLElement).hidden = tab !== 'sqdc';
+      (document.getElementById('tab-dom') as HTMLElement).hidden = tab !== 'dom';
+    });
+  });
+
+  // ---------- SQDC (dilution blend) ----------
   type Recipe = {
     kiefFraction: number;
     distFraction: number;
@@ -208,8 +317,8 @@ if (!staff) {
     { label: 'Favorable — kief 33%, dist 86%', kiefThc: 0.33, distCbd: 0.86 },
   ];
 
-  function render() {
-    const out = document.getElementById('result');
+  function renderSqdc() {
+    const out = document.getElementById('result-sqdc');
     if (!out) return;
 
     const kiefCost = num('kiefCost');
@@ -374,8 +483,120 @@ if (!staff) {
     `;
   }
 
+  // ---------- DOM (boost blend) ----------
+  function renderDom() {
+    const out = document.getElementById('result-dom');
+    if (!out) return;
+
+    const kiefCost = num('dom_kiefCost');
+    const kiefThc = pct('dom_kiefThc');
+    const distCost = num('dom_distCost');
+    const distThc = pct('dom_distThc');
+
+    const thcTarget = pct('dom_thcTarget');
+    const maxThc = pct('dom_maxThc');
+
+    const batchKg = num('dom_batchKg');
+    const batchG = batchKg * 1000;
+    const sellPrice = num('dom_sellPrice');
+
+    if (batchKg <= 0) {
+      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      return;
+    }
+
+    const denom = distThc - kiefThc;
+    const kiefFraction = denom !== 0 ? (distThc - thcTarget) / denom : NaN;
+    const distFraction = 1 - kiefFraction;
+    const feasible = isFinite(kiefFraction) && kiefFraction >= 0 && kiefFraction <= 1;
+
+    const resultingThc = kiefFraction * kiefThc + distFraction * distThc;
+    const resultingCbd = 0;
+
+    const kiefMass = kiefFraction * batchG;
+    const distMass = distFraction * batchG;
+    const kiefCostTotal = kiefMass * kiefCost;
+    const distCostTotal = distMass * distCost;
+    const totalCost = kiefCostTotal + distCostTotal;
+    const costPerG = totalCost / batchG;
+
+    const revenue = batchG * sellPrice;
+    const profit = revenue - totalCost;
+    const marginHtml = sellPrice === 0 ? 'Entrez un prix de vente ci-dessus' : fmtPct1(profit / revenue);
+
+    const feasibilityHtml = feasible
+      ? `<div class="feasibility-banner feasibility-ok">✓ Recette faisable</div>`
+      : `<div class="feasibility-banner feasibility-bad">⚠ INFAISABLE — la cible THC doit se situer entre la puissance du kief et celle du distillat (kief &lt; cible &lt; distillat).</div>`;
+
+    const capHtml = resultingThc > maxThc
+      ? `<div class="feasibility-banner feasibility-bad">⚠ Dépasse le cap de ${fmtPct1(maxThc)} THC — augmentez le cap ou baissez la cible THC.</div>`
+      : '';
+
+    const kief8 = kiefFraction * 8000;
+    const dist8 = distFraction * 8000;
+    const cost8 = costPerG * 8000;
+    const kief10 = kiefFraction * 10000;
+    const dist10 = distFraction * 10000;
+    const cost10 = costPerG * 10000;
+
+    out.innerHTML = `
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Recette (minimisant le coût)</h2>
+        ${feasibilityHtml}
+        ${capHtml}
+        <div class="formulation-recipe">
+          <div class="formulation-ingredient">
+            <div class="formulation-ingredient-name">Kief</div>
+            <div class="formulation-ingredient-pct">${fmtPct1(kiefFraction)}</div>
+            <div class="formulation-ingredient-mass">${fmtG(kiefMass)} · ${fmtMoney2(kiefCostTotal)}</div>
+          </div>
+          <div class="formulation-ingredient">
+            <div class="formulation-ingredient-name">Distillat THC</div>
+            <div class="formulation-ingredient-pct">${fmtPct1(distFraction)}</div>
+            <div class="formulation-ingredient-mass">${fmtG(distMass)} · ${fmtMoney2(distCostTotal)}</div>
+          </div>
+        </div>
+        <div class="sanity-row">
+          <div class="sanity-item">THC résultant (vérification)<strong>${fmtPct2(resultingThc)}</strong></div>
+          <div class="sanity-item">CBD résultant (assumé ~0%)<strong>${fmtPct2(resultingCbd)}</strong></div>
+          <div class="sanity-item">Coût total des matières<strong>${fmtMoney2(totalCost)}</strong></div>
+          <div class="sanity-item">Coût / gramme, produit fini<strong>${fmtPerG(costPerG)}</strong></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Économie</h2>
+        <div class="econ-compare" style="grid-template-columns: 1fr;">
+          <div class="econ-col new-method">
+            <div class="econ-line"><span>Revenu</span><span>${fmtMoney0(revenue)}</span></div>
+            <div class="econ-line"><span>Coût des matières</span><span>${fmtMoney0(totalCost)}</span></div>
+            <div class="econ-line total"><span>Profit brut</span><span>${fmtMoney0(profit)}</span></div>
+            <div class="econ-line"><span>Marge brute</span><span>${marginHtml}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Comparaison 8 kg vs 10 kg</h2>
+        <p class="hint" style="margin-bottom: 12px;">Même ratio de recette à la cible THC ci-dessus, simplement mis à l'échelle.</p>
+        <table class="batch-compare">
+          <thead><tr><th></th><th>Lot de 8 kg</th><th>Lot de 10 kg</th></tr></thead>
+          <tbody>
+            <tr><td>Kief (g)</td><td>${fmtG(kief8)}</td><td>${fmtG(kief10)}</td></tr>
+            <tr><td>Distillat THC (g)</td><td>${fmtG(dist8)}</td><td>${fmtG(dist10)}</td></tr>
+            <tr><td>Coût / gramme</td><td>${fmtPerG(costPerG)}</td><td>${fmtPerG(costPerG)}</td></tr>
+            <tr><td>Coût total des matières</td><td>${fmtMoney2(cost8)}</td><td>${fmtMoney2(cost10)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   document.addEventListener('input', (e) => {
-    if ((e.target as HTMLElement)?.closest('.calc-wizard')) render();
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    renderSqdc();
+    renderDom();
   });
-  render();
+  renderSqdc();
+  renderDom();
 </script>
