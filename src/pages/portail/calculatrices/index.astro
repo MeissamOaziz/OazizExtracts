@@ -1,0 +1,52 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+
+const calculators = [
+  {
+    href: '/portail/calculatrices/cout-production',
+    title: 'Coût de production',
+    desc: "Décompose le coût complet d'un lot (matières, main-d'œuvre, frais généraux, COA) et calcule le prix de vente par palier de marge — Kief, IWE, Hash, Rosin, Vape, Topiques et Hash à partir de kief acheté.",
+  },
+];
+---
+<PortailLayout title="Calculatrices" staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+      ← Retour au tableau de bord
+    </a>
+  </div>
+  <h1>Calculatrices</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">
+    Outils internes de calcul de coûts et de prix.
+  </p>
+
+  <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+    {calculators.map((calc) => (
+      <a href={calc.href} class="card calc-card">
+        <h2 style="margin-bottom: 8px;">{calc.title}</h2>
+        <p style="color: var(--p-muted); font-size: .9rem; margin: 0;">{calc.desc}</p>
+      </a>
+    ))}
+  </div>
+</PortailLayout>
+<style>
+  .calc-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .calc-card:hover {
+    border-color: var(--p-accent);
+    box-shadow: 0 2px 6px rgba(16,24,40,.08);
+  }
+</style>

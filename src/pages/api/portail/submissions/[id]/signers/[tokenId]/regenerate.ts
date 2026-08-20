@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
   if (!staff) return redirect('/portail/connexion');
 
   const { id, tokenId } = params;
-  if (!id || !tokenId) return redirect('/portail');
+  if (!id || !tokenId) return redirect('/portail/formulaires');
 
   const backTo = `/portail/demande/${id}`;
 

@@ -155,8 +155,14 @@ const { title, staffName = null, minimal = false } = Astro.props;
           <div style="display:flex;align-items:center;gap:16px;">
             {!minimal && (
               <nav class="portail-nav">
-                <a href="/portail" class={Astro.url.pathname === '/portail' ? 'active' : ''}>Tableau de bord</a>
-                <a href="/portail/nouvelle" class={Astro.url.pathname === '/portail/nouvelle' ? 'active' : ''}>Nouvelle demande</a>
+                <a href="/portail" class={Astro.url.pathname === '/portail' ? 'active' : ''}>Accueil</a>
+                <a href="/portail/formulaires" class={
+                  Astro.url.pathname.startsWith('/portail/formulaires') ||
+                  Astro.url.pathname.startsWith('/portail/demande') ||
+                  Astro.url.pathname === '/portail/nouvelle'
+                    ? 'active' : ''
+                }>Formulaires R&D</a>
+                <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>Calculatrices</a>
               </nav>
             )}
             <span class="portail-user">{staffName}</span>

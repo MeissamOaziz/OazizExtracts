@@ -41,8 +41,8 @@ const today = new Date().toISOString().slice(0, 10);
 ---
 <PortailLayout title="Nouvelle demande" staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
-    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour au tableau de bord
+    <a href="/portail/formulaires" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+      ← Retour aux formulaires
     </a>
   </div>
   <h1>Nouvelle demande d'échantillon</h1>
@@ -154,7 +154,7 @@ const today = new Date().toISOString().slice(0, 10);
       <button type="submit" name="action" value="save_draft" class="btn btn-primary">
         Enregistrer le brouillon
       </button>
-      <a href="/portail" class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
+      <a href="/portail/formulaires" class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
     </div>
   </form>
 </PortailLayout>

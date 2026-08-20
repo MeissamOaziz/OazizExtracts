@@ -9,7 +9,7 @@ const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
 
 const { id } = Astro.params;
-if (!id) return Astro.redirect('/portail');
+if (!id) return Astro.redirect('/portail/formulaires');
 
 // Load the submission we're editing.
 const { data: submission } = await supabase

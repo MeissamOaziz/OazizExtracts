@@ -14,7 +14,7 @@ const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
 
 const { id } = Astro.params;
-if (!id) return Astro.redirect('/portail');
+if (!id) return Astro.redirect('/portail/formulaires');
 
 // Session identifies WHICH pending signer — no token needed. Use admin client
 // because signer_tokens is RLS-denied to all client roles.
@@ -45,7 +45,7 @@ const { data: subRow } = await admin
   `)
   .eq('id', id).maybeSingle();
 
-if (!subRow) return Astro.redirect('/portail');
+if (!subRow) return Astro.redirect('/portail/formulaires');
 
 const { data: partRows } = await admin
   .from('submission_participants')

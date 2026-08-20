@@ -74,153 +74,51 @@ if (!staff) {
   });
 }
 
-const { data: submissions } = await supabase
+const { count: pendingCount } = await supabase
   .from('submissions')
-  .select(`
-    id, status, form_date, product_name, product_type, quantity, created_at, created_by_email,
-    initiator_staff_id
-  `)
-  .order('created_at', { ascending: false })
-  .limit(50);
+  .select('id', { count: 'exact', head: true })
+  .in('status', ['draft', 'sent', 'signing']);
 
-const submissionIds = (submissions ?? []).map((s) => s.id);
-type SignerRow = { submission_id: string; status: string };
-type ParticipantRow = { submission_id: string };
-type DocRow = { submission_id: string; id: string; kind: string; pdf_path: string };
-
-let signerRows: SignerRow[] = [];
-let participantRows: ParticipantRow[] = [];
-let docRows: DocRow[] = [];
-if (submissionIds.length > 0) {
-  const [{ data: sr }, { data: pr }, { data: dr }] = await Promise.all([
-    supabase.from('v_signers_public').select('submission_id, status').in('submission_id', submissionIds),
-    supabase.from('submission_participants').select('submission_id').in('submission_id', submissionIds),
-    supabase.from('documents').select('submission_id, id, kind, pdf_path').in('submission_id', submissionIds),
-  ]);
-  signerRows = (sr ?? []) as SignerRow[];
-  participantRows = (pr ?? []) as ParticipantRow[];
-  docRows = (dr ?? []) as DocRow[];
-}
-
-// Which submissions have a pending signer_token for the CURRENT user?
-// signer_tokens is RLS-denied so we go through the admin client.
-import { getAdminClient } from '../../lib/supabase';
-const admin = getAdminClient();
-const pendingSignSet = new Set<string>();
-if (submissionIds.length > 0) {
-  const { data: myPending } = await admin
-    .from('signer_tokens')
-    .select('submission_id')
-    .eq('staff_id', staff.id)
-    .is('completed_at', null)
-    .in('submission_id', submissionIds);
-  for (const row of myPending ?? []) pendingSignSet.add(row.submission_id);
-}
-
-const signerBySubmission = new Map<string, { signed: number; total: number }>();
-for (const row of signerRows) {
-  const cur = signerBySubmission.get(row.submission_id) ?? { signed: 0, total: 0 };
-  cur.total += 1;
-  if (row.status === 'signed') cur.signed += 1;
-  signerBySubmission.set(row.submission_id, cur);
-}
-
-const participantsBySubmission = new Map<string, number>();
-for (const row of participantRows) {
-  participantsBySubmission.set(row.submission_id, (participantsBySubmission.get(row.submission_id) ?? 0) + 1);
-}
-
-const docsBySubmission = new Map<string, DocRow[]>();
-for (const row of docRows) {
-  if (!docsBySubmission.has(row.submission_id)) docsBySubmission.set(row.submission_id, []);
-  docsBySubmission.get(row.submission_id)!.push(row);
-}
-
-const statusLabel: Record<string, string> = {
-  draft: 'Brouillon',
-  sent: 'Envoyé',
-  signing: 'En signature',
-  complete: 'Complet',
-  finalized: 'Finalisé',
-  cancelled: 'Annulé',
-};
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
+const sections = [
+  {
+    href: '/portail/formulaires',
+    title: 'Formulaires R&D',
+    desc: 'Demandes d\'échantillon, consentement, signatures et documents.',
+    tag: pendingCount ? `${pendingCount} en cours` : null,
+  },
+  {
+    href: '/portail/calculatrices',
+    title: 'Calculatrices',
+    desc: 'Coût de production, prix de vente par palier de marge, solveur inverse.',
+    tag: null,
+  },
+];
 ---
-<PortailLayout title="Tableau de bord" staffName={staff.full_name}>
-  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px;">
-    <div>
-      <h1>Bonjour, {staff.full_name.split(' ')[0]}.</h1>
-      <p style="color: var(--p-muted);">Suivi de vos demandes d'échantillon.</p>
-    </div>
-    <a href="/portail/nouvelle" class="btn btn-primary">+ Nouvelle demande</a>
-  </div>
+<PortailLayout title="Accueil" staffName={staff.full_name}>
+  <h1>Bonjour, {staff.full_name.split(' ')[0]}.</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">Choisissez une section.</p>
 
-  <div class="card" style="padding: 0;">
-    {(!submissions || submissions.length === 0) ? (
-      <div class="empty-state">
-        <p style="margin-bottom: 12px;">Aucune demande pour le moment.</p>
-        <a href="/portail/nouvelle" class="btn btn-primary">Créer la première</a>
-      </div>
-    ) : (
-      <table class="data">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Produit</th>
-            <th>Participants</th>
-            <th>Signatures</th>
-            <th>Statut</th>
-            <th>Document</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {submissions.map((s) => {
-            const sig = signerBySubmission.get(s.id);
-            const partCount = participantsBySubmission.get(s.id) ?? 0;
-            const docs = docsBySubmission.get(s.id) ?? [];
-            return (
-              <tr>
-                <td>{formatDate(s.form_date)}</td>
-                <td>
-                  <a href={`/portail/demande/${s.id}`}>
-                    <strong>{s.product_name || '(sans nom)'}</strong>
-                  </a>
-                  <div style="color: var(--p-muted); font-size: .82rem;">{s.product_type}</div>
-                </td>
-                <td>{partCount}</td>
-                <td>
-                  {sig ? `${sig.signed} / ${sig.total}` : (s.status === 'draft' ? '—' : '0 / 0')}
-                </td>
-                <td>
-                  <span class={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
-                </td>
-                <td>
-                  {['finalized', 'complete', 'signing', 'sent'].includes(s.status) ? (
-                    <a href={`/api/portail/documents/${s.id}/download`} class="btn btn-secondary" style="font-size: .78rem; padding: 4px 10px;" title="Télécharger le PDF">
-                      ⬇ PDF
-                    </a>
-                  ) : (
-                    <span style="color: var(--p-muted); font-size: .82rem;">—</span>
-                  )}
-                </td>
-                <td style="text-align: right;">
-                  {pendingSignSet.has(s.id) && (
-                    <a href={`/portail/demande/${s.id}/signer`} class="btn btn-primary" style="font-size: .82rem; padding: 6px 14px; margin-right: 8px;">
-                      Signer
-                    </a>
-                  )}
-                  <a href={`/portail/demande/${s.id}`} style="font-size: .85rem;">Ouvrir →</a>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    )}
+  <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+    {sections.map((s) => (
+      <a href={s.href} class="card hub-card">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom: 8px;">
+          <h2 style="margin-bottom: 0;">{s.title}</h2>
+          {s.tag && <span class="badge badge-sent">{s.tag}</span>}
+        </div>
+        <p style="color: var(--p-muted); font-size: .9rem; margin: 0;">{s.desc}</p>
+      </a>
+    ))}
   </div>
 </PortailLayout>
+<style>
+  .hub-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .hub-card:hover {
+    border-color: var(--p-accent);
+    box-shadow: 0 2px 6px rgba(16,24,40,.08);
+  }
+</style>

@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ params, cookies, redirect, request }) => 
   if (!staff) return redirect('/portail/connexion');
 
   const { id } = params;
-  if (!id) return redirect('/portail');
+  if (!id) return redirect('/portail/formulaires');
 
   // Clean up any finalized PDF in Storage (RLS-guarded delete on the row alone
   // would orphan it). Ignore errors — the row delete is authoritative.
@@ -37,5 +37,5 @@ export const POST: APIRoute = async ({ params, cookies, redirect, request }) => 
     metadata: { submission_id: id },
   });
 
-  return redirect('/portail?info=deleted', 303);
+  return redirect('/portail/formulaires?info=deleted', 303);
 };

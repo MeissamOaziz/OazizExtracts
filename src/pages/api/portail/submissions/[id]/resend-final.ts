@@ -13,7 +13,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
   if (!staff) return redirect('/portail/connexion');
 
   const { id } = params;
-  if (!id) return redirect('/portail');
+  if (!id) return redirect('/portail/formulaires');
 
   // Guard: creator only, status must be finalized.
   const { data: sub } = await supabase
@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
     .select('id, status, created_by_email')
     .eq('id', id)
     .maybeSingle();
-  if (!sub) return redirect('/portail?error=not_found', 303);
+  if (!sub) return redirect('/portail/formulaires?error=not_found', 303);
   if (sub.created_by_email !== staff.email) {
     return redirect(`/portail/demande/${id}?error=not_creator`, 303);
   }

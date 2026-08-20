@@ -26,7 +26,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
   if (!staff) return redirect('/portail/connexion');
 
   const { id } = params;
-  if (!id) return redirect('/portail');
+  if (!id) return redirect('/portail/formulaires');
 
   // Load submission — RLS lets any authenticated user read, so this succeeds if it exists.
   const { data: submission, error: subErr } = await supabase
