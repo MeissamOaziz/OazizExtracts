@@ -1,0 +1,255 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+---
+<PortailLayout title="Export Suisse — Kief / Blocs pressés" staffName={staff.full_name}>
+  <div class="calc-wizard">
+    <div style="margin-bottom: 20px;">
+      <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour aux calculatrices
+      </a>
+    </div>
+    <h1>Export Suisse — Kief / Blocs pressés</h1>
+    <p style="color: var(--p-muted); margin-bottom: 20px;">
+      Modélise le parcours Fournisseur de kief → Oaziz → Vertical 7 → Suisse : kief pressé en blocs, décompte
+      complet des coûts et prix de vente selon la majoration appliquée.
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Transaction</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="totalVolumeG">Volume total (g)</label>
+          <input type="number" id="totalVolumeG" value="20000" step="1000" />
+        </div>
+        <div class="form-row">
+          <label for="blockSizeG">Taille du bloc pressé (g/bloc)</label>
+          <input type="number" id="blockSizeG" value="100" step="10" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Nombre de blocs (dérivé)</label>
+        <div id="jarCountDisplay" class="derived-value">—</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Postes de coût</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="kiefPurchaseCadPerG">Kief — prix d'achat ($/g)</label>
+          <input type="number" id="kiefPurchaseCadPerG" value="0.92" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="shippingSupplierFlat">Expédition fournisseur de kief → Oaziz (forfaitaire $)</label>
+          <input type="number" id="shippingSupplierFlat" value="200" step="10" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="vacuumSealCadPerG">Scellage sous vide + pesée + pressage ($/g)</label>
+          <input type="number" id="vacuumSealCadPerG" value="0.12" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="exportPermitFlat">Permis d'exportation (forfaitaire $)</label>
+          <input type="number" id="exportPermitFlat" value="755" step="5" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="vertical7CadPerG">Frais Vertical 7 ($/g)</label>
+          <input type="number" id="vertical7CadPerG" value="0.10" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="jarPackagingCadPerJar">Emballage — pots ($/pot)</label>
+          <input type="number" id="jarPackagingCadPerJar" value="1.75" step="0.05" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="packagingLabourCadPerG">Emballage — main-d'œuvre ($/g)</label>
+          <input type="number" id="packagingLabourCadPerG" value="0.10" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="shippingToVertical7Flat">Expédition Oaziz → Vertical 7 (forfaitaire $)</label>
+          <input type="number" id="shippingToVertical7Flat" value="300" step="10" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="shippingToSwitzerlandCadPerG">Expédition Vertical 7 → Suisse ($/g)</label>
+          <input type="number" id="shippingToSwitzerlandCadPerG" value="0.20" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="fullCoaFlat">COA complet High North (forfaitaire $)</label>
+          <input type="number" id="fullCoaFlat" value="1600" step="50" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Prix</h2>
+      <div class="form-row">
+        <label for="markupPct">Majoration (%)</label>
+        <input type="number" id="markupPct" value="40" step="1" />
+      </div>
+    </div>
+
+    <div id="result"></div>
+  </div>
+</PortailLayout>
+
+<style is:global>
+  .derived-value {
+    padding: 9px 12px;
+    border: 1px solid var(--p-border);
+    border-radius: 6px;
+    background: var(--p-bg);
+    color: var(--p-muted);
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cost-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: .88rem; gap: 12px; }
+  .cost-line span:first-child { color: var(--p-muted); }
+  .cost-line span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cost-line.subtotal { border-top: 1px solid var(--p-border); margin-top: 6px; padding-top: 8px; font-weight: 600; }
+
+  .landed-highlight {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 10px;
+    background: rgba(208, 88, 38, .08);
+    border: 1px solid rgba(208, 88, 38, .3);
+  }
+  .landed-highlight .cost-line { font-size: 1rem; font-weight: 700; color: var(--p-accent); }
+  .landed-highlight .cost-line span:first-child { color: var(--p-accent); }
+  .landed-highlight .cost-line.small { font-size: .82rem; font-weight: 500; color: var(--p-muted); margin-top: 2px; }
+  .landed-highlight .cost-line.small span:first-child { color: var(--p-muted); }
+</style>
+
+<script>
+  function num(id: string): number {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? v : 0;
+  }
+
+  const fmtMoney2 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  const fmtMoney0 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+  const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
+  const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
+  const fmtPct2 = (n: number) => (isFinite(n) ? (n * 100).toFixed(2) + '%' : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
+  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') : '—');
+
+  function render() {
+    const out = document.getElementById('result');
+    if (!out) return;
+
+    const totalVolumeG = num('totalVolumeG');
+    const blockSizeG = num('blockSizeG');
+    const jarCount = blockSizeG > 0 ? totalVolumeG / blockSizeG : 0;
+
+    const jarCountDisplay = document.getElementById('jarCountDisplay');
+    if (jarCountDisplay) jarCountDisplay.textContent = fmtUnits(jarCount);
+
+    const kiefPurchaseCadPerG = num('kiefPurchaseCadPerG');
+    const shippingSupplierFlat = num('shippingSupplierFlat');
+    const vacuumSealCadPerG = num('vacuumSealCadPerG');
+    const exportPermitFlat = num('exportPermitFlat');
+    const vertical7CadPerG = num('vertical7CadPerG');
+    const jarPackagingCadPerJar = num('jarPackagingCadPerJar');
+    const packagingLabourCadPerG = num('packagingLabourCadPerG');
+    const shippingToVertical7Flat = num('shippingToVertical7Flat');
+    const shippingToSwitzerlandCadPerG = num('shippingToSwitzerlandCadPerG');
+    const fullCoaFlat = num('fullCoaFlat');
+
+    const markupPct = num('markupPct');
+
+    if (totalVolumeG <= 0) {
+      out.innerHTML = `<div class="warn-banner">Le volume total doit être supérieur à 0.</div>`;
+      return;
+    }
+
+    const kiefPurchaseTotal = kiefPurchaseCadPerG * totalVolumeG;
+    const vacuumSealTotal = vacuumSealCadPerG * totalVolumeG;
+    const vertical7Total = vertical7CadPerG * totalVolumeG;
+    const jarPackagingTotal = jarPackagingCadPerJar * jarCount;
+    const packagingLabourTotal = packagingLabourCadPerG * totalVolumeG;
+    const shippingToSwitzerlandTotal = shippingToSwitzerlandCadPerG * totalVolumeG;
+
+    const totalCost =
+      kiefPurchaseTotal +
+      shippingSupplierFlat +
+      vacuumSealTotal +
+      exportPermitFlat +
+      vertical7Total +
+      jarPackagingTotal +
+      packagingLabourTotal +
+      shippingToVertical7Flat +
+      shippingToSwitzerlandTotal +
+      fullCoaFlat;
+
+    const costPerGram = totalVolumeG > 0 ? totalCost / totalVolumeG : 0;
+    const sellPricePerGram = costPerGram * (1 + markupPct / 100);
+    const totalRevenue = sellPricePerGram * totalVolumeG;
+    const grossProfit = totalRevenue - totalCost;
+    const grossMarginPct = totalRevenue > 0 ? grossProfit / totalRevenue : 0;
+    const fiftyFiftySplit = grossProfit / 2;
+
+    out.innerHTML = `
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Décompte du coût total</h2>
+        <div class="cost-line"><span>Kief — achat (${fmtG(totalVolumeG)} × ${fmtPerG(kiefPurchaseCadPerG)}/g)</span><span>${fmtMoney0(kiefPurchaseTotal)}</span></div>
+        <div class="cost-line"><span>Expédition fournisseur de kief → Oaziz</span><span>${fmtMoney0(shippingSupplierFlat)}</span></div>
+        <div class="cost-line"><span>Scellage sous vide + pesée + pressage</span><span>${fmtMoney0(vacuumSealTotal)}</span></div>
+        <div class="cost-line"><span>Permis d'exportation</span><span>${fmtMoney0(exportPermitFlat)}</span></div>
+        <div class="cost-line"><span>Frais Vertical 7</span><span>${fmtMoney0(vertical7Total)}</span></div>
+        <div class="cost-line"><span>Emballage — pots (${fmtUnits(jarCount)} × ${fmtMoney2(jarPackagingCadPerJar)})</span><span>${fmtMoney0(jarPackagingTotal)}</span></div>
+        <div class="cost-line"><span>Emballage — main-d'œuvre</span><span>${fmtMoney0(packagingLabourTotal)}</span></div>
+        <div class="cost-line"><span>Expédition Oaziz → Vertical 7</span><span>${fmtMoney0(shippingToVertical7Flat)}</span></div>
+        <div class="cost-line"><span>Expédition Vertical 7 → Suisse</span><span>${fmtMoney0(shippingToSwitzerlandTotal)}</span></div>
+        <div class="cost-line"><span>COA complet High North</span><span>${fmtMoney0(fullCoaFlat)}</span></div>
+        <div class="cost-line subtotal"><span>Coût total</span><span>${fmtMoney0(totalCost)}</span></div>
+
+        <div class="landed-highlight">
+          <div class="cost-line"><span>★ COÛT / GRAMME</span><span>${fmtPerG(costPerGram)}</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Résumé de la transaction</h2>
+        <div class="cost-line"><span>Volume total</span><span>${fmtG(totalVolumeG)}</span></div>
+        <div class="cost-line"><span>Coût / gramme</span><span>${fmtPerG(costPerGram)}</span></div>
+        <div class="cost-line"><span>Majoration</span><span>${fmtPct1(markupPct / 100)}</span></div>
+        <div class="cost-line"><span>Prix de vente / gramme</span><span>${fmtPerG(sellPricePerGram)}</span></div>
+        <div class="cost-line"><span>Revenu total</span><span>${fmtMoney0(totalRevenue)}</span></div>
+        <div class="cost-line subtotal"><span>Profit brut</span><span>${fmtMoney0(grossProfit)}</span></div>
+        <div class="cost-line"><span>Marge brute</span><span>${fmtPct2(grossMarginPct)}</span></div>
+
+        <div class="landed-highlight">
+          <div class="cost-line"><span>Portion 50 % – 50 % du profit</span><span>${fmtMoney0(fiftyFiftySplit)}</span></div>
+          <div class="cost-line small"><span>Référence — structure de partage de profit</span><span></span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  document.addEventListener('input', (e) => {
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    render();
+  });
+  render();
+</script>

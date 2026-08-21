@@ -1,0 +1,346 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+---
+<PortailLayout title="Prix des softgels OSG (CBD/CBN)" staffName={staff.full_name}>
+  <div class="calc-wizard">
+    <div style="margin-bottom: 20px;">
+      <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour aux calculatrices
+      </a>
+    </div>
+    <h1>Prix des softgels OSG (CBD/CBN)</h1>
+    <p style="color: var(--p-muted); margin-bottom: 20px;">
+      Cascade de prix pour les capsules softgel produites par Olds Softgel Ltd. (OSG) — départ usine Olds, AB.
+      Basé sur la grille de prix OSG, avec une majoration Oaziz et une majoration du distributeur en aval,
+      plus un module d'embouteillage optionnel.
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Sélection du produit</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="productType">Type de produit</label>
+          <select id="productType">
+            <option value="CBD">CBD</option>
+            <option value="CBN" selected>CBN</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="dose">Dosage</label>
+          <select id="dose"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="volumeTier">Palier de volume</label>
+        <select id="volumeTier"></select>
+      </div>
+      <p class="hint">Les options de dosage et de palier de volume dépendent du type de produit sélectionné.</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Grille de prix de base OSG (référence fixe)</h2>
+      <p class="hint" style="margin-bottom: 12px;">CA$ par 1 000 capsules, départ usine Olds AB — non éditable.</p>
+      <div style="overflow-x:auto;">
+        <table class="osg-price-table">
+          <thead>
+            <tr><th>Produit</th><th>92K (MOQ)</th><th>250K</th><th>500K</th><th>750K</th><th>1000K</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>CBD 25mg</td><td>680</td><td>590</td><td>550</td><td>510</td><td>470</td></tr>
+            <tr><td>CBD 50mg</td><td>815</td><td>725</td><td>685</td><td>645</td><td>605</td></tr>
+            <tr><td>CBN 5mg/5mg</td><td>430</td><td>360</td><td>310</td><td>S/O</td><td>S/O</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Hypothèses de coût et de majoration</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="oazizMarkupPct">Majoration Oaziz (%)</label>
+          <input type="number" id="oazizMarkupPct" value="30" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="distributorMarkupPct">Majoration du distributeur (%)</label>
+          <input type="number" id="distributorMarkupPct" value="100" step="1" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="transportCadPer1000">Coût de transport (CA$ / 1000 capsules)</label>
+        <input type="number" id="transportCadPer1000" value="0" step="1" />
+      </div>
+    </div>
+
+    <div id="result"></div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h2>Module d'embouteillage (optionnel)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="bottleTier">Format de bouteille (capsules)</label>
+          <select id="bottleTier">
+            <option value="600" selected>600</option>
+            <option value="1000">1000</option>
+            <option value="1500">1500</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="bottleSuppliedBy">Bouteille fournie par</label>
+          <select id="bottleSuppliedBy">
+            <option value="OSG" selected>OSG</option>
+            <option value="Customer">Client</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint">Ce module est indépendant de la cascade de prix des capsules ci-dessus — il partage uniquement les majorations Oaziz et distributeur.</p>
+    </div>
+
+    <div id="result-bottle"></div>
+  </div>
+</PortailLayout>
+
+<style is:global>
+  table.osg-price-table { width: 100%; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
+  table.osg-price-table th, table.osg-price-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--p-border); white-space: nowrap; }
+  table.osg-price-table th:first-child, table.osg-price-table td:first-child { text-align: left; }
+  table.osg-price-table th { font-weight: 600; color: var(--p-muted); font-size: .72rem; text-transform: uppercase; }
+
+  table.waterfall-table { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  table.waterfall-table th, table.waterfall-table td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--p-border); }
+  table.waterfall-table th:first-child, table.waterfall-table td:first-child { text-align: left; }
+  table.waterfall-table th { font-weight: 600; color: var(--p-muted); font-size: .72rem; text-transform: uppercase; }
+  table.waterfall-table tbody tr.highlight-row td { font-weight: 700; }
+  table.waterfall-table tbody tr.final-row td { font-weight: 700; color: var(--p-accent); border-top: 2px solid var(--p-border); }
+
+  .bottle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
+  .bottle-item { background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 12px 14px; }
+  .bottle-item-name { font-size: .78rem; font-weight: 600; color: var(--p-muted); margin-bottom: 6px; }
+  .bottle-item-value { font-size: 1.2rem; font-weight: 700; }
+</style>
+
+<script>
+  function num(id: string): number {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? v : 0;
+  }
+  function sel(id: string): string {
+    const el = document.getElementById(id) as HTMLSelectElement | null;
+    return el ? el.value : '';
+  }
+
+  const fmtMoney2 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  const fmtMoney3 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—';
+  const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
+
+  // ---------- Option sets ----------
+  const DOSE_OPTIONS: Record<string, string[]> = {
+    CBD: ['25mg', '50mg'],
+    CBN: ['5mg/5mg'],
+  };
+  const VOLUME_OPTIONS: Record<string, string[]> = {
+    CBD: ['92K (MOQ)', '250K', '500K', '750K', '1000K'],
+    CBN: ['92K (MOQ)', '250K', '500K'],
+  };
+  const BOTTLE_OPTIONS: Record<string, string[]> = {
+    CBD: ['600', '1000', '1500'],
+    CBN: ['3000', '5000'],
+  };
+
+  // ---------- Base price grid (CA$ / 1000 capsules) ----------
+  type PriceRow = Record<string, number | null>;
+  const PRICE_TABLE: Record<string, PriceRow> = {
+    'CBD 25mg': { '92K (MOQ)': 680, '250K': 590, '500K': 550, '750K': 510, '1000K': 470 },
+    'CBD 50mg': { '92K (MOQ)': 815, '250K': 725, '500K': 685, '750K': 645, '1000K': 605 },
+    'CBN 5mg/5mg': { '92K (MOQ)': 430, '250K': 360, '500K': 310, '750K': null, '1000K': null },
+  };
+
+  // ---------- Bottle cost table (CA$ / bottle), keyed by tier ----------
+  const BOTTLE_COST: Record<string, Record<string, number>> = {
+    OSG: { '600': 5.50, '1000': 4.10, '1500': 3.50, '3000': 3.50, '5000': 2.25 },
+    Customer: { '600': 3.80, '1000': 2.80, '1500': 2.60, '3000': 2.30, '5000': 1.60 },
+  };
+
+  function populateSelect(id: string, options: string[], preferredValue?: string) {
+    const elSelect = document.getElementById(id) as HTMLSelectElement | null;
+    if (!elSelect) return;
+    const current = preferredValue ?? elSelect.value;
+    elSelect.innerHTML = options.map((o) => `<option value="${o}">${o}</option>`).join('');
+    elSelect.value = options.includes(current) ? current : options[0];
+  }
+
+  // Dose & volume tier always track the currently selected product type (initial load and on change).
+  function refreshDoseAndVolume(resetToDefaults: boolean) {
+    const productType = sel('productType');
+    populateSelect('dose', DOSE_OPTIONS[productType]);
+    populateSelect('volumeTier', VOLUME_OPTIONS[productType], resetToDefaults ? '92K (MOQ)' : undefined);
+  }
+
+  // Bottle tier options only re-sync to the product type when the user explicitly switches it —
+  // the page's literal default state (bottleTier = 600) is preserved on initial load even though
+  // productType defaults to CBN, matching the source sheet's actual default state.
+  function refreshBottleTierForProductType() {
+    const productType = sel('productType');
+    populateSelect('bottleTier', BOTTLE_OPTIONS[productType]);
+  }
+
+  // ---------- Capsule pricing ----------
+  function renderResult() {
+    const out = document.getElementById('result');
+    if (!out) return;
+
+    const productType = sel('productType');
+    const dose = sel('dose');
+    const volumeTier = sel('volumeTier');
+    const oazizMarkupPct = num('oazizMarkupPct');
+    const distributorMarkupPct = num('distributorMarkupPct');
+    const transportCadPer1000 = num('transportCadPer1000');
+
+    const key = `${productType} ${dose}`;
+    const row = PRICE_TABLE[key];
+    const osgCostPer1000 = row ? row[volumeTier] : null;
+
+    if (osgCostPer1000 === null || osgCostPer1000 === undefined) {
+      out.innerHTML = `<div class="warn-banner">⚠ Ce palier de volume n'est pas offert pour ${key} (S/O dans la grille OSG). Choisissez un autre palier.</div>`;
+      return;
+    }
+
+    const osgCostPerCapsule = osgCostPer1000 / 1000;
+
+    const landedCostPer1000 = osgCostPer1000 + transportCadPer1000;
+    const landedCostPerCapsule = landedCostPer1000 / 1000;
+
+    const oazizSellingPricePer1000 = landedCostPer1000 * (1 + oazizMarkupPct / 100);
+    const oazizSellingPricePerCapsule = oazizSellingPricePer1000 / 1000;
+    const oazizGrossMarginTotal = oazizSellingPricePer1000 - landedCostPer1000;
+    const oazizGrossMarginPct = oazizSellingPricePer1000 > 0 ? oazizGrossMarginTotal / oazizSellingPricePer1000 : 0;
+
+    const distributorEndPricePer1000 = oazizSellingPricePer1000 * (1 + distributorMarkupPct / 100);
+    const distributorEndPricePerCapsule = distributorEndPricePer1000 / 1000;
+
+    out.innerHTML = `
+      <div class="card">
+        <h2>Cascade de prix — ${key}, ${volumeTier}</h2>
+        <div style="overflow-x:auto;">
+          <table class="waterfall-table">
+            <thead>
+              <tr><th>Étape</th><th>CA$ / 1000 capsules</th><th>CA$ / capsule</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Coût OSG (Oaziz achète à)</td>
+                <td>${fmtMoney2(osgCostPer1000)}</td>
+                <td>${fmtMoney3(osgCostPerCapsule)}</td>
+              </tr>
+              <tr>
+                <td>Coût de transport</td>
+                <td>${fmtMoney2(transportCadPer1000)}</td>
+                <td>${fmtMoney3(transportCadPer1000 / 1000)}</td>
+              </tr>
+              <tr class="highlight-row">
+                <td>Coût total rendu</td>
+                <td>${fmtMoney2(landedCostPer1000)}</td>
+                <td>${fmtMoney3(landedCostPerCapsule)}</td>
+              </tr>
+              <tr>
+                <td>Prix de vente Oaziz (+${oazizMarkupPct}%)</td>
+                <td>${fmtMoney2(oazizSellingPricePer1000)}</td>
+                <td>${fmtMoney3(oazizSellingPricePerCapsule)}</td>
+              </tr>
+              <tr>
+                <td>Marge brute Oaziz</td>
+                <td>${fmtMoney2(oazizGrossMarginTotal)} (${fmtPct1(oazizGrossMarginPct)})</td>
+                <td>${fmtMoney3(oazizGrossMarginTotal / 1000)}</td>
+              </tr>
+              <tr class="final-row">
+                <td>Prix final distributeur (+${distributorMarkupPct}%)</td>
+                <td>${fmtMoney2(distributorEndPricePer1000)}</td>
+                <td>${fmtMoney3(distributorEndPricePerCapsule)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ---------- Bottling add-on ----------
+  function renderBottle() {
+    const out = document.getElementById('result-bottle');
+    if (!out) return;
+
+    const bottleTier = sel('bottleTier');
+    const bottleSuppliedBy = sel('bottleSuppliedBy');
+    const oazizMarkupPct = num('oazizMarkupPct');
+    const distributorMarkupPct = num('distributorMarkupPct');
+
+    const costTable = BOTTLE_COST[bottleSuppliedBy];
+    const osgBottleCost = costTable ? costTable[bottleTier] : undefined;
+
+    if (osgBottleCost === undefined) {
+      out.innerHTML = `<div class="warn-banner">⚠ Combinaison de format de bouteille invalide.</div>`;
+      return;
+    }
+
+    const oazizBottleSellPrice = osgBottleCost * (1 + oazizMarkupPct / 100);
+    const distributorBottleEndPrice = oazizBottleSellPrice * (1 + distributorMarkupPct / 100);
+
+    out.innerHTML = `
+      <div class="card">
+        <h2>Module d'embouteillage — résultat</h2>
+        <div class="bottle-grid">
+          <div class="bottle-item">
+            <div class="bottle-item-name">Coût bouteille OSG</div>
+            <div class="bottle-item-value">${fmtMoney2(osgBottleCost)}</div>
+          </div>
+          <div class="bottle-item">
+            <div class="bottle-item-name">Prix de vente Oaziz / bouteille</div>
+            <div class="bottle-item-value">${fmtMoney2(oazizBottleSellPrice)}</div>
+          </div>
+          <div class="bottle-item">
+            <div class="bottle-item-name">Prix final distributeur / bouteille</div>
+            <div class="bottle-item-value">${fmtMoney2(distributorBottleEndPrice)}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAll() {
+    renderResult();
+    renderBottle();
+  }
+
+  const productTypeEl = document.getElementById('productType') as HTMLSelectElement | null;
+  if (productTypeEl) {
+    productTypeEl.addEventListener('change', () => {
+      refreshDoseAndVolume(true);
+      refreshBottleTierForProductType();
+      renderAll();
+    });
+  }
+
+  document.addEventListener('input', (e) => {
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    if ((e.target as HTMLElement).id === 'productType') return; // handled by change listener above
+    renderAll();
+  });
+
+  // Initial population: dose/volumeTier options depend on productType default (CBN).
+  // bottleTier keeps its static HTML default (600) to match the source sheet's literal default state.
+  refreshDoseAndVolume(true);
+  renderAll();
+</script>

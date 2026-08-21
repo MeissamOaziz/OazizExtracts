@@ -1,0 +1,329 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+---
+<PortailLayout title="Export Allemagne — GACP → GMP" staffName={staff.full_name}>
+  <div class="calc-wizard">
+    <div style="margin-bottom: 20px;">
+      <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour aux calculatrices
+      </a>
+    </div>
+    <h1>Export Allemagne — GACP → GMP</h1>
+    <p style="color: var(--p-muted); margin-bottom: 20px;">
+      Modélise le parcours Canada (fournisseur GACP) → partenaire de conversion GMP (Allemagne) → grossiste/pharmacies
+      allemandes, sur la base des frais BfArM. Tous les montants sont affichés en € et en CA$ lorsque pertinent.
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Devises (FX)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="cadToEur">Taux de conversion CAD → EUR</label>
+          <input type="number" id="cadToEur" value="0.70" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label>Taux EUR → CAD (dérivé)</label>
+          <div id="eurToCadDisplay" class="derived-value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Lot &amp; volume</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="batchSizeG">Taille du lot (g)</label>
+          <input type="number" id="batchSizeG" value="50000" step="1000" />
+        </div>
+        <div class="form-row">
+          <label for="wholesalePriceEur">Prix de gros net (€/g)</label>
+          <input type="number" id="wholesalePriceEur" value="3" step="0.05" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="inputCostCad">Coût d'intrant GACP (CA$/g)</label>
+          <input type="number" id="inputCostCad" value="1" step="0.05" />
+        </div>
+        <div class="form-row">
+          <label>Coût d'intrant GACP (€/g, dérivé)</label>
+          <div id="inputCostEurDisplay" class="derived-value">—</div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="shippingCostEur">Coût d'expédition estimé (€ total)</label>
+          <input type="number" id="shippingCostEur" value="0" step="10" />
+        </div>
+        <div class="form-row">
+          <label for="storageWeeksBeyond2">Entreposage au-delà de 2 semaines incluses (semaines)</label>
+          <input type="number" id="storageWeeksBeyond2" value="0" step="1" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Sélection de service</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="gmpLevel">Niveau de conversion GMP</label>
+          <select id="gmpLevel">
+            <option value="Level 1" selected>Level 1 — séchage seulement (0,55 €/g)</option>
+            <option value="Level 2">Level 2 — séchage + décontamination (0,80 €/g)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="packagingSize">Taille d'emballage en vrac</label>
+          <select id="packagingSize">
+            <option value="1000g" selected>1000 g (gratuit)</option>
+            <option value="500g">500 g (+0,04 €/g)</option>
+          </select>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="salesAgent">Agent de vente (qui trouve l'acheteur)</label>
+          <select id="salesAgent">
+            <option value="Partner" selected>Partenaire (commission 6 %)</option>
+            <option value="Self">Oaziz (commission 3 %)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="includeGacpAudit">Inclure le coût d'audit GACP?</label>
+          <select id="includeGacpAudit">
+            <option value="Yes" selected>Oui</option>
+            <option value="No">Non</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Coûts uniques / amortissement</h2>
+      <p class="hint" style="margin-bottom: 12px;">
+        Audit GACP : 12 000 € (si inclus) · Enregistrement d'installation (BfArM) : 1 144 € · Enregistrement de produit (BfArM) : 528 €.
+        Ces coûts sont amortis sur le volume cible ci-dessous, puis appliqués au lot courant au prorata.
+      </p>
+      <div class="form-row">
+        <label for="amortizeOverKg">Amortir sur ce volume cible (kg)</label>
+        <input type="number" id="amortizeOverKg" value="100" step="10" />
+      </div>
+    </div>
+
+    <div id="result"></div>
+  </div>
+</PortailLayout>
+
+<style is:global>
+  .derived-value {
+    padding: 9px 12px;
+    border: 1px solid var(--p-border);
+    border-radius: 6px;
+    background: var(--p-bg);
+    color: var(--p-muted);
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cost-line { display: flex; justify-content: space-between; padding: 6px 0; font-size: .88rem; gap: 12px; }
+  .cost-line span:first-child { color: var(--p-muted); }
+  .cost-line span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cost-line.sub { padding-left: 16px; font-size: .84rem; }
+  .cost-line.subtotal { border-top: 1px solid var(--p-border); margin-top: 6px; padding-top: 8px; font-weight: 600; }
+  .cost-line.section-gap { margin-top: 10px; }
+
+  .landed-highlight {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 10px;
+    background: rgba(208, 88, 38, .08);
+    border: 1px solid rgba(208, 88, 38, .3);
+  }
+  .landed-highlight .cost-line { font-size: 1rem; font-weight: 700; color: var(--p-accent); }
+  .landed-highlight .cost-line span:first-child { color: var(--p-accent); }
+  .landed-highlight .cost-line.small { font-size: .82rem; font-weight: 500; color: var(--p-muted); margin-top: 2px; }
+  .landed-highlight .cost-line.small span:first-child { color: var(--p-muted); }
+
+  .profit-stat-row { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+  .profit-stat { flex: 1; min-width: 160px; font-size: .85rem; color: var(--p-muted); }
+  .profit-stat strong { display: block; font-size: 1.1rem; color: var(--p-text); font-variant-numeric: tabular-nums; }
+  .profit-stat.margin strong { color: var(--p-success); }
+</style>
+
+<script>
+  function num(id: string): number {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? v : 0;
+  }
+  function sel(id: string): string {
+    const el = document.getElementById(id) as HTMLSelectElement | null;
+    return el ? el.value : '';
+  }
+
+  const fmtEur2 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  const fmtEur0 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) : '—';
+  const fmtCad2 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  const fmtPerGEur = (n: number) => (isFinite(n) ? '€' + n.toFixed(5) : '—');
+  const fmtPerGEur2 = (n: number) => (isFinite(n) ? '€' + n.toFixed(2) : '—');
+  const fmtPerGCad = (n: number) => (isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—');
+  const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
+  const fmtRate = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
+
+  function render() {
+    const out = document.getElementById('result');
+    if (!out) return;
+
+    const cadToEur = num('cadToEur');
+    const eurToCad = cadToEur > 0 ? 1 / cadToEur : 0;
+
+    const eurToCadDisplay = document.getElementById('eurToCadDisplay');
+    if (eurToCadDisplay) eurToCadDisplay.textContent = fmtRate(eurToCad);
+
+    const batchSizeG = num('batchSizeG');
+    const wholesalePriceEur = num('wholesalePriceEur');
+    const inputCostCad = num('inputCostCad');
+    const inputCostEurPerG = inputCostCad * cadToEur;
+
+    const inputCostEurDisplay = document.getElementById('inputCostEurDisplay');
+    if (inputCostEurDisplay) inputCostEurDisplay.textContent = fmtPerGEur(inputCostEurPerG);
+
+    const shippingCostEur = num('shippingCostEur');
+    const storageWeeksBeyond2 = num('storageWeeksBeyond2');
+
+    const gmpLevel = sel('gmpLevel');
+    const packagingSize = sel('packagingSize');
+    const salesAgent = sel('salesAgent');
+    const includeGacpAudit = sel('includeGacpAudit');
+
+    const amortizeOverKg = num('amortizeOverKg');
+
+    if (batchSizeG <= 0) {
+      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      return;
+    }
+
+    // Setup / amortization
+    const gacpAuditCost = includeGacpAudit === 'Yes' ? 12000 : 0;
+    const facilityRegistrationFee = 1144;
+    const productRegistrationFee = 528;
+    const totalSetupCosts = gacpAuditCost + facilityRegistrationFee + productRegistrationFee;
+    const setupCostPerG = amortizeOverKg > 0 ? totalSetupCosts / (amortizeOverKg * 1000) : 0;
+    const amortizedSetupThisBatch = setupCostPerG * batchSizeG;
+
+    // GMP conversion fee
+    const gmpFeePerG = gmpLevel === 'Level 1' ? 0.55 : 0.80;
+    const gmpFeeTotal = gmpFeePerG * batchSizeG;
+
+    // Packaging
+    const packagingFeePerG = packagingSize === '1000g' ? 0 : 0.04;
+    const packagingFeeTotal = packagingFeePerG * batchSizeG;
+
+    // Storage
+    const storageFeeTotal = storageWeeksBeyond2 * 9;
+    const storageFeePerG = batchSizeG > 0 ? storageFeeTotal / batchSizeG : 0;
+
+    // Sales commission
+    const commissionRate = salesAgent === 'Partner' ? 0.06 : 0.03;
+    const salesCommissionPerG = commissionRate * wholesalePriceEur;
+    const salesCommissionTotal = salesCommissionPerG * batchSizeG;
+
+    // Shipping (+10% handling)
+    const shippingTotal = shippingCostEur * 1.1;
+    const shippingPerG = batchSizeG > 0 ? shippingTotal / batchSizeG : 0;
+
+    // Fixed batch costs
+    const analyticalTesting = 2500 + 50;
+    const batchRelease = 1000;
+    const importExportLicense = 190 + 250;
+    const fixedBatchCostsTotal = analyticalTesting + batchRelease + importExportLicense;
+
+    const variableProcessingTotal = gmpFeeTotal + packagingFeeTotal + storageFeeTotal + shippingTotal;
+
+    const totalProcessingCostExclInput =
+      variableProcessingTotal + salesCommissionTotal + fixedBatchCostsTotal + amortizedSetupThisBatch;
+    const inputCostTotal = inputCostEurPerG * batchSizeG;
+    const totalLandedCostEur = totalProcessingCostExclInput + inputCostTotal;
+    const totalLandedCostPerGEur = totalLandedCostEur / batchSizeG;
+    const totalLandedCostPerGCad = totalLandedCostPerGEur * eurToCad;
+
+    // Profitability
+    const wholesaleRevenueTotal = wholesalePriceEur * batchSizeG;
+    const grossProfitTotal = wholesaleRevenueTotal - totalLandedCostEur;
+    const grossMarginPct = wholesaleRevenueTotal !== 0 ? grossProfitTotal / wholesaleRevenueTotal : 0;
+    const grossProfitPerG = grossProfitTotal / batchSizeG;
+    const totalLandedCostPerGEurDisp = totalLandedCostPerGEur;
+    const wholesaleRevenuePerG = wholesalePriceEur;
+
+    out.innerHTML = `
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Décompte des coûts</h2>
+
+        <div class="cost-line" style="font-weight:600; color: var(--p-text);"><span>Coûts de traitement variables</span><span></span></div>
+        <div class="cost-line sub"><span>Frais de conversion GMP (${gmpLevel})</span><span>${fmtEur0(gmpFeeTotal)} · ${fmtPerGEur(gmpFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>Emballage en vrac (${packagingSize})</span><span>${fmtEur0(packagingFeeTotal)} · ${fmtPerGEur(packagingFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>Entreposage (${storageWeeksBeyond2} sem. au-delà de 2)</span><span>${fmtEur0(storageFeeTotal)} · ${fmtPerGEur(storageFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>Expédition (+10 % manutention)</span><span>${fmtEur0(shippingTotal)} · ${fmtPerGEur(shippingPerG)}/g</span></div>
+        <div class="cost-line subtotal"><span>Sous-total traitement variable</span><span>${fmtEur0(variableProcessingTotal)}</span></div>
+
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Commission de vente (${salesAgent === 'Partner' ? 'partenaire, 6 %' : 'Oaziz, 3 %'})</span><span>${fmtEur0(salesCommissionTotal)} · ${fmtPerGEur(salesCommissionPerG)}/g</span></div>
+
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Coûts fixes par lot</span><span></span></div>
+        <div class="cost-line sub"><span>Analyses (BfArM + manutention)</span><span>${fmtEur0(analyticalTesting)}</span></div>
+        <div class="cost-line sub"><span>Libération de lot</span><span>${fmtEur0(batchRelease)}</span></div>
+        <div class="cost-line sub"><span>Licence import/export</span><span>${fmtEur0(importExportLicense)}</span></div>
+        <div class="cost-line subtotal"><span>Sous-total coûts fixes</span><span>${fmtEur0(fixedBatchCostsTotal)}</span></div>
+
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Amortissement des coûts de démarrage</span><span>${fmtEur0(amortizedSetupThisBatch)}</span></div>
+        <div class="cost-line sub"><span>Coûts de démarrage totaux (audit GACP ${includeGacpAudit === 'Yes' ? 'inclus' : 'exclu'} + enregistrements BfArM)</span><span>${fmtEur0(totalSetupCosts)}</span></div>
+        <div class="cost-line sub"><span>Amorti sur ${amortizeOverKg.toLocaleString('fr-CA')} kg</span><span>${fmtPerGEur(setupCostPerG)}/g</span></div>
+
+        <div class="cost-line subtotal" style="font-size: .95rem;"><span>TOTAL COÛT DE TRAITEMENT (excl. intrant)</span><span>${fmtEur0(totalProcessingCostExclInput)}</span></div>
+
+        <div class="cost-line section-gap"><span>Coût de l'intrant GACP</span><span>${fmtEur0(inputCostTotal)} · ${fmtPerGEur(inputCostEurPerG)}/g</span></div>
+
+        <div class="landed-highlight">
+          <div class="cost-line"><span>★ COÛT TOTAL RENDU (incl. intrant)</span><span>${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
+          <div class="cost-line small"><span>Équivalent</span><span>${fmtPerGCad(totalLandedCostPerGCad)}/g CA$</span></div>
+          <div class="cost-line small"><span>Total du lot</span><span>${fmtEur0(totalLandedCostEur)}</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Rentabilité</h2>
+        <div class="cost-line"><span>Revenu de gros</span><span>${fmtEur0(wholesaleRevenueTotal)} · ${fmtPerGEur2(wholesaleRevenuePerG)}/g</span></div>
+        <div class="cost-line"><span>Coût total rendu</span><span>${fmtEur0(totalLandedCostEur)} · ${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
+        <div class="cost-line subtotal"><span>Profit brut</span><span>${fmtEur0(grossProfitTotal)} · ${fmtPerGEur2(grossProfitPerG)}/g</span></div>
+
+        <div class="profit-stat-row">
+          <div class="profit-stat">Profit brut (lot)<strong>${fmtEur2(grossProfitTotal)}</strong></div>
+          <div class="profit-stat">Profit brut (CA$)<strong>${fmtCad2(grossProfitTotal * eurToCad)}</strong></div>
+          <div class="profit-stat margin">Marge brute<strong>${fmtPct1(grossMarginPct)}</strong></div>
+        </div>
+      </div>
+    `;
+  }
+
+  document.addEventListener('input', (e) => {
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    render();
+  });
+  document.addEventListener('change', (e) => {
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    render();
+  });
+  render();
+</script>

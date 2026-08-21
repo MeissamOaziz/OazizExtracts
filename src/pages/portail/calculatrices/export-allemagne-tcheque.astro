@@ -1,0 +1,410 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) {
+  return Astro.redirect('/portail/connexion');
+}
+---
+<PortailLayout title="Export Allemagne (via République tchèque)" staffName={staff.full_name}>
+  <div class="calc-wizard">
+    <div style="margin-bottom: 20px;">
+      <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        ← Retour aux calculatrices
+      </a>
+    </div>
+    <h1>Export Allemagne (via République tchèque)</h1>
+    <p style="color: var(--p-muted); margin-bottom: 20px;">
+      Fournisseur → GWNG (Canada) → République tchèque (transformation GACP → GMP) → Distribution allemande →
+      Pharmacies. Basé sur « Christian Q&amp;A Email + GWNG Confirmed Costs ».
+    </p>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Devises</h2>
+      <div class="form-row">
+        <label for="cadToEur">Taux de conversion CAD → EUR</label>
+        <input type="number" id="cadToEur" value="0.67" step="0.01" />
+      </div>
+      <p class="hint">Le taux inverse (EUR → CAD) est calculé automatiquement.</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Volume</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="shipmentVolumeG">Volume par envoi (g)</label>
+          <input type="number" id="shipmentVolumeG" value="19950" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="bagSizeG">Taille du sac (g/sac)</label>
+          <input type="number" id="bagSizeG" value="150" step="1" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="numStrains">Nombre de souches</label>
+        <input type="number" id="numStrains" value="1" step="1" />
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Coûts en amont (CAD) — Fournisseur → GWNG → Rép. tchèque</h2>
+      <div class="form-row">
+        <label for="flowerPurchaseCostCad">Coût d'achat de la fleur (CA$/g)</label>
+        <input type="number" id="flowerPurchaseCostCad" value="3.25" step="0.01" />
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="shippingSupplierToGwngFlat">Expédition fournisseur → GWNG, tarif forfaitaire / 25 kg (CA$)</label>
+          <input type="number" id="shippingSupplierToGwngFlat" value="200" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="gwngHandlingFeeCadPerG">Frais de manutention GWNG (CA$/g)</label>
+          <input type="number" id="gwngHandlingFeeCadPerG" value="0.10" step="0.01" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="shippingGwngToCzechCadPerG">Expédition GWNG → Rép. tchèque (CA$/g)</label>
+        <input type="number" id="shippingGwngToCzechCadPerG" value="0.15" step="0.01" />
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Coûts uniques (EUR)</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="growerRegistryFeeEur">Registre par cultivateur (Allemagne) (€)</label>
+          <input type="number" id="growerRegistryFeeEur" value="1200" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="productRegistrationFeeEur">Frais d'enregistrement du produit (Allemagne) (€)</label>
+          <input type="number" id="productRegistrationFeeEur" value="10" step="1" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="germanSetupFeeEur">Frais de mise en place entrepreneur allemand — 1er mois (€)</label>
+        <input type="number" id="germanSetupFeeEur" value="2500" step="1" />
+      </div>
+      <p class="hint">Onboarding fournisseur confirmé à 0 € — non inclus. Total informatif, non amorti par envoi.</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Coûts de transformation par gramme (EUR) — République tchèque</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="retentionSampleG">Échantillon de rétention par souche (g)</label>
+          <input type="number" id="retentionSampleG" value="600" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="gacpToGmpProcessingEurPerG">Transformation GACP → GMP, en sacs de 150g (€/g)</label>
+          <input type="number" id="gacpToGmpProcessingEurPerG" value="0.50" step="0.01" />
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="remediationSurchargeEurPerG">Supplément de remédiation, si nécessaire (€/g)</label>
+          <input type="number" id="remediationSurchargeEurPerG" value="0.10" step="0.01" />
+        </div>
+        <div class="form-row">
+          <label for="salesCommissionEurPerG">Commission de vente, payée à la vente en pharmacie (€/g)</label>
+          <input type="number" id="salesCommissionEurPerG" value="0.50" step="0.01" />
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="includeRemediation" />
+        <label for="includeRemediation">Inclure la remédiation</label>
+      </div>
+      <p class="hint">Transport Rép. tchèque → Allemagne et entreposage confirmés à 0 € — non inclus.</p>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Coûts fixes mensuels (EUR) — Allemagne</h2>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="germanEntrepreneurFeeEurPerMonth">Frais entrepreneur / représentant réglementaire allemand (€/mois)</label>
+          <input type="number" id="germanEntrepreneurFeeEurPerMonth" value="2500" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="shipmentsPerMonth">Envois par mois</label>
+          <input type="number" id="shipmentsPerMonth" value="1" step="1" />
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="pharmacyDeliveryFeeEurPerG">Frais de livraison en pharmacie (€/g expédié)</label>
+        <input type="number" id="pharmacyDeliveryFeeEurPerG" value="0.10" step="0.01" />
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>Prix de vente</h2>
+      <div class="form-row">
+        <label for="oazizMarkupPct">Majoration Oaziz (%)</label>
+        <input type="number" id="oazizMarkupPct" value="50" step="1" />
+      </div>
+    </div>
+
+    <div id="result"></div>
+  </div>
+</PortailLayout>
+
+<style is:global>
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .checkbox-row input[type="checkbox"] { margin: 0; width: 16px; height: 16px; }
+  .checkbox-row label { margin: 0; font-weight: 600; cursor: pointer; }
+
+  .headline-card {
+    border: 1px solid rgba(208, 88, 38, .35);
+    background: rgba(208, 88, 38, .05);
+  }
+  .headline-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .headline-stat-label { font-size: .78rem; font-weight: 600; color: var(--p-muted); margin-bottom: 4px; }
+  .headline-stat-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .headline-stat-sub { font-size: .8rem; color: var(--p-muted); margin-top: 2px; }
+
+  table.export-table { width: 100%; border-collapse: collapse; font-size: .87rem; font-variant-numeric: tabular-nums; }
+  table.export-table th, table.export-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--p-border); }
+  table.export-table th:first-child, table.export-table td:first-child { text-align: left; }
+  table.export-table th { font-weight: 600; color: var(--p-muted); font-size: .72rem; text-transform: uppercase; }
+  table.export-table tbody tr.primary-row { background: rgba(208, 88, 38, .06); font-weight: 600; }
+  table.export-table tfoot td { font-weight: 700; border-top: 2px solid var(--p-border); border-bottom: none; }
+
+  .breakdown-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: .85rem; }
+  .breakdown-line span:first-child { color: var(--p-muted); }
+  .breakdown-line.total { border-top: 1px solid var(--p-border); margin-top: 6px; padding-top: 8px; font-weight: 700; }
+</style>
+
+<script>
+  function num(id: string): number {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? v : 0;
+  }
+  function checked(id: string): boolean {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    return !!el?.checked;
+  }
+
+  const fmtMoney2 = (n: number) =>
+    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
+  const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
+  const fmtNum = (n: number) => (isFinite(n) ? n.toLocaleString('fr-CA', { maximumFractionDigits: 2 }) : '—');
+
+  const fmtEur2 = (n: number) => (isFinite(n) ? n.toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '—');
+  const fmtEurPerG = (n: number) => (isFinite(n) ? n.toFixed(4) + ' €' : '—');
+
+  function render() {
+    const out = document.getElementById('result');
+    if (!out) return;
+
+    const cadToEur = num('cadToEur');
+    const eurToCad = cadToEur > 0 ? 1 / cadToEur : 0;
+
+    const shipmentVolumeG = num('shipmentVolumeG');
+    const bagSizeG = num('bagSizeG');
+    const numStrains = num('numStrains');
+    const bagsPerShipment = bagSizeG > 0 ? shipmentVolumeG / bagSizeG : 0;
+
+    if (shipmentVolumeG <= 0) {
+      out.innerHTML = `<div class="warn-banner">Le volume par envoi doit être supérieur à 0.</div>`;
+      return;
+    }
+
+    // ---------- Upstream (CAD) ----------
+    const flowerPurchaseCostCad = num('flowerPurchaseCostCad');
+    const shippingSupplierToGwngFlat = num('shippingSupplierToGwngFlat');
+    const gwngHandlingFeeCadPerG = num('gwngHandlingFeeCadPerG');
+    const shippingGwngToCzechCadPerG = num('shippingGwngToCzechCadPerG');
+
+    const flowerPurchaseTotalCad = flowerPurchaseCostCad * shipmentVolumeG;
+    const shippingSupplierToGwngCad = shippingSupplierToGwngFlat * (shipmentVolumeG / 25000);
+    const gwngHandlingTotalCad = gwngHandlingFeeCadPerG * shipmentVolumeG;
+    const shippingGwngToCzechCad = shippingGwngToCzechCadPerG * shipmentVolumeG;
+    const upstreamTotalCad = flowerPurchaseTotalCad + shippingSupplierToGwngCad + gwngHandlingTotalCad + shippingGwngToCzechCad;
+
+    // ---------- One-time setup (EUR) — informational only ----------
+    const growerRegistryFeeEur = num('growerRegistryFeeEur');
+    const productRegistrationFeeEur = num('productRegistrationFeeEur');
+    const germanSetupFeeEur = num('germanSetupFeeEur');
+    const totalSetupCostsEur = growerRegistryFeeEur + productRegistrationFeeEur + germanSetupFeeEur;
+
+    // ---------- Czech processing (EUR) ----------
+    const retentionSampleG = num('retentionSampleG');
+    const gacpToGmpProcessingEurPerG = num('gacpToGmpProcessingEurPerG');
+    const remediationSurchargeEurPerG = num('remediationSurchargeEurPerG');
+    const salesCommissionEurPerG = num('salesCommissionEurPerG');
+    const includeRemediation = checked('includeRemediation');
+
+    const retentionSampleTotalG = retentionSampleG * numStrains;
+    const saleableVolumeG = shipmentVolumeG - retentionSampleTotalG;
+    const gacpToGmpTotalEur = gacpToGmpProcessingEurPerG * shipmentVolumeG;
+    const remediationTotalEur = remediationSurchargeEurPerG * shipmentVolumeG;
+    const salesCommissionTotalEur = salesCommissionEurPerG * saleableVolumeG;
+
+    // ---------- German fixed monthly (EUR), allocated per shipment ----------
+    const germanEntrepreneurFeeEurPerMonth = num('germanEntrepreneurFeeEurPerMonth');
+    const shipmentsPerMonth = num('shipmentsPerMonth');
+    const pharmacyDeliveryFeeEurPerG = num('pharmacyDeliveryFeeEurPerG');
+
+    const germanEntrepreneurPerShipmentEur = shipmentsPerMonth > 0 ? germanEntrepreneurFeeEurPerMonth / shipmentsPerMonth : 0;
+    const pharmacyDeliveryTotalEur = pharmacyDeliveryFeeEurPerG * shipmentVolumeG;
+
+    // ---------- Retention sample cost (lost flower value) — CAD ----------
+    const retentionSampleCostCad = retentionSampleTotalG * flowerPurchaseCostCad;
+
+    // ---------- EUR figures converted to CAD (CAD amount = EUR amount × eurToCad, i.e. × 1/cadToEur) ----------
+    const gacpToGmpTotalCad = gacpToGmpTotalEur * eurToCad;
+    const remediationTotalCad = remediationTotalEur * eurToCad;
+    const salesCommissionTotalCad = salesCommissionTotalEur * eurToCad;
+    const pharmacyDeliveryTotalCad = pharmacyDeliveryTotalEur * eurToCad;
+    const germanEntrepreneurPerShipmentCad = germanEntrepreneurPerShipmentEur * eurToCad;
+
+    const totalCostPerShipmentCad_withCommission =
+      flowerPurchaseTotalCad + shippingSupplierToGwngCad + gwngHandlingTotalCad + shippingGwngToCzechCad +
+      gacpToGmpTotalCad + retentionSampleCostCad + salesCommissionTotalCad + pharmacyDeliveryTotalCad + germanEntrepreneurPerShipmentCad;
+
+    const totalCostWithRemediation_withCommission = totalCostPerShipmentCad_withCommission + remediationTotalCad;
+    const totalCostPerShipmentCad_exclCommission = totalCostPerShipmentCad_withCommission - salesCommissionTotalCad;
+    const totalCostWithRemediation_exclCommission = totalCostPerShipmentCad_exclCommission + remediationTotalCad;
+
+    const perGramCad_withCommission = totalCostPerShipmentCad_withCommission / shipmentVolumeG;
+    const perGramEur_withCommission = perGramCad_withCommission * cadToEur;
+
+    // ---------- Effective remediation total actually applied (for the "used" cost basis) ----------
+    const remediationAppliedCad = includeRemediation ? remediationTotalCad : 0;
+    const totalCostUsed_withCommission = totalCostPerShipmentCad_withCommission + remediationAppliedCad;
+    const totalCostUsed_exclCommission = totalCostPerShipmentCad_exclCommission + remediationAppliedCad;
+
+    // ---------- Oaziz selling price to pharmacies — primary scenario: with commission, no remediation ----------
+    const oazizMarkupPct = num('oazizMarkupPct');
+    const markupFactor = 1 + oazizMarkupPct / 100;
+    const sellPriceTotalCad = totalCostPerShipmentCad_withCommission * markupFactor;
+    const sellPriceTotalEur = totalCostPerShipmentCad_withCommission * cadToEur * markupFactor;
+    const sellPricePerGramCad = sellPriceTotalCad / shipmentVolumeG;
+    const sellPricePerGramEur = sellPriceTotalEur / shipmentVolumeG;
+    const profitTotalCad = sellPriceTotalCad - totalCostPerShipmentCad_withCommission;
+
+    // ---------- 4 scenarios table ----------
+    type Scenario = { label: string; totalCad: number; primary: boolean };
+    const scenarios: Scenario[] = [
+      { label: 'Avec commission, sans remédiation', totalCad: totalCostPerShipmentCad_withCommission, primary: true },
+      { label: 'Sans commission, sans remédiation', totalCad: totalCostPerShipmentCad_exclCommission, primary: false },
+      { label: 'Avec commission, avec remédiation', totalCad: totalCostWithRemediation_withCommission, primary: false },
+      { label: 'Sans commission, avec remédiation', totalCad: totalCostWithRemediation_exclCommission, primary: false },
+    ];
+
+    const scenarioRows = scenarios
+      .map((s) => {
+        const perGCad = s.totalCad / shipmentVolumeG;
+        const perGEur = perGCad * cadToEur;
+        return `<tr class="${s.primary ? 'primary-row' : ''}">
+          <td>${s.label}${s.primary ? ' ★' : ''}</td>
+          <td>${fmtMoney2(s.totalCad)}</td>
+          <td>${fmtPerG(perGCad)}</td>
+          <td>${fmtEurPerG(perGEur)}</td>
+        </tr>`;
+      })
+      .join('');
+
+    out.innerHTML = `
+      <div class="card headline-card" style="margin-bottom: 16px;">
+        <h2>Prix de vente suggéré aux pharmacies</h2>
+        <p class="hint" style="margin-bottom: 8px;">Scénario principal : avec commission de vente, sans remédiation — coût total + majoration Oaziz de ${fmtPct1(oazizMarkupPct / 100)}.</p>
+        <div class="headline-grid">
+          <div>
+            <div class="headline-stat-label">Coût total par envoi</div>
+            <div class="headline-stat-value">${fmtMoney2(totalCostPerShipmentCad_withCommission)}</div>
+            <div class="headline-stat-sub">${fmtPerG(perGramCad_withCommission)}/g · ${fmtEurPerG(perGramEur_withCommission)}/g</div>
+          </div>
+          <div>
+            <div class="headline-stat-label">Prix de vente suggéré (total)</div>
+            <div class="headline-stat-value">${fmtMoney2(sellPriceTotalCad)}</div>
+            <div class="headline-stat-sub">${fmtEur2(sellPriceTotalEur)}</div>
+          </div>
+          <div>
+            <div class="headline-stat-label">Prix de vente suggéré ($/g)</div>
+            <div class="headline-stat-value">${fmtPerG(sellPricePerGramCad)}</div>
+            <div class="headline-stat-sub">${fmtEurPerG(sellPricePerGramEur)}/g</div>
+          </div>
+          <div>
+            <div class="headline-stat-label">Profit brut par envoi</div>
+            <div class="headline-stat-value">${fmtMoney2(profitTotalCad)}</div>
+            <div class="headline-stat-sub">Sur ${fmtG(shipmentVolumeG)} (${fmtNum(bagsPerShipment)} sacs de ${fmtG(bagSizeG)})</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Coûts en amont (CAD) — Fournisseur → GWNG → Rép. tchèque</h2>
+        <div class="breakdown-line"><span>Achat de la fleur</span><span>${fmtMoney2(flowerPurchaseTotalCad)}</span></div>
+        <div class="breakdown-line"><span>Expédition fournisseur → GWNG</span><span>${fmtMoney2(shippingSupplierToGwngCad)}</span></div>
+        <div class="breakdown-line"><span>Manutention GWNG</span><span>${fmtMoney2(gwngHandlingTotalCad)}</span></div>
+        <div class="breakdown-line"><span>Expédition GWNG → Rép. tchèque</span><span>${fmtMoney2(shippingGwngToCzechCad)}</span></div>
+        <div class="breakdown-line total"><span>Total en amont</span><span>${fmtMoney2(upstreamTotalCad)}</span></div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Coûts uniques (EUR) — informationnel, non amorti par envoi</h2>
+        <div class="breakdown-line"><span>Registre par cultivateur (Allemagne)</span><span>${fmtEur2(growerRegistryFeeEur)}</span></div>
+        <div class="breakdown-line"><span>Frais d'enregistrement du produit</span><span>${fmtEur2(productRegistrationFeeEur)}</span></div>
+        <div class="breakdown-line"><span>Mise en place entrepreneur allemand (1er mois)</span><span>${fmtEur2(germanSetupFeeEur)}</span></div>
+        <div class="breakdown-line total"><span>Total coûts uniques</span><span>${fmtEur2(totalSetupCostsEur)}</span></div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Transformation (EUR) — République tchèque</h2>
+        <div class="breakdown-line"><span>Échantillon de rétention (${fmtG(retentionSampleTotalG)} retenus, ${fmtG(saleableVolumeG)} vendables)</span><span>${fmtMoney2(retentionSampleCostCad)} (perte de valeur fleur, CAD)</span></div>
+        <div class="breakdown-line"><span>Transformation GACP → GMP</span><span>${fmtEur2(gacpToGmpTotalEur)} (${fmtMoney2(gacpToGmpTotalCad)})</span></div>
+        <div class="breakdown-line"><span>Commission de vente (sur volume vendable)</span><span>${fmtEur2(salesCommissionTotalEur)} (${fmtMoney2(salesCommissionTotalCad)})</span></div>
+        <div class="breakdown-line"><span>Supplément de remédiation ${includeRemediation ? '(inclus)' : '(non inclus)'}</span><span>${fmtEur2(remediationTotalEur)} (${fmtMoney2(remediationTotalCad)})</span></div>
+      </div>
+
+      <div class="card" style="margin-bottom: 16px;">
+        <h2>Coûts fixes (EUR) — Allemagne</h2>
+        <div class="breakdown-line"><span>Entrepreneur / représentant réglementaire, par envoi (${fmtNum(shipmentsPerMonth)} envoi(s)/mois)</span><span>${fmtEur2(germanEntrepreneurPerShipmentEur)} (${fmtMoney2(germanEntrepreneurPerShipmentCad)})</span></div>
+        <div class="breakdown-line"><span>Livraison en pharmacie</span><span>${fmtEur2(pharmacyDeliveryTotalEur)} (${fmtMoney2(pharmacyDeliveryTotalCad)})</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Résumé — coût total par envoi selon scénario</h2>
+        <p class="hint" style="margin-bottom: 12px;">★ = scénario principal utilisé pour le prix de vente suggéré ci-dessus.</p>
+        <div style="overflow-x:auto;">
+          <table class="export-table">
+            <thead>
+              <tr><th>Scénario</th><th>Coût total (CAD)</th><th>$/g</th><th>€/g</th></tr>
+            </thead>
+            <tbody>${scenarioRows}</tbody>
+          </table>
+        </div>
+        <details style="margin-top: 14px;">
+          <summary>Détail du calcul retenu (avec commission, activé selon la case « remédiation » ci-dessus)</summary>
+          <div class="details-body">
+            <div class="breakdown-line"><span>Coût total, avec commission</span><span>${fmtMoney2(totalCostUsed_withCommission)}</span></div>
+            <div class="breakdown-line"><span>Coût total, sans commission</span><span>${fmtMoney2(totalCostUsed_exclCommission)}</span></div>
+          </div>
+        </details>
+      </div>
+    `;
+  }
+
+  document.addEventListener('input', (e) => {
+    if (!(e.target as HTMLElement)?.closest('.calc-wizard')) return;
+    render();
+  });
+  render();
+</script>
