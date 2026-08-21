@@ -3,118 +3,160 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frExportAllemagneGacpGmp, enExportAllemagneGacpGmp } from '../../../i18n/portail/export-allemagne-gacp-gmp';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frExportAllemagneGacpGmp, enExportAllemagneGacpGmp);
+
+const clientStrings = {
+  locale,
+  warnBatchSize: T('warnBatchSize'),
+  costBreakdown: T('costBreakdown'),
+  variableProcessingCosts: T('variableProcessingCosts'),
+  gmpFeeLabel: T('gmpFeeLabel'),
+  packagingFeeLabel: T('packagingFeeLabel'),
+  storageLabel: T('storageLabel'),
+  storageSuffix: T('storageSuffix'),
+  shippingLabel: T('shippingLabel'),
+  subtotalVariable: T('subtotalVariable'),
+  salesCommissionLabel: T('salesCommissionLabel'),
+  partnerCommission: T('partnerCommission'),
+  selfCommission: T('selfCommission'),
+  fixedBatchCosts: T('fixedBatchCosts'),
+  analyticalTestingLabel: T('analyticalTestingLabel'),
+  batchReleaseLabel: T('batchReleaseLabel'),
+  importExportLicenseLabel: T('importExportLicenseLabel'),
+  subtotalFixed: T('subtotalFixed'),
+  amortizedSetupLabel: T('amortizedSetupLabel'),
+  setupTotalPrefix: T('setupTotalPrefix'),
+  auditIncluded: T('auditIncluded'),
+  auditExcluded: T('auditExcluded'),
+  setupTotalSuffix: T('setupTotalSuffix'),
+  amortizedOverLabel: T('amortizedOverLabel'),
+  totalProcessingCostLabel: T('totalProcessingCostLabel'),
+  inputCostLabel: T('inputCostLabel'),
+  landedCostLabel: T('landedCostLabel'),
+  equivalentLabel: T('equivalentLabel'),
+  batchTotalLabel: T('batchTotalLabel'),
+  profitabilityHeading: T('profitabilityHeading'),
+  wholesaleRevenueLabel: T('wholesaleRevenueLabel'),
+  totalLandedCostLabel: T('totalLandedCostLabel'),
+  grossProfitLabel: T('grossProfitLabel'),
+  grossProfitBatchLabel: T('grossProfitBatchLabel'),
+  grossProfitCadLabel: T('grossProfitCadLabel'),
+  grossMarginLabel: T('grossMarginLabel'),
+};
 ---
-<PortailLayout title="Export Allemagne — GACP → GMP" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Export Allemagne — GACP → GMP</h1>
+    <h1>{T('title')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Modélise le parcours Canada (fournisseur GACP) → partenaire de conversion GMP (Allemagne) → grossiste/pharmacies
-      allemandes, sur la base des frais BfArM. Tous les montants sont affichés en € et en CA$ lorsque pertinent.
+      {T('intro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Devises (FX)</h2>
+      <h2>{T('fxHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="cadToEur">Taux de conversion CAD → EUR</label>
+          <label for="cadToEur">{T('cadToEurLabel')}</label>
           <input type="number" id="cadToEur" value="0.70" step="0.01" />
         </div>
         <div class="form-row">
-          <label>Taux EUR → CAD (dérivé)</label>
+          <label>{T('eurToCadLabel')}</label>
           <div id="eurToCadDisplay" class="derived-value">—</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Lot &amp; volume</h2>
+      <h2>{T('batchHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="batchSizeG">Taille du lot (g)</label>
+          <label for="batchSizeG">{T('batchSizeLabel')}</label>
           <input type="number" id="batchSizeG" value="50000" step="1000" />
         </div>
         <div class="form-row">
-          <label for="wholesalePriceEur">Prix de gros net (€/g)</label>
+          <label for="wholesalePriceEur">{T('wholesalePriceLabel')}</label>
           <input type="number" id="wholesalePriceEur" value="3" step="0.05" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="inputCostCad">Coût d'intrant GACP (CA$/g)</label>
+          <label for="inputCostCad">{T('inputCostCadLabel')}</label>
           <input type="number" id="inputCostCad" value="1" step="0.05" />
         </div>
         <div class="form-row">
-          <label>Coût d'intrant GACP (€/g, dérivé)</label>
+          <label>{T('inputCostEurLabel')}</label>
           <div id="inputCostEurDisplay" class="derived-value">—</div>
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="shippingCostEur">Coût d'expédition estimé (€ total)</label>
+          <label for="shippingCostEur">{T('shippingCostLabel')}</label>
           <input type="number" id="shippingCostEur" value="0" step="10" />
         </div>
         <div class="form-row">
-          <label for="storageWeeksBeyond2">Entreposage au-delà de 2 semaines incluses (semaines)</label>
+          <label for="storageWeeksBeyond2">{T('storageWeeksLabel')}</label>
           <input type="number" id="storageWeeksBeyond2" value="0" step="1" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Sélection de service</h2>
+      <h2>{T('serviceHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="gmpLevel">Niveau de conversion GMP</label>
+          <label for="gmpLevel">{T('gmpLevelLabel')}</label>
           <select id="gmpLevel">
-            <option value="Level 1" selected>Level 1 — séchage seulement (0,55 €/g)</option>
-            <option value="Level 2">Level 2 — séchage + décontamination (0,80 €/g)</option>
+            <option value="Level 1" selected>{T('gmpLevel1Option')}</option>
+            <option value="Level 2">{T('gmpLevel2Option')}</option>
           </select>
         </div>
         <div class="form-row">
-          <label for="packagingSize">Taille d'emballage en vrac</label>
+          <label for="packagingSize">{T('packagingSizeLabel')}</label>
           <select id="packagingSize">
-            <option value="1000g" selected>1000 g (gratuit)</option>
-            <option value="500g">500 g (+0,04 €/g)</option>
+            <option value="1000g" selected>{T('packaging1000Option')}</option>
+            <option value="500g">{T('packaging500Option')}</option>
           </select>
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="salesAgent">Agent de vente (qui trouve l'acheteur)</label>
+          <label for="salesAgent">{T('salesAgentLabel')}</label>
           <select id="salesAgent">
-            <option value="Partner" selected>Partenaire (commission 6 %)</option>
-            <option value="Self">Oaziz (commission 3 %)</option>
+            <option value="Partner" selected>{T('salesAgentPartnerOption')}</option>
+            <option value="Self">{T('salesAgentSelfOption')}</option>
           </select>
         </div>
         <div class="form-row">
-          <label for="includeGacpAudit">Inclure le coût d'audit GACP?</label>
+          <label for="includeGacpAudit">{T('includeAuditLabel')}</label>
           <select id="includeGacpAudit">
-            <option value="Yes" selected>Oui</option>
-            <option value="No">Non</option>
+            <option value="Yes" selected>{T('yesOption')}</option>
+            <option value="No">{T('noOption')}</option>
           </select>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts uniques / amortissement</h2>
+      <h2>{T('setupHeading')}</h2>
       <p class="hint" style="margin-bottom: 12px;">
-        Audit GACP : 12 000 € (si inclus) · Enregistrement d'installation (BfArM) : 1 144 € · Enregistrement de produit (BfArM) : 528 €.
-        Ces coûts sont amortis sur le volume cible ci-dessous, puis appliqués au lot courant au prorata.
+        {T('setupHint')}
       </p>
       <div class="form-row">
-        <label for="amortizeOverKg">Amortir sur ce volume cible (kg)</label>
+        <label for="amortizeOverKg">{T('amortizeOverLabel')}</label>
         <input type="number" id="amortizeOverKg" value="100" step="10" />
       </div>
     </div>
@@ -122,6 +164,8 @@ if (!staff) {
     <div id="result"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .derived-value {
@@ -160,6 +204,9 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const NUM_LOCALE = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -172,14 +219,14 @@ if (!staff) {
   }
 
   const fmtEur2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtEur0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) : '—';
   const fmtCad2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtPerGEur = (n: number) => (isFinite(n) ? '€' + n.toFixed(5) : '—');
   const fmtPerGEur2 = (n: number) => (isFinite(n) ? '€' + n.toFixed(2) : '—');
-  const fmtPerGCad = (n: number) => (isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—');
+  const fmtPerGCad = (n: number) => (isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—');
   const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
   const fmtRate = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
 
@@ -212,7 +259,7 @@ if (!staff) {
     const amortizeOverKg = num('amortizeOverKg');
 
     if (batchSizeG <= 0) {
-      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnBatchSize}</div>`;
       return;
     }
 
@@ -270,48 +317,48 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Décompte des coûts</h2>
+        <h2>${I18N.costBreakdown}</h2>
 
-        <div class="cost-line" style="font-weight:600; color: var(--p-text);"><span>Coûts de traitement variables</span><span></span></div>
-        <div class="cost-line sub"><span>Frais de conversion GMP (${gmpLevel})</span><span>${fmtEur0(gmpFeeTotal)} · ${fmtPerGEur(gmpFeePerG)}/g</span></div>
-        <div class="cost-line sub"><span>Emballage en vrac (${packagingSize})</span><span>${fmtEur0(packagingFeeTotal)} · ${fmtPerGEur(packagingFeePerG)}/g</span></div>
-        <div class="cost-line sub"><span>Entreposage (${storageWeeksBeyond2} sem. au-delà de 2)</span><span>${fmtEur0(storageFeeTotal)} · ${fmtPerGEur(storageFeePerG)}/g</span></div>
-        <div class="cost-line sub"><span>Expédition (+10 % manutention)</span><span>${fmtEur0(shippingTotal)} · ${fmtPerGEur(shippingPerG)}/g</span></div>
-        <div class="cost-line subtotal"><span>Sous-total traitement variable</span><span>${fmtEur0(variableProcessingTotal)}</span></div>
+        <div class="cost-line" style="font-weight:600; color: var(--p-text);"><span>${I18N.variableProcessingCosts}</span><span></span></div>
+        <div class="cost-line sub"><span>${I18N.gmpFeeLabel} (${gmpLevel})</span><span>${fmtEur0(gmpFeeTotal)} · ${fmtPerGEur(gmpFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>${I18N.packagingFeeLabel} (${packagingSize})</span><span>${fmtEur0(packagingFeeTotal)} · ${fmtPerGEur(packagingFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>${I18N.storageLabel} (${storageWeeksBeyond2}${I18N.storageSuffix})</span><span>${fmtEur0(storageFeeTotal)} · ${fmtPerGEur(storageFeePerG)}/g</span></div>
+        <div class="cost-line sub"><span>${I18N.shippingLabel}</span><span>${fmtEur0(shippingTotal)} · ${fmtPerGEur(shippingPerG)}/g</span></div>
+        <div class="cost-line subtotal"><span>${I18N.subtotalVariable}</span><span>${fmtEur0(variableProcessingTotal)}</span></div>
 
-        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Commission de vente (${salesAgent === 'Partner' ? 'partenaire, 6 %' : 'Oaziz, 3 %'})</span><span>${fmtEur0(salesCommissionTotal)} · ${fmtPerGEur(salesCommissionPerG)}/g</span></div>
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>${I18N.salesCommissionLabel} (${salesAgent === 'Partner' ? I18N.partnerCommission : I18N.selfCommission})</span><span>${fmtEur0(salesCommissionTotal)} · ${fmtPerGEur(salesCommissionPerG)}/g</span></div>
 
-        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Coûts fixes par lot</span><span></span></div>
-        <div class="cost-line sub"><span>Analyses (BfArM + manutention)</span><span>${fmtEur0(analyticalTesting)}</span></div>
-        <div class="cost-line sub"><span>Libération de lot</span><span>${fmtEur0(batchRelease)}</span></div>
-        <div class="cost-line sub"><span>Licence import/export</span><span>${fmtEur0(importExportLicense)}</span></div>
-        <div class="cost-line subtotal"><span>Sous-total coûts fixes</span><span>${fmtEur0(fixedBatchCostsTotal)}</span></div>
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>${I18N.fixedBatchCosts}</span><span></span></div>
+        <div class="cost-line sub"><span>${I18N.analyticalTestingLabel}</span><span>${fmtEur0(analyticalTesting)}</span></div>
+        <div class="cost-line sub"><span>${I18N.batchReleaseLabel}</span><span>${fmtEur0(batchRelease)}</span></div>
+        <div class="cost-line sub"><span>${I18N.importExportLicenseLabel}</span><span>${fmtEur0(importExportLicense)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.subtotalFixed}</span><span>${fmtEur0(fixedBatchCostsTotal)}</span></div>
 
-        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>Amortissement des coûts de démarrage</span><span>${fmtEur0(amortizedSetupThisBatch)}</span></div>
-        <div class="cost-line sub"><span>Coûts de démarrage totaux (audit GACP ${includeGacpAudit === 'Yes' ? 'inclus' : 'exclu'} + enregistrements BfArM)</span><span>${fmtEur0(totalSetupCosts)}</span></div>
-        <div class="cost-line sub"><span>Amorti sur ${amortizeOverKg.toLocaleString('fr-CA')} kg</span><span>${fmtPerGEur(setupCostPerG)}/g</span></div>
+        <div class="cost-line section-gap" style="font-weight:600; color: var(--p-text);"><span>${I18N.amortizedSetupLabel}</span><span>${fmtEur0(amortizedSetupThisBatch)}</span></div>
+        <div class="cost-line sub"><span>${I18N.setupTotalPrefix} ${includeGacpAudit === 'Yes' ? I18N.auditIncluded : I18N.auditExcluded}${I18N.setupTotalSuffix}</span><span>${fmtEur0(totalSetupCosts)}</span></div>
+        <div class="cost-line sub"><span>${I18N.amortizedOverLabel} ${amortizeOverKg.toLocaleString(NUM_LOCALE)} kg</span><span>${fmtPerGEur(setupCostPerG)}/g</span></div>
 
-        <div class="cost-line subtotal" style="font-size: .95rem;"><span>TOTAL COÛT DE TRAITEMENT (excl. intrant)</span><span>${fmtEur0(totalProcessingCostExclInput)}</span></div>
+        <div class="cost-line subtotal" style="font-size: .95rem;"><span>${I18N.totalProcessingCostLabel}</span><span>${fmtEur0(totalProcessingCostExclInput)}</span></div>
 
-        <div class="cost-line section-gap"><span>Coût de l'intrant GACP</span><span>${fmtEur0(inputCostTotal)} · ${fmtPerGEur(inputCostEurPerG)}/g</span></div>
+        <div class="cost-line section-gap"><span>${I18N.inputCostLabel}</span><span>${fmtEur0(inputCostTotal)} · ${fmtPerGEur(inputCostEurPerG)}/g</span></div>
 
         <div class="landed-highlight">
-          <div class="cost-line"><span>★ COÛT TOTAL RENDU (incl. intrant)</span><span>${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
-          <div class="cost-line small"><span>Équivalent</span><span>${fmtPerGCad(totalLandedCostPerGCad)}/g CA$</span></div>
-          <div class="cost-line small"><span>Total du lot</span><span>${fmtEur0(totalLandedCostEur)}</span></div>
+          <div class="cost-line"><span>${I18N.landedCostLabel}</span><span>${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
+          <div class="cost-line small"><span>${I18N.equivalentLabel}</span><span>${fmtPerGCad(totalLandedCostPerGCad)}/g CA$</span></div>
+          <div class="cost-line small"><span>${I18N.batchTotalLabel}</span><span>${fmtEur0(totalLandedCostEur)}</span></div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Rentabilité</h2>
-        <div class="cost-line"><span>Revenu de gros</span><span>${fmtEur0(wholesaleRevenueTotal)} · ${fmtPerGEur2(wholesaleRevenuePerG)}/g</span></div>
-        <div class="cost-line"><span>Coût total rendu</span><span>${fmtEur0(totalLandedCostEur)} · ${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
-        <div class="cost-line subtotal"><span>Profit brut</span><span>${fmtEur0(grossProfitTotal)} · ${fmtPerGEur2(grossProfitPerG)}/g</span></div>
+        <h2>${I18N.profitabilityHeading}</h2>
+        <div class="cost-line"><span>${I18N.wholesaleRevenueLabel}</span><span>${fmtEur0(wholesaleRevenueTotal)} · ${fmtPerGEur2(wholesaleRevenuePerG)}/g</span></div>
+        <div class="cost-line"><span>${I18N.totalLandedCostLabel}</span><span>${fmtEur0(totalLandedCostEur)} · ${fmtPerGEur2(totalLandedCostPerGEurDisp)}/g</span></div>
+        <div class="cost-line subtotal"><span>${I18N.grossProfitLabel}</span><span>${fmtEur0(grossProfitTotal)} · ${fmtPerGEur2(grossProfitPerG)}/g</span></div>
 
         <div class="profit-stat-row">
-          <div class="profit-stat">Profit brut (lot)<strong>${fmtEur2(grossProfitTotal)}</strong></div>
-          <div class="profit-stat">Profit brut (CA$)<strong>${fmtCad2(grossProfitTotal * eurToCad)}</strong></div>
-          <div class="profit-stat margin">Marge brute<strong>${fmtPct1(grossMarginPct)}</strong></div>
+          <div class="profit-stat">${I18N.grossProfitBatchLabel}<strong>${fmtEur2(grossProfitTotal)}</strong></div>
+          <div class="profit-stat">${I18N.grossProfitCadLabel}<strong>${fmtCad2(grossProfitTotal * eurToCad)}</strong></div>
+          <div class="profit-stat margin">${I18N.grossMarginLabel}<strong>${fmtPct1(grossMarginPct)}</strong></div>
         </div>
       </div>
     `;

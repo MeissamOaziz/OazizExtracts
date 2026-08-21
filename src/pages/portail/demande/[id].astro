@@ -3,10 +3,17 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frCommon, enCommon } from '../../../i18n/portail/common';
+import { frDemandeDetail, enDemandeDetail } from '../../../i18n/portail/demande-detail';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDemandeDetail, enDemandeDetail);
+const Tc = makeT(locale, frCommon, enCommon);
 
 const { id } = Astro.params;
 if (!id) return Astro.redirect('/portail/formulaires');
@@ -25,7 +32,7 @@ const { data: submission } = await supabase
   .maybeSingle();
 
 if (!submission) {
-  return new Response('Demande introuvable.', { status: 404 });
+  return new Response(T('error.not_found'), { status: 404 });
 }
 
 const { data: participants } = await supabase
@@ -83,50 +90,28 @@ const revealUrl = pageUrl.searchParams.get('reveal_url');
 const revealFor = pageUrl.searchParams.get('reveal_for');
 const revealEmailStatus = pageUrl.searchParams.get('reveal_email_status');
 const infoMessages: Record<string, string> = {
-  sent: 'Demande envoyée. Les signataires ont reçu leur lien par courriel.',
-  edited: 'Modifications enregistrées. La demande est repassée en brouillon — cliquez « Envoyer pour signature » pour réémettre les liens.',
-  signed: 'Merci, votre signature a été enregistrée.',
-  resent: 'Courriel finalisé renvoyé à la liste de distribution.',
+  sent: T('info.sent'),
+  edited: T('info.edited'),
+  signed: T('info.signed'),
+  resent: T('info.resent'),
 };
 const errorMessages: Record<string, string> = {
-  not_creator: 'Seul le créateur de la demande peut effectuer cette action.',
-  already_sent: 'Cette demande a déjà été envoyée.',
-  already_signed_row: 'Ce signataire a déjà signé — pas besoin de régénérer.',
-  no_participants: 'Ajoutez au moins un participant avant d\'envoyer.',
-  not_found: 'Demande introuvable.',
-  not_finalized: 'La demande doit être entièrement signée avant de renvoyer le courriel finalisé.',
-  nothing_to_sign: 'Vous n\'avez aucune signature en attente sur cette demande.',
-  unknown: 'Une erreur est survenue.',
-  token_insert: 'Impossible de créer les jetons de signature. Réessayez.',
-  signer_insert: 'Impossible de créer les signataires. Réessayez.',
-  delete: 'La suppression a échoué.',
+  not_creator: T('error.not_creator'),
+  already_sent: T('error.already_sent'),
+  already_signed_row: T('error.already_signed_row'),
+  no_participants: T('error.no_participants'),
+  not_found: T('error.not_found'),
+  not_finalized: T('error.not_finalized'),
+  nothing_to_sign: T('error.nothing_to_sign'),
+  unknown: T('error.unknown'),
+  token_insert: T('error.token_insert'),
+  signer_insert: T('error.signer_insert'),
+  delete: T('error.delete'),
 };
 const emailStatusLabel: Record<string, string> = {
-  sent: 'Courriel envoyé.',
-  skipped_no_key: 'Aucun courriel envoyé (clé Resend non configurée). Copiez le lien ci-dessous.',
-  error: 'L\'envoi du courriel a échoué. Copiez le lien manuellement ci-dessous.',
-};
-
-const statusLabel: Record<string, string> = {
-  draft: 'Brouillon',
-  sent: 'Envoyé',
-  signing: 'En signature',
-  complete: 'Complet',
-  finalized: 'Finalisé',
-  cancelled: 'Annulé',
-};
-const stateLabel: Record<string, string> = { vrac: 'Vrac', emballe: 'Emballé' };
-const roleLabel: Record<string, string> = {
-  initiator: 'Initiateur',
-  production: 'Personnel de production',
-  participant: 'Participant',
-  consent_obtainer: 'Personne obtenant le consentement',
-  qa_verifier: 'Vérification AQ',
-};
-const kindLabel: Record<string, string> = {
-  sample_request: "Demande d'échantillon",
-  rnd: 'R&D',
-  consent: 'Consentement',
+  sent: T('emailStatus.sent'),
+  skipped_no_key: T('emailStatus.skipped_no_key'),
+  error: T('emailStatus.error'),
 };
 
 function fmtDate(iso?: string | null): string {
@@ -134,10 +119,10 @@ function fmtDate(iso?: string | null): string {
   return new Date(iso).toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 ---
-<PortailLayout title={submission.product_name || 'Demande'} staffName={staff.full_name}>
+<PortailLayout title={submission.product_name || T('untitled')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
     <a href="/portail/formulaires" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Formulaires R&D
+      {T('backLink')}
     </a>
   </div>
 
@@ -145,28 +130,28 @@ function fmtDate(iso?: string | null): string {
     <div>
       <h1 style="margin-bottom: 4px;">{submission.product_name}</h1>
       <p style="color: var(--p-muted);">
-        {submission.product_type} · Créé le {fmtDate(submission.created_at)}
+        {submission.product_type} · {T('createdOn')} {fmtDate(submission.created_at)}
       </p>
     </div>
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
       {hasPendingForMe && (
-        <a href={`/portail/demande/${id}/signer`} class="btn btn-primary" title="Signer directement dans le portail">
-          ✍ Signer maintenant
+        <a href={`/portail/demande/${id}/signer`} class="btn btn-primary" title={T('signNowTitle')}>
+          {T('signNow')}
         </a>
       )}
       {['finalized', 'complete', 'signing', 'sent'].includes(submission.status) && (
-        <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title="Télécharger le PDF (partiel tant que la demande n'est pas finalisée)">
-          ⬇ Télécharger le PDF
+        <a href={`/api/portail/documents/${id}/download`} class="btn btn-secondary" title={T('downloadPdfTitle')}>
+          {T('downloadPdf')}
         </a>
       )}
       {isCreator && submission.status === 'finalized' && (
         <form method="POST" action={`/api/portail/submissions/${id}/resend-final`} style="margin: 0;">
-          <button type="submit" class="btn btn-secondary" title="Renvoyer le courriel avec PDF signé à la liste de distribution">
-            📧 Renvoyer le courriel finalisé
+          <button type="submit" class="btn btn-secondary" title={T('resendFinalTitle')}>
+            {T('resendFinal')}
           </button>
         </form>
       )}
-      <span class={`badge badge-${submission.status}`}>{statusLabel[submission.status]}</span>
+      <span class={`badge badge-${submission.status}`}>{Tc(`status.${submission.status}` as keyof typeof frCommon) ?? submission.status}</span>
     </div>
   </div>
 
@@ -178,14 +163,14 @@ function fmtDate(iso?: string | null): string {
   )}
   {revealUrl && (
     <div class="card" id="reveal-card" style="border-color: var(--p-accent); margin-bottom: 20px;">
-      <h2 style="margin-bottom: 6px;">Nouveau lien de signature pour {revealFor}</h2>
+      <h2 style="margin-bottom: 6px;">{T('reveal.heading')} {revealFor}</h2>
       <p style="color: var(--p-muted); margin-bottom: 12px; font-size: .9rem;">
-        {emailStatusLabel[revealEmailStatus ?? ''] ?? 'Copiez le lien ci-dessous pour le partager.'}
-        <br/>Le lien précédent pour cette personne a été révoqué.
+        {emailStatusLabel[revealEmailStatus ?? ''] ?? T('reveal.defaultCopy')}
+        <br/>{T('reveal.previousRevoked')}
       </p>
       <div style="display: flex; gap: 8px; align-items: stretch;">
         <input type="text" id="reveal-input" value={revealUrl} readonly onclick="this.select()" style="flex: 1; font-family: monospace; font-size: .85rem;" />
-        <button type="button" id="reveal-copy" class="btn btn-secondary">Copier</button>
+        <button type="button" id="reveal-copy" class="btn btn-secondary" data-copy-text={T('reveal.copy')} data-copied-text={T('reveal.copied')}>{T('reveal.copy')}</button>
       </div>
       <script is:inline>
         (function() {
@@ -202,17 +187,19 @@ function fmtDate(iso?: string | null): string {
           const btn = document.getElementById('reveal-copy');
           const input = document.getElementById('reveal-input');
           if (btn && input) {
+            const copyText = btn.dataset.copyText || 'Copier';
+            const copiedText = btn.dataset.copiedText || 'Copié ✓';
             btn.addEventListener('click', function() {
               input.select();
               try {
                 navigator.clipboard.writeText(input.value).then(function() {
-                  btn.textContent = 'Copié ✓';
-                  setTimeout(function() { btn.textContent = 'Copier'; }, 1800);
+                  btn.textContent = copiedText;
+                  setTimeout(function() { btn.textContent = copyText; }, 1800);
                 });
               } catch (e) {
                 document.execCommand('copy');
-                btn.textContent = 'Copié ✓';
-                setTimeout(function() { btn.textContent = 'Copier'; }, 1800);
+                btn.textContent = copiedText;
+                setTimeout(function() { btn.textContent = copyText; }, 1800);
               }
             });
           }
@@ -222,26 +209,26 @@ function fmtDate(iso?: string | null): string {
   )}
 
   <div class="card" style="margin-bottom: 24px;">
-    <h2>Détails</h2>
+    <h2>{T('section.details')}</h2>
     <table class="data" style="margin-top: 12px;">
       <tbody>
-        <tr><th style="width: 260px;">Date du formulaire</th><td>{fmtDate(submission.form_date)}</td></tr>
-        <tr><th>Initiateur</th><td>{(submission.initiator as any)?.full_name ?? '—'}</td></tr>
-        <tr><th>Type de produit</th><td>{submission.product_type}</td></tr>
-        <tr><th>Quantité</th><td>{submission.quantity}</td></tr>
-        <tr><th>État de production</th><td>{submission.production_state ? stateLabel[submission.production_state] : '—'}</td></tr>
-        <tr><th>Identifiant du lot</th><td>{submission.production_id || '—'}</td></tr>
-        <tr><th>Personnel de production</th><td>{(submission.production as any)?.full_name ?? '—'}</td></tr>
-        <tr><th>Vérification AQ</th><td>{(submission.qa as any)?.full_name ?? '—'}</td></tr>
-        <tr><th>Personne obtenant le consentement</th><td>{(submission.consent_obtainer as any)?.full_name ?? '—'}</td></tr>
+        <tr><th style="width: 260px;">{T('field.formDate')}</th><td>{fmtDate(submission.form_date)}</td></tr>
+        <tr><th>{T('field.initiator')}</th><td>{(submission.initiator as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>{T('field.productType')}</th><td>{submission.product_type}</td></tr>
+        <tr><th>{T('field.quantity')}</th><td>{submission.quantity}</td></tr>
+        <tr><th>{T('field.productionState')}</th><td>{submission.production_state ? (Tc(`state.${submission.production_state}` as keyof typeof frCommon) ?? submission.production_state) : '—'}</td></tr>
+        <tr><th>{T('field.productionId')}</th><td>{submission.production_id || '—'}</td></tr>
+        <tr><th>{T('field.productionStaff')}</th><td>{(submission.production as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>{T('field.qaVerification')}</th><td>{(submission.qa as any)?.full_name ?? '—'}</td></tr>
+        <tr><th>{T('field.consentObtainer')}</th><td>{(submission.consent_obtainer as any)?.full_name ?? '—'}</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="card" style="margin-bottom: 24px;">
-    <h2>Participants ({participants?.length ?? 0})</h2>
+    <h2>{T('section.participants')} ({participants?.length ?? 0})</h2>
     {(!participants || participants.length === 0) ? (
-      <p style="color: var(--p-muted); margin-top: 8px;">Aucun participant.</p>
+      <p style="color: var(--p-muted); margin-top: 8px;">{T('participants.empty')}</p>
     ) : (
       <ul style="margin-top: 12px; padding-left: 20px;">
         {participants.map((p: any) => (
@@ -252,22 +239,22 @@ function fmtDate(iso?: string | null): string {
   </div>
 
   <div class="card" style="margin-bottom: 24px;">
-    <h2>Signatures</h2>
+    <h2>{T('section.signatures')}</h2>
     {(!signers || signers.length === 0) ? (
       <div style="color: var(--p-muted); margin-top: 8px;">
         {isDraft
-          ? "Les signataires seront créés lorsque la demande sera envoyée."
-          : "Aucun signataire enregistré."}
+          ? T('signatures.emptyDraft')
+          : T('signatures.emptyOther')}
       </div>
     ) : (
       <table class="data" style="margin-top: 12px;">
         <thead>
           <tr>
-            <th>Rôle</th>
-            <th>Signataire</th>
-            <th>Document</th>
-            <th>Statut</th>
-            <th>Signé le</th>
+            <th>{T('th.role')}</th>
+            <th>{T('th.signer')}</th>
+            <th>{T('th.document')}</th>
+            <th>{T('th.status')}</th>
+            <th>{T('th.signedOn')}</th>
             {isCreator && <th></th>}
           </tr>
         </thead>
@@ -283,15 +270,15 @@ function fmtDate(iso?: string | null): string {
               && ['sent', 'signing', 'complete'].includes(submission.status);
             return (
               <tr>
-                <td>{roleLabel[s.role] ?? s.role}</td>
+                <td>{Tc(`role.${s.role}` as keyof typeof frCommon) ?? s.role}</td>
                 <td>
                   {s.staff_name}
-                  {s.participant_name && <div style="color: var(--p-muted); font-size: .82rem;">Pour {s.participant_name}</div>}
+                  {s.participant_name && <div style="color: var(--p-muted); font-size: .82rem;">{T('signerFor')} {s.participant_name}</div>}
                 </td>
-                <td>{kindLabel[s.document_kind] ?? s.document_kind}</td>
+                <td>{Tc(`kind.${s.document_kind}` as keyof typeof frCommon) ?? s.document_kind}</td>
                 <td>
                   <span class={`badge badge-${s.status === 'signed' ? 'complete' : s.status === 'pending' ? 'sent' : 'cancelled'}`}>
-                    {s.status === 'signed' ? 'Signé' : s.status === 'pending' ? 'En attente' : s.status}
+                    {s.status === 'signed' ? T('pill.signed') : s.status === 'pending' ? T('pill.pending') : s.status}
                   </span>
                 </td>
                 <td>{fmtDate(s.signed_at)}</td>
@@ -299,7 +286,7 @@ function fmtDate(iso?: string | null): string {
                   <td style="text-align: right;">
                     {canRegen ? (
                       <form method="POST" action={`/api/portail/submissions/${id}/signers/${s.signer_token_id}/regenerate`} style="margin: 0;">
-                        <button type="submit" class="btn btn-secondary" style="font-size: .78rem; padding: 5px 10px;">Régénérer le lien</button>
+                        <button type="submit" class="btn btn-secondary" style="font-size: .78rem; padding: 5px 10px;">{T('regenerateLink')}</button>
                       </form>
                     ) : null}
                   </td>
@@ -315,13 +302,13 @@ function fmtDate(iso?: string | null): string {
   {isCreator && (
     <div style="display: flex; gap: 12px; flex-wrap: wrap;">
       {isDraft && (
-        <form method="POST" action={`/api/portail/submissions/${id}/send`} onsubmit="return confirm('Envoyer les liens de signature à chaque signataire par courriel ?');" style="margin: 0;">
-          <button type="submit" class="btn btn-primary">Envoyer pour signature</button>
+        <form method="POST" action={`/api/portail/submissions/${id}/send`} onsubmit={`return confirm('${T('confirm.send')}');`} style="margin: 0;">
+          <button type="submit" class="btn btn-primary">{T('sendForSignature')}</button>
         </form>
       )}
 
       <a href={`/portail/demande/${id}/editer`} class="btn btn-secondary">
-        Modifier{!isDraft && ' (efface les signatures)'}
+        {Tc('btn.edit')}{!isDraft && T('editSuffixNotDraft')}
       </a>
 
       <form
@@ -329,13 +316,13 @@ function fmtDate(iso?: string | null): string {
         action={`/api/portail/submissions/${id}/delete`}
         onsubmit={
           isDraft
-            ? "return confirm('Supprimer ce brouillon ?');"
-            : "return confirm('⚠ Cette demande a été envoyée pour signature. Supprimer va effacer définitivement les signatures collectées, le PDF signé, et les liens envoyés. Continuer ?');"
+            ? `return confirm('${T('confirm.deleteDraft')}');`
+            : `return confirm('${T('confirm.deleteSent')}');`
         }
         style="margin: 0; margin-left: auto;"
       >
         <button type="submit" class="btn btn-danger">
-          Supprimer{!isDraft && ' (définitif)'}
+          {Tc('btn.delete')}{!isDraft && T('deleteSuffixNotDraft')}
         </button>
       </form>
     </div>

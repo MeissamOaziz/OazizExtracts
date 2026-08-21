@@ -3,6 +3,8 @@ export const prerender = false;
 
 import PortailLayout from '../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../lib/supabase';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frDefinirMotDePasse, enDefinirMotDePasse } from '../../i18n/portail/definir-mot-de-passe';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
@@ -10,27 +12,30 @@ if (!staff) {
   return Astro.redirect('/portail/connexion?error=no_session');
 }
 
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDefinirMotDePasse, enDefinirMotDePasse);
+
 const url = new URL(Astro.request.url);
 const isFirst = url.searchParams.get('first') === '1';
 const errCode = url.searchParams.get('error');
 const errDetail = url.searchParams.get('detail');
 const errorMessages: Record<string, string> = {
-  short: 'Le mot de passe doit contenir au moins 8 caractères.',
-  mismatch: 'Les deux mots de passe ne correspondent pas.',
-  weak: 'Ce mot de passe a été refusé (trop courant ou déjà compromis dans une fuite connue). Choisissez-en un autre — idéalement une phrase de 3 à 4 mots plus des chiffres.',
-  unknown: 'Une erreur est survenue.',
+  short: T('error.short'),
+  mismatch: T('error.mismatch'),
+  weak: T('error.weak'),
+  unknown: T('error.unknown'),
 };
 ---
-<PortailLayout title="Définir votre mot de passe" staffName={staff.full_name} minimal>
+<PortailLayout title={T('title')} staffName={staff.full_name} minimal>
   <div style="max-width: 480px; margin: 40px auto;">
     <div class="card">
       <h1 style="margin-bottom: 8px;">
-        {isFirst ? 'Bienvenue sur le portail' : 'Définir un nouveau mot de passe'}
+        {isFirst ? T('h1.first') : T('h1.reset')}
       </h1>
       <p style="color: var(--p-muted); font-size: .92rem; margin-bottom: 22px;">
         {isFirst
-          ? `Bonjour ${staff.full_name.split(' ')[0]}, choisissez le mot de passe que vous utiliserez pour vous connecter.`
-          : 'Choisissez votre nouveau mot de passe.'}
+          ? T('subtitle.first').replace('{name}', staff.full_name.split(' ')[0])
+          : T('subtitle.reset')}
       </p>
 
       {errCode && (
@@ -38,7 +43,7 @@ const errorMessages: Record<string, string> = {
           {errorMessages[errCode] ?? errorMessages.unknown}
           {errDetail && (
             <div style="margin-top: 6px; font-size: .82rem; opacity: .85;">
-              <strong>Détail :</strong> {errDetail}
+              <strong>{T('error.detailLabel')}</strong> {errDetail}
             </div>
           )}
         </div>
@@ -46,19 +51,19 @@ const errorMessages: Record<string, string> = {
 
       <form method="POST" action="/api/portail/set-password">
         <div class="form-row">
-          <label for="password">Nouveau mot de passe</label>
+          <label for="password">{T('label.password')}</label>
           <input type="password" name="password" id="password" required minlength="8" autocomplete="new-password" />
           <div class="hint">
-            <strong>Minimum 8 caractères.</strong> Les mots de passe très courants (ex. « 12345678 ») sont refusés — ils sont vérifiés contre une base de fuites connues.
-            <br/>Astuce : une phrase de 3 mots + chiffres est facile à retenir et acceptée (ex. <em>Rosin-Kief-2026</em>).
+            <strong>{T('hint.strong')}</strong> {T('hint.rest')}
+            <br/>{T('hint.tipPrefix')}<em>{T('hint.example')}</em>{T('hint.tipSuffix')}
           </div>
         </div>
         <div class="form-row">
-          <label for="confirm">Confirmer</label>
+          <label for="confirm">{T('label.confirm')}</label>
           <input type="password" name="confirm" id="confirm" required minlength="8" autocomplete="new-password" />
         </div>
         <button type="submit" class="btn btn-primary" style="width: 100%;">
-          {isFirst ? 'Définir mon mot de passe' : 'Enregistrer'}
+          {isFirst ? T('submit.first') : T('submit.reset')}
         </button>
       </form>
     </div>

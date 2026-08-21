@@ -1,6 +1,9 @@
 ---
 // Internal portal chrome — deliberately does NOT include the public site's
 // Header, Footer, BottomBanner, AgeGate, or SEO. This is a private tool.
+import { getPortailLocale, makeT } from '../lib/portail-i18n';
+import { frCommon, enCommon } from '../i18n/portail/common';
+
 interface Props {
   title: string;
   /** Staff full name to show in the top-right, or null when unauthenticated. */
@@ -11,9 +14,13 @@ interface Props {
   wide?: boolean;
 }
 const { title, staffName = null, minimal = false, wide = false } = Astro.props;
+
+const locale = getPortailLocale(Astro.cookies);
+const Tc = makeT(locale, frCommon, enCommon);
+const currentPath = Astro.url.pathname + Astro.url.search;
 ---
 <!DOCTYPE html>
-<html lang="fr-CA">
+<html lang={locale === 'en' ? 'en' : 'fr-CA'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -78,6 +85,12 @@ const { title, staffName = null, minimal = false, wide = false } = Astro.props;
         font-family: inherit;
       }
       .portail-logout:hover { background: var(--p-bg); }
+      .portail-lang-switch { display: flex; gap: 2px; font-size: .8rem; font-weight: 600; }
+      .portail-lang-switch a {
+        color: var(--p-muted); text-decoration: none; padding: 4px 8px; border-radius: 5px;
+      }
+      .portail-lang-switch a:hover { background: var(--p-bg); color: var(--p-text); }
+      .portail-lang-switch a.active { color: var(--p-accent); background: rgba(208, 88, 38, .08); }
       h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; }
       h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 12px; }
       .card {
@@ -178,30 +191,46 @@ const { title, staffName = null, minimal = false, wide = false } = Astro.props;
           <img src="/images/Oaziz-Logo.webp" alt="" />
           <span>Portail Oaziz <small>· R&D</small></span>
         </a>
-        {staffName && (
-          <div style="display:flex;align-items:center;gap:16px;">
-            {!minimal && (
-              <nav class="portail-nav">
-                <a href="/portail" class={Astro.url.pathname === '/portail' ? 'active' : ''}>Accueil</a>
-                <a href="/portail/formulaires" class={
-                  Astro.url.pathname.startsWith('/portail/formulaires') ||
-                  Astro.url.pathname.startsWith('/portail/demande') ||
-                  Astro.url.pathname === '/portail/nouvelle'
-                    ? 'active' : ''
-                }>Formulaires R&D</a>
-                <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>Calculatrices</a>
-              </nav>
-            )}
-            <span class="portail-user">{staffName}</span>
-            <form method="POST" action="/api/portail/logout" style="margin:0;">
-              <button type="submit" class="portail-logout">Déconnexion</button>
-            </form>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="portail-lang-switch" role="group" aria-label="Language / Langue">
+            <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
+            <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
           </div>
-        )}
+          {staffName && (
+            <>
+              {!minimal && (
+                <nav class="portail-nav">
+                  <a href="/portail" class={Astro.url.pathname === '/portail' ? 'active' : ''}>{Tc('nav.home')}</a>
+                  <a href="/portail/formulaires" class={
+                    Astro.url.pathname.startsWith('/portail/formulaires') ||
+                    Astro.url.pathname.startsWith('/portail/demande') ||
+                    Astro.url.pathname === '/portail/nouvelle'
+                      ? 'active' : ''
+                  }>{Tc('nav.forms')}</a>
+                  <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>
+                </nav>
+              )}
+              <span class="portail-user">{staffName}</span>
+              <form method="POST" action="/api/portail/logout" style="margin:0;">
+                <button type="submit" class="portail-logout">{Tc('nav.logout')}</button>
+              </form>
+            </>
+          )}
+        </div>
       </div>
     </header>
     <main class={`portail-shell ${wide ? 'wide' : ''}`}>
       <slot />
     </main>
+    <script>
+      document.querySelectorAll<HTMLAnchorElement>('a[data-set-locale]').forEach((link) => {
+        link.addEventListener('click', () => {
+          const loc = link.dataset.setLocale;
+          if (loc === 'fr' || loc === 'en') {
+            document.cookie = `portail_locale=${loc}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+          }
+        });
+      });
+    </script>
   </body>
 </html>

@@ -3,70 +3,96 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frExportRoyaumeUniFleur, enExportRoyaumeUniFleur } from '../../../i18n/portail/export-royaume-uni-fleur';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frExportRoyaumeUniFleur, enExportRoyaumeUniFleur);
+
+const clientStrings = {
+  locale,
+  warnLotSize: T('warnLotSize'),
+  breakdownHeading: T('breakdownHeading'),
+  flowerCostLine: T('flowerCostLine'),
+  exportPermitLine: T('exportPermitLine'),
+  shippingLine: T('shippingLine'),
+  highNorthCoaLine: T('highNorthCoaLine'),
+  permitsGmpCoaLine: T('permitsGmpCoaLine'),
+  totalLotCostLine: T('totalLotCostLine'),
+  costPerGramLabel: T('costPerGramLabel'),
+  equivalentLabel: T('equivalentLabel'),
+  unitCompareHeading: T('unitCompareHeading'),
+  unitCompareHint: T('unitCompareHint'),
+  tableFormat: T('tableFormat'),
+  tableUnitsFromLot: T('tableUnitsFromLot'),
+  tableCostPerUnit: T('tableCostPerUnit'),
+  tableCostPerUnitGbp: T('tableCostPerUnitGbp'),
+  tableCostPerGram: T('tableCostPerGram'),
+  tableCostPerGramGbp: T('tableCostPerGramGbp'),
+  footnote: T('footnote'),
+};
 ---
-<PortailLayout title="Export Royaume-Uni — Fleur" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitle')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Export Royaume-Uni — Fleur</h1>
+    <h1>{T('heading')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Modélise le parcours Oaziz Extracts → AgMedica (Canada) → RX Distributor (Royaume-Uni) → détail/pharmacie UK,
-      sur la base de la soumission de RX UK Partner et des coûts AgMedica. Compare le coût par gramme selon la
-      taille d'unité d'emballage.
+      {T('intro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Devises (FX)</h2>
+      <h2>{T('fxHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="gbpToCad">Taux de conversion GBP → CAD</label>
+          <label for="gbpToCad">{T('gbpToCadLabel')}</label>
           <input type="number" id="gbpToCad" value="1.95" step="0.01" />
         </div>
         <div class="form-row">
-          <label>Taux CAD → GBP (dérivé)</label>
+          <label>{T('cadToGbpLabel')}</label>
           <div id="cadToGbpDisplay" class="derived-value">—</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Hypothèses du lot</h2>
+      <h2>{T('lotAssumptionsHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="lotSizeG">Taille du lot (g)</label>
+          <label for="lotSizeG">{T('lotSizeLabel')}</label>
           <input type="number" id="lotSizeG" value="40000" step="1000" />
         </div>
         <div class="form-row">
-          <label for="flowerCostCad">Coût de la fleur par gramme (CA$/g)</label>
+          <label for="flowerCostCad">{T('flowerCostLabel')}</label>
           <input type="number" id="flowerCostCad" value="2" step="0.05" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="exportPermitCadPerG">Coût du permis d'exportation par gramme (CA$/g)</label>
+          <label for="exportPermitCadPerG">{T('exportPermitLabel')}</label>
           <input type="number" id="exportPermitCadPerG" value="0.25" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="shippingCadPerG">Coût d'expédition par gramme, Canada → UK (CA$/g)</label>
+          <label for="shippingCadPerG">{T('shippingLabel')}</label>
           <input type="number" id="shippingCadPerG" value="1.25" step="0.01" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="highNorthCoaCad">Coût COA High North (CA$, forfaitaire par lot)</label>
+          <label for="highNorthCoaCad">{T('highNorthCoaLabel')}</label>
           <input type="number" id="highNorthCoaCad" value="1500" step="50" />
         </div>
         <div class="form-row">
-          <label for="permitsGmpCoaCad">Permis entrants/sortants + COA GMP (CA$, forfaitaire par lot)</label>
+          <label for="permitsGmpCoaCad">{T('permitsGmpCoaLabel')}</label>
           <input type="number" id="permitsGmpCoaCad" value="5850" step="50" />
         </div>
       </div>
@@ -75,6 +101,8 @@ if (!staff) {
     <div id="result"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .derived-value {
@@ -112,6 +140,9 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const NUM_LOCALE = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -120,16 +151,16 @@ if (!staff) {
   }
 
   const fmtCad2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtCad0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtGbp2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtPerGCad = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPerGGbp = (n: number) => (isFinite(n) ? '£' + n.toFixed(4) : '—');
   const fmtRate = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
-  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
-  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) + ' g' : '—');
+  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) : '—');
 
   type UnitOption = { label: string; unitG: number; packagingCostCad: number };
   const UNIT_OPTIONS: UnitOption[] = [
@@ -156,7 +187,7 @@ if (!staff) {
     const permitsGmpCoaCad = num('permitsGmpCoaCad');
 
     if (lotSizeG <= 0) {
-      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnLotSize}</div>`;
       return;
     }
 
@@ -194,39 +225,38 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Décompte du coût total du lot</h2>
-        <div class="cost-line"><span>Coût de la fleur (${fmtG(lotSizeG)} × ${fmtPerGCad(flowerCostCad)}/g)</span><span>${fmtCad0(totalFlowerCost)}</span></div>
-        <div class="cost-line"><span>Permis d'exportation</span><span>${fmtCad0(exportPermitTotal)}</span></div>
-        <div class="cost-line"><span>Expédition Canada → UK</span><span>${fmtCad0(shippingTotal)}</span></div>
-        <div class="cost-line"><span>COA High North</span><span>${fmtCad0(highNorthCoaCad)}</span></div>
-        <div class="cost-line"><span>Permis entrants/sortants + COA GMP</span><span>${fmtCad0(permitsGmpCoaCad)}</span></div>
-        <div class="cost-line subtotal"><span>Coût total du lot</span><span>${fmtCad0(totalLotCostCad)}</span></div>
+        <h2>${I18N.breakdownHeading}</h2>
+        <div class="cost-line"><span>${I18N.flowerCostLine.replace('{g}', fmtG(lotSizeG)).replace('{rate}', fmtPerGCad(flowerCostCad))}</span><span>${fmtCad0(totalFlowerCost)}</span></div>
+        <div class="cost-line"><span>${I18N.exportPermitLine}</span><span>${fmtCad0(exportPermitTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.shippingLine}</span><span>${fmtCad0(shippingTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.highNorthCoaLine}</span><span>${fmtCad0(highNorthCoaCad)}</span></div>
+        <div class="cost-line"><span>${I18N.permitsGmpCoaLine}</span><span>${fmtCad0(permitsGmpCoaCad)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.totalLotCostLine}</span><span>${fmtCad0(totalLotCostCad)}</span></div>
 
         <div class="landed-highlight">
-          <div class="cost-line"><span>★ COÛT / GRAMME</span><span>${fmtPerGCad(costPerGramCad)} CA$</span></div>
-          <div class="cost-line small"><span>Équivalent</span><span>${fmtPerGGbp(costPerGramGbp)} £/g</span></div>
+          <div class="cost-line"><span>${I18N.costPerGramLabel}</span><span>${fmtPerGCad(costPerGramCad)} CA$</span></div>
+          <div class="cost-line small"><span>${I18N.equivalentLabel}</span><span>${fmtPerGGbp(costPerGramGbp)} £/g</span></div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Comparaison par taille d'unité d'emballage</h2>
+        <h2>${I18N.unitCompareHeading}</h2>
         <p class="hint" style="margin-bottom: 12px;">
-          Coût du lot réparti sur le nombre d'unités obtenues, plus le coût d'emballage propre à chaque format
-          (soumission RX UK). La ligne surlignée est le format le moins coûteux par gramme.
+          ${I18N.unitCompareHint}
         </p>
         <div style="overflow-x:auto;">
           <table class="unit-compare">
             <thead>
               <tr>
-                <th>Format</th><th>Unités du lot</th><th>Coût / unité</th><th>Coût / unité (£)</th>
-                <th>Coût / g</th><th>Coût / g (£)</th>
+                <th>${I18N.tableFormat}</th><th>${I18N.tableUnitsFromLot}</th><th>${I18N.tableCostPerUnit}</th><th>${I18N.tableCostPerUnitGbp}</th>
+                <th>${I18N.tableCostPerGram}</th><th>${I18N.tableCostPerGramGbp}</th>
               </tr>
             </thead>
             <tbody>${unitRowsHtml}</tbody>
           </table>
         </div>
         <p class="hint" style="margin-top: 14px;">
-          * Prix hors TVA. * Emballage secondaire non inclus. * Test de stabilité : £750–£2,000 par souche par an (non inclus).
+          ${I18N.footnote}
         </p>
       </div>
     `;

@@ -3,6 +3,9 @@ export const prerender = false;
 
 import PortailLayout from '../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../lib/supabase';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frHub, enHub } from '../../i18n/portail/hub';
+import { frCommon, enCommon } from '../../i18n/portail/common';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 
@@ -74,6 +77,10 @@ if (!staff) {
   });
 }
 
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frHub, enHub);
+const Tc = makeT(locale, frCommon, enCommon);
+
 const { count: pendingCount } = await supabase
   .from('submissions')
   .select('id', { count: 'exact', head: true })
@@ -82,21 +89,21 @@ const { count: pendingCount } = await supabase
 const sections = [
   {
     href: '/portail/formulaires',
-    title: 'Formulaires R&D',
-    desc: 'Demandes d\'échantillon, consentement, signatures et documents.',
-    tag: pendingCount ? `${pendingCount} en cours` : null,
+    title: Tc('nav.forms'),
+    desc: T('section.forms.desc'),
+    tag: pendingCount ? T('section.forms.tag').replace('{count}', String(pendingCount)) : null,
   },
   {
     href: '/portail/calculatrices',
-    title: 'Calculatrices',
-    desc: 'Coût de production, prix de vente par palier de marge, solveur inverse.',
+    title: Tc('nav.calculators'),
+    desc: T('section.calc.desc'),
     tag: null,
   },
 ];
 ---
-<PortailLayout title="Accueil" staffName={staff.full_name}>
-  <h1>Bonjour, {staff.full_name.split(' ')[0]}.</h1>
-  <p style="color: var(--p-muted); margin-bottom: 24px;">Choisissez une section.</p>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <h1>{T('greeting').replace('{name}', staff.full_name.split(' ')[0])}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
 
   <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
     {sections.map((s) => (

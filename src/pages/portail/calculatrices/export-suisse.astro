@@ -3,102 +3,134 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frExportSuisse, enExportSuisse } from '../../../i18n/portail/export-suisse';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frExportSuisse, enExportSuisse);
+
+const clientStrings = {
+  locale,
+  warnVolume: T('warnVolume'),
+  breakdownHeading: T('breakdownHeading'),
+  kiefPurchaseLine: T('kiefPurchaseLine'),
+  shippingSupplierLine: T('shippingSupplierLine'),
+  vacuumSealLine: T('vacuumSealLine'),
+  exportPermitLine: T('exportPermitLine'),
+  vertical7Line: T('vertical7Line'),
+  jarPackagingLine: T('jarPackagingLine'),
+  packagingLabourLine: T('packagingLabourLine'),
+  shippingToVertical7Line: T('shippingToVertical7Line'),
+  shippingToSwitzerlandLine: T('shippingToSwitzerlandLine'),
+  fullCoaLine: T('fullCoaLine'),
+  totalCostLine: T('totalCostLine'),
+  costPerGramLabel: T('costPerGramLabel'),
+  summaryHeading: T('summaryHeading'),
+  summaryVolumeLine: T('summaryVolumeLine'),
+  summaryCostPerGramLine: T('summaryCostPerGramLine'),
+  summaryMarkupLine: T('summaryMarkupLine'),
+  summarySellPriceLine: T('summarySellPriceLine'),
+  summaryRevenueLine: T('summaryRevenueLine'),
+  summaryProfitLine: T('summaryProfitLine'),
+  summaryMarginLine: T('summaryMarginLine'),
+  splitLine: T('splitLine'),
+  splitReferenceLine: T('splitReferenceLine'),
+};
 ---
-<PortailLayout title="Export Suisse — Kief / Blocs pressés" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitle')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Export Suisse — Kief / Blocs pressés</h1>
+    <h1>{T('heading')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Modélise le parcours Fournisseur de kief → Oaziz → Vertical 7 → Suisse : kief pressé en blocs, décompte
-      complet des coûts et prix de vente selon la majoration appliquée.
+      {T('intro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Transaction</h2>
+      <h2>{T('transactionHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="totalVolumeG">Volume total (g)</label>
+          <label for="totalVolumeG">{T('totalVolumeLabel')}</label>
           <input type="number" id="totalVolumeG" value="20000" step="1000" />
         </div>
         <div class="form-row">
-          <label for="blockSizeG">Taille du bloc pressé (g/bloc)</label>
+          <label for="blockSizeG">{T('blockSizeLabel')}</label>
           <input type="number" id="blockSizeG" value="100" step="10" />
         </div>
       </div>
       <div class="form-row">
-        <label>Nombre de blocs (dérivé)</label>
+        <label>{T('jarCountLabel')}</label>
         <div id="jarCountDisplay" class="derived-value">—</div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Postes de coût</h2>
+      <h2>{T('costHeading')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="kiefPurchaseCadPerG">Kief — prix d'achat ($/g)</label>
+          <label for="kiefPurchaseCadPerG">{T('kiefPurchaseLabel')}</label>
           <input type="number" id="kiefPurchaseCadPerG" value="0.92" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="shippingSupplierFlat">Expédition fournisseur de kief → Oaziz (forfaitaire $)</label>
+          <label for="shippingSupplierFlat">{T('shippingSupplierLabel')}</label>
           <input type="number" id="shippingSupplierFlat" value="200" step="10" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="vacuumSealCadPerG">Scellage sous vide + pesée + pressage ($/g)</label>
+          <label for="vacuumSealCadPerG">{T('vacuumSealLabel')}</label>
           <input type="number" id="vacuumSealCadPerG" value="0.12" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="exportPermitFlat">Permis d'exportation (forfaitaire $)</label>
+          <label for="exportPermitFlat">{T('exportPermitLabel')}</label>
           <input type="number" id="exportPermitFlat" value="755" step="5" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="vertical7CadPerG">Frais Vertical 7 ($/g)</label>
+          <label for="vertical7CadPerG">{T('vertical7Label')}</label>
           <input type="number" id="vertical7CadPerG" value="0.10" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="jarPackagingCadPerJar">Emballage — pots ($/pot)</label>
+          <label for="jarPackagingCadPerJar">{T('jarPackagingLabel')}</label>
           <input type="number" id="jarPackagingCadPerJar" value="1.75" step="0.05" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="packagingLabourCadPerG">Emballage — main-d'œuvre ($/g)</label>
+          <label for="packagingLabourCadPerG">{T('packagingLabourLabel')}</label>
           <input type="number" id="packagingLabourCadPerG" value="0.10" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="shippingToVertical7Flat">Expédition Oaziz → Vertical 7 (forfaitaire $)</label>
+          <label for="shippingToVertical7Flat">{T('shippingToVertical7Label')}</label>
           <input type="number" id="shippingToVertical7Flat" value="300" step="10" />
         </div>
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="shippingToSwitzerlandCadPerG">Expédition Vertical 7 → Suisse ($/g)</label>
+          <label for="shippingToSwitzerlandCadPerG">{T('shippingToSwitzerlandLabel')}</label>
           <input type="number" id="shippingToSwitzerlandCadPerG" value="0.20" step="0.01" />
         </div>
         <div class="form-row">
-          <label for="fullCoaFlat">COA complet High North (forfaitaire $)</label>
+          <label for="fullCoaFlat">{T('fullCoaLabel')}</label>
           <input type="number" id="fullCoaFlat" value="1600" step="50" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Prix</h2>
+      <h2>{T('priceHeading')}</h2>
       <div class="form-row">
-        <label for="markupPct">Majoration (%)</label>
+        <label for="markupPct">{T('markupLabel')}</label>
         <input type="number" id="markupPct" value="40" step="1" />
       </div>
     </div>
@@ -106,6 +138,8 @@ if (!staff) {
     <div id="result"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .derived-value {
@@ -137,6 +171,9 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const NUM_LOCALE = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -145,14 +182,14 @@ if (!staff) {
   }
 
   const fmtMoney2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtMoney0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
   const fmtPct2 = (n: number) => (isFinite(n) ? (n * 100).toFixed(2) + '%' : '—');
-  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
-  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) + ' g' : '—');
+  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) : '—');
 
   function render() {
     const out = document.getElementById('result');
@@ -179,7 +216,7 @@ if (!staff) {
     const markupPct = num('markupPct');
 
     if (totalVolumeG <= 0) {
-      out.innerHTML = `<div class="warn-banner">Le volume total doit être supérieur à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnVolume}</div>`;
       return;
     }
 
@@ -211,37 +248,37 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Décompte du coût total</h2>
-        <div class="cost-line"><span>Kief — achat (${fmtG(totalVolumeG)} × ${fmtPerG(kiefPurchaseCadPerG)}/g)</span><span>${fmtMoney0(kiefPurchaseTotal)}</span></div>
-        <div class="cost-line"><span>Expédition fournisseur de kief → Oaziz</span><span>${fmtMoney0(shippingSupplierFlat)}</span></div>
-        <div class="cost-line"><span>Scellage sous vide + pesée + pressage</span><span>${fmtMoney0(vacuumSealTotal)}</span></div>
-        <div class="cost-line"><span>Permis d'exportation</span><span>${fmtMoney0(exportPermitFlat)}</span></div>
-        <div class="cost-line"><span>Frais Vertical 7</span><span>${fmtMoney0(vertical7Total)}</span></div>
-        <div class="cost-line"><span>Emballage — pots (${fmtUnits(jarCount)} × ${fmtMoney2(jarPackagingCadPerJar)})</span><span>${fmtMoney0(jarPackagingTotal)}</span></div>
-        <div class="cost-line"><span>Emballage — main-d'œuvre</span><span>${fmtMoney0(packagingLabourTotal)}</span></div>
-        <div class="cost-line"><span>Expédition Oaziz → Vertical 7</span><span>${fmtMoney0(shippingToVertical7Flat)}</span></div>
-        <div class="cost-line"><span>Expédition Vertical 7 → Suisse</span><span>${fmtMoney0(shippingToSwitzerlandTotal)}</span></div>
-        <div class="cost-line"><span>COA complet High North</span><span>${fmtMoney0(fullCoaFlat)}</span></div>
-        <div class="cost-line subtotal"><span>Coût total</span><span>${fmtMoney0(totalCost)}</span></div>
+        <h2>${I18N.breakdownHeading}</h2>
+        <div class="cost-line"><span>${I18N.kiefPurchaseLine} (${fmtG(totalVolumeG)} × ${fmtPerG(kiefPurchaseCadPerG)}/g)</span><span>${fmtMoney0(kiefPurchaseTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.shippingSupplierLine}</span><span>${fmtMoney0(shippingSupplierFlat)}</span></div>
+        <div class="cost-line"><span>${I18N.vacuumSealLine}</span><span>${fmtMoney0(vacuumSealTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.exportPermitLine}</span><span>${fmtMoney0(exportPermitFlat)}</span></div>
+        <div class="cost-line"><span>${I18N.vertical7Line}</span><span>${fmtMoney0(vertical7Total)}</span></div>
+        <div class="cost-line"><span>${I18N.jarPackagingLine} (${fmtUnits(jarCount)} × ${fmtMoney2(jarPackagingCadPerJar)})</span><span>${fmtMoney0(jarPackagingTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.packagingLabourLine}</span><span>${fmtMoney0(packagingLabourTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.shippingToVertical7Line}</span><span>${fmtMoney0(shippingToVertical7Flat)}</span></div>
+        <div class="cost-line"><span>${I18N.shippingToSwitzerlandLine}</span><span>${fmtMoney0(shippingToSwitzerlandTotal)}</span></div>
+        <div class="cost-line"><span>${I18N.fullCoaLine}</span><span>${fmtMoney0(fullCoaFlat)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.totalCostLine}</span><span>${fmtMoney0(totalCost)}</span></div>
 
         <div class="landed-highlight">
-          <div class="cost-line"><span>★ COÛT / GRAMME</span><span>${fmtPerG(costPerGram)}</span></div>
+          <div class="cost-line"><span>${I18N.costPerGramLabel}</span><span>${fmtPerG(costPerGram)}</span></div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Résumé de la transaction</h2>
-        <div class="cost-line"><span>Volume total</span><span>${fmtG(totalVolumeG)}</span></div>
-        <div class="cost-line"><span>Coût / gramme</span><span>${fmtPerG(costPerGram)}</span></div>
-        <div class="cost-line"><span>Majoration</span><span>${fmtPct1(markupPct / 100)}</span></div>
-        <div class="cost-line"><span>Prix de vente / gramme</span><span>${fmtPerG(sellPricePerGram)}</span></div>
-        <div class="cost-line"><span>Revenu total</span><span>${fmtMoney0(totalRevenue)}</span></div>
-        <div class="cost-line subtotal"><span>Profit brut</span><span>${fmtMoney0(grossProfit)}</span></div>
-        <div class="cost-line"><span>Marge brute</span><span>${fmtPct2(grossMarginPct)}</span></div>
+        <h2>${I18N.summaryHeading}</h2>
+        <div class="cost-line"><span>${I18N.summaryVolumeLine}</span><span>${fmtG(totalVolumeG)}</span></div>
+        <div class="cost-line"><span>${I18N.summaryCostPerGramLine}</span><span>${fmtPerG(costPerGram)}</span></div>
+        <div class="cost-line"><span>${I18N.summaryMarkupLine}</span><span>${fmtPct1(markupPct / 100)}</span></div>
+        <div class="cost-line"><span>${I18N.summarySellPriceLine}</span><span>${fmtPerG(sellPricePerGram)}</span></div>
+        <div class="cost-line"><span>${I18N.summaryRevenueLine}</span><span>${fmtMoney0(totalRevenue)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.summaryProfitLine}</span><span>${fmtMoney0(grossProfit)}</span></div>
+        <div class="cost-line"><span>${I18N.summaryMarginLine}</span><span>${fmtPct2(grossMarginPct)}</span></div>
 
         <div class="landed-highlight">
-          <div class="cost-line"><span>Portion 50 % – 50 % du profit</span><span>${fmtMoney0(fiftyFiftySplit)}</span></div>
-          <div class="cost-line small"><span>Référence — structure de partage de profit</span><span></span></div>
+          <div class="cost-line"><span>${I18N.splitLine}</span><span>${fmtMoney0(fiftyFiftySplit)}</span></div>
+          <div class="cost-line small"><span>${I18N.splitReferenceLine}</span><span></span></div>
         </div>
       </div>
     `;

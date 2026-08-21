@@ -3,56 +3,82 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frSoftgelOsg, enSoftgelOsg } from '../../../i18n/portail/softgel-osg';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frSoftgelOsg, enSoftgelOsg);
+
+// Strings needed by the client-side render() functions (JSON data island — see
+// the <script type="application/json"> below). Keep in sync with every I18N.xxx
+// reference in the <script> block further down.
+const clientStrings = {
+  locale,
+  warnVolumeTier: T('warnVolumeTier'),
+  warnBottleCombo: T('warnBottleCombo'),
+  waterfallTitle: T('waterfallTitle'),
+  colStep: T('colStep'),
+  colPer1000: T('colPer1000'),
+  colPerCapsule: T('colPerCapsule'),
+  rowOsgCost: T('rowOsgCost'),
+  rowTransportCost: T('rowTransportCost'),
+  rowLandedCost: T('rowLandedCost'),
+  rowOazizSellingPrice: T('rowOazizSellingPrice'),
+  rowOazizGrossMargin: T('rowOazizGrossMargin'),
+  rowDistributorEndPrice: T('rowDistributorEndPrice'),
+  bottleResultTitle: T('bottleResultTitle'),
+  bottleOsgCostLabel: T('bottleOsgCostLabel'),
+  bottleOazizSellLabel: T('bottleOazizSellLabel'),
+  bottleDistributorEndLabel: T('bottleDistributorEndLabel'),
+};
 ---
-<PortailLayout title="Prix des softgels OSG (CBD/CBN)" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitle')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Prix des softgels OSG (CBD/CBN)</h1>
+    <h1>{T('pageTitle')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Cascade de prix pour les capsules softgel produites par Olds Softgel Ltd. (OSG) — départ usine Olds, AB.
-      Basé sur la grille de prix OSG, avec une majoration Oaziz et une majoration du distributeur en aval,
-      plus un module d'embouteillage optionnel.
+      {T('pageIntro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Sélection du produit</h2>
+      <h2>{T('selectionCardTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="productType">Type de produit</label>
+          <label for="productType">{T('productTypeLabel')}</label>
           <select id="productType">
             <option value="CBD">CBD</option>
             <option value="CBN" selected>CBN</option>
           </select>
         </div>
         <div class="form-row">
-          <label for="dose">Dosage</label>
+          <label for="dose">{T('doseLabel')}</label>
           <select id="dose"></select>
         </div>
       </div>
       <div class="form-row">
-        <label for="volumeTier">Palier de volume</label>
+        <label for="volumeTier">{T('volumeTierLabel')}</label>
         <select id="volumeTier"></select>
       </div>
-      <p class="hint">Les options de dosage et de palier de volume dépendent du type de produit sélectionné.</p>
+      <p class="hint">{T('selectionHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Grille de prix de base OSG (référence fixe)</h2>
-      <p class="hint" style="margin-bottom: 12px;">CA$ par 1 000 capsules, départ usine Olds AB — non éditable.</p>
+      <h2>{T('priceGridCardTitle')}</h2>
+      <p class="hint" style="margin-bottom: 12px;">{T('priceGridHint')}</p>
       <div style="overflow-x:auto;">
         <table class="osg-price-table">
           <thead>
-            <tr><th>Produit</th><th>92K (MOQ)</th><th>250K</th><th>500K</th><th>750K</th><th>1000K</th></tr>
+            <tr><th>{T('priceGridColProduct')}</th><th>92K (MOQ)</th><th>250K</th><th>500K</th><th>750K</th><th>1000K</th></tr>
           </thead>
           <tbody>
             <tr><td>CBD 25mg</td><td>680</td><td>590</td><td>550</td><td>510</td><td>470</td></tr>
@@ -64,19 +90,19 @@ if (!staff) {
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Hypothèses de coût et de majoration</h2>
+      <h2>{T('assumptionsCardTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="oazizMarkupPct">Majoration Oaziz (%)</label>
+          <label for="oazizMarkupPct">{T('oazizMarkupLabel')}</label>
           <input type="number" id="oazizMarkupPct" value="30" step="1" />
         </div>
         <div class="form-row">
-          <label for="distributorMarkupPct">Majoration du distributeur (%)</label>
+          <label for="distributorMarkupPct">{T('distributorMarkupLabel')}</label>
           <input type="number" id="distributorMarkupPct" value="100" step="1" />
         </div>
       </div>
       <div class="form-row">
-        <label for="transportCadPer1000">Coût de transport (CA$ / 1000 capsules)</label>
+        <label for="transportCadPer1000">{T('transportCostLabel')}</label>
         <input type="number" id="transportCadPer1000" value="0" step="1" />
       </div>
     </div>
@@ -84,10 +110,10 @@ if (!staff) {
     <div id="result"></div>
 
     <div class="card" style="margin-top: 16px;">
-      <h2>Module d'embouteillage (optionnel)</h2>
+      <h2>{T('bottlingCardTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="bottleTier">Format de bouteille (capsules)</label>
+          <label for="bottleTier">{T('bottleTierLabel')}</label>
           <select id="bottleTier">
             <option value="600" selected>600</option>
             <option value="1000">1000</option>
@@ -95,19 +121,21 @@ if (!staff) {
           </select>
         </div>
         <div class="form-row">
-          <label for="bottleSuppliedBy">Bouteille fournie par</label>
+          <label for="bottleSuppliedBy">{T('bottleSuppliedByLabel')}</label>
           <select id="bottleSuppliedBy">
-            <option value="OSG" selected>OSG</option>
-            <option value="Customer">Client</option>
+            <option value="OSG" selected>{T('bottleSuppliedByOsg')}</option>
+            <option value="Customer">{T('bottleSuppliedByCustomer')}</option>
           </select>
         </div>
       </div>
-      <p class="hint">Ce module est indépendant de la cascade de prix des capsules ci-dessus — il partage uniquement les majorations Oaziz et distributeur.</p>
+      <p class="hint">{T('bottlingHint')}</p>
     </div>
 
     <div id="result-bottle"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   table.osg-price-table { width: 100%; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
@@ -129,6 +157,9 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const localeTag = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -141,9 +172,9 @@ if (!staff) {
   }
 
   const fmtMoney2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(localeTag, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtMoney3 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—';
+    isFinite(n) ? n.toLocaleString(localeTag, { style: 'currency', currency: 'CAD', minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—';
   const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
 
   // ---------- Option sets ----------
@@ -214,7 +245,7 @@ if (!staff) {
     const osgCostPer1000 = row ? row[volumeTier] : null;
 
     if (osgCostPer1000 === null || osgCostPer1000 === undefined) {
-      out.innerHTML = `<div class="warn-banner">⚠ Ce palier de volume n'est pas offert pour ${key} (S/O dans la grille OSG). Choisissez un autre palier.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnVolumeTier.replace('{key}', key)}</div>`;
       return;
     }
 
@@ -233,40 +264,40 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card">
-        <h2>Cascade de prix — ${key}, ${volumeTier}</h2>
+        <h2>${I18N.waterfallTitle.replace('{key}', key).replace('{volumeTier}', volumeTier)}</h2>
         <div style="overflow-x:auto;">
           <table class="waterfall-table">
             <thead>
-              <tr><th>Étape</th><th>CA$ / 1000 capsules</th><th>CA$ / capsule</th></tr>
+              <tr><th>${I18N.colStep}</th><th>${I18N.colPer1000}</th><th>${I18N.colPerCapsule}</th></tr>
             </thead>
             <tbody>
               <tr>
-                <td>Coût OSG (Oaziz achète à)</td>
+                <td>${I18N.rowOsgCost}</td>
                 <td>${fmtMoney2(osgCostPer1000)}</td>
                 <td>${fmtMoney3(osgCostPerCapsule)}</td>
               </tr>
               <tr>
-                <td>Coût de transport</td>
+                <td>${I18N.rowTransportCost}</td>
                 <td>${fmtMoney2(transportCadPer1000)}</td>
                 <td>${fmtMoney3(transportCadPer1000 / 1000)}</td>
               </tr>
               <tr class="highlight-row">
-                <td>Coût total rendu</td>
+                <td>${I18N.rowLandedCost}</td>
                 <td>${fmtMoney2(landedCostPer1000)}</td>
                 <td>${fmtMoney3(landedCostPerCapsule)}</td>
               </tr>
               <tr>
-                <td>Prix de vente Oaziz (+${oazizMarkupPct}%)</td>
+                <td>${I18N.rowOazizSellingPrice.replace('{pct}', String(oazizMarkupPct))}</td>
                 <td>${fmtMoney2(oazizSellingPricePer1000)}</td>
                 <td>${fmtMoney3(oazizSellingPricePerCapsule)}</td>
               </tr>
               <tr>
-                <td>Marge brute Oaziz</td>
+                <td>${I18N.rowOazizGrossMargin}</td>
                 <td>${fmtMoney2(oazizGrossMarginTotal)} (${fmtPct1(oazizGrossMarginPct)})</td>
                 <td>${fmtMoney3(oazizGrossMarginTotal / 1000)}</td>
               </tr>
               <tr class="final-row">
-                <td>Prix final distributeur (+${distributorMarkupPct}%)</td>
+                <td>${I18N.rowDistributorEndPrice.replace('{pct}', String(distributorMarkupPct))}</td>
                 <td>${fmtMoney2(distributorEndPricePer1000)}</td>
                 <td>${fmtMoney3(distributorEndPricePerCapsule)}</td>
               </tr>
@@ -291,7 +322,7 @@ if (!staff) {
     const osgBottleCost = costTable ? costTable[bottleTier] : undefined;
 
     if (osgBottleCost === undefined) {
-      out.innerHTML = `<div class="warn-banner">⚠ Combinaison de format de bouteille invalide.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnBottleCombo}</div>`;
       return;
     }
 
@@ -300,18 +331,18 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card">
-        <h2>Module d'embouteillage — résultat</h2>
+        <h2>${I18N.bottleResultTitle}</h2>
         <div class="bottle-grid">
           <div class="bottle-item">
-            <div class="bottle-item-name">Coût bouteille OSG</div>
+            <div class="bottle-item-name">${I18N.bottleOsgCostLabel}</div>
             <div class="bottle-item-value">${fmtMoney2(osgBottleCost)}</div>
           </div>
           <div class="bottle-item">
-            <div class="bottle-item-name">Prix de vente Oaziz / bouteille</div>
+            <div class="bottle-item-name">${I18N.bottleOazizSellLabel}</div>
             <div class="bottle-item-value">${fmtMoney2(oazizBottleSellPrice)}</div>
           </div>
           <div class="bottle-item">
-            <div class="bottle-item-name">Prix final distributeur / bouteille</div>
+            <div class="bottle-item-name">${I18N.bottleDistributorEndLabel}</div>
             <div class="bottle-item-value">${fmtMoney2(distributorBottleEndPrice)}</div>
           </div>
         </div>

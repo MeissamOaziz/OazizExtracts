@@ -8,6 +8,12 @@ import DocRnd from '../../../../components/portail/DocRnd.astro';
 import DocConsent from '../../../../components/portail/DocConsent.astro';
 import type { SubmissionForRender, StaffLite, RndRatings } from '../../../../lib/portail-types';
 import { fmtDateFr, RATING_KEYS, RATING_LABELS } from '../../../../lib/portail-types';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frSigner, enSigner } from '../../../../i18n/portail/signer';
+
+// NOTE: RATING_LABELS above is shared with the printed R&D document
+// (src/components/portail/DocRnd.astro, src/lib/pdf.ts) and must always
+// render in French regardless of portail_locale — do not translate it here.
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
@@ -111,24 +117,40 @@ const prefill = {
 
 const savedSignature = savedSig?.saved_signature ?? null;
 
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frSigner, enSigner);
+
 const kindLabel: Record<string, string> = {
-  sample_request: "Demande d'échantillon",
-  rnd: 'Formulaire R&D (F2-PRO-013/04)',
-  consent: 'Formulaire de consentement éclairé',
+  sample_request: T('kind.sample_request'),
+  rnd: T('kind.rnd'),
+  consent: T('kind.consent'),
+};
+
+// Strings needed by the inline client script further down (passed via
+// define:vars, since that script is already is:inline).
+const clientStrings = {
+  errorImageTooLarge: T('errorImageTooLarge'),
+  viewDocument: T('viewDocument'),
+  hideDocument: T('hideDocument'),
+  statusSending: T('statusSending'),
+  errorNothingToSign: T('errorNothingToSign'),
+  errorGeneric: T('errorGeneric'),
+  errorNetwork: T('errorNetwork'),
+  successSaved: T('successSaved'),
 };
 ---
-<PortailLayout title="Signer" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="max-width: 840px; margin: 0 auto;">
     <div style="margin-bottom: 16px;">
       <a href={`/portail/demande/${id}`} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour à la demande
+        {T('backLink')}
       </a>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h1 style="margin-bottom: 6px;">Signature en ligne</h1>
+      <h1 style="margin-bottom: 6px;">{T('heading')}</h1>
       <p style="color: var(--p-muted); font-size: .95rem;">
-        Bonjour <strong>{staff.full_name.split(' ')[0]}</strong>, merci de signer {documents.length > 1 ? 'les documents suivants' : 'le document suivant'}.
+        {T('greetingHello')} <strong>{staff.full_name.split(' ')[0]}</strong>, {documents.length > 1 ? T('greetingMultiple') : T('greetingSingle')}.
       </p>
       <div style="margin-top: 14px; color: var(--p-muted); font-size: .88rem;">
         <strong style="color: var(--p-text);">{submission.product_name}</strong> · {submission.product_type} · {fmtDateFr(submission.form_date)}
@@ -136,17 +158,17 @@ const kindLabel: Record<string, string> = {
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Documents à signer</h2>
+      <h2>{T('documentsHeading')}</h2>
       <ul style="margin-top: 12px; padding-left: 0; list-style: none;">
         {documents.map((doc, idx) => (
           <li style="margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--p-border); border-radius: 6px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
               <div>
                 <strong>{kindLabel[doc.kind] ?? doc.kind}</strong>
-                {doc.participant && <span style="color: var(--p-muted);"> — pour {doc.participant.name}</span>}
+                {doc.participant && <span style="color: var(--p-muted);"> — {T('signedFor')} {doc.participant.name}</span>}
               </div>
               <button type="button" class="btn btn-secondary doc-toggle" data-target={`doc-preview-${idx}`} style="font-size: .82rem; padding: 5px 12px;">
-                Voir le document
+                {T('viewDocument')}
               </button>
             </div>
             <div id={`doc-preview-${idx}`} class="doc-preview" style="display: none; margin-top: 14px;">
@@ -173,34 +195,34 @@ const kindLabel: Record<string, string> = {
 
     {needsQaVerification && (
       <div class="card" id="qa-verif-card" style="margin-bottom: 16px;">
-        <h2>Vérification AQ — Destruction</h2>
-        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">À remplir avant de signer. Ces champs seront apposés sur tous les formulaires R&D.</p>
+        <h2>{T('qaHeading')}</h2>
+        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">{T('qaHint')}</p>
         <div class="form-row">
-          <label for="qa-destruction-id">ID de destruction</label>
-          <input type="text" id="qa-destruction-id" required maxlength="200" placeholder="ex: DEST-2026-0042" value={qaPrefill.rnd_destruction_id} />
+          <label for="qa-destruction-id">{T('qaDestructionIdLabel')}</label>
+          <input type="text" id="qa-destruction-id" required maxlength="200" placeholder={T('qaDestructionIdPlaceholder')} value={qaPrefill.rnd_destruction_id} />
         </div>
         <div class="form-row">
-          <label for="qa-qty-destroyed">Quantité de cannabis détruite (en g)</label>
-          <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder="ex: 5 g" value={qaPrefill.rnd_qty_destroyed} />
+          <label for="qa-qty-destroyed">{T('qaQtyDestroyedLabel')}</label>
+          <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder={T('qaQtyDestroyedPlaceholder')} value={qaPrefill.rnd_qty_destroyed} />
         </div>
         <div class="form-row">
-          <label for="qa-date-destroyed">Date de destruction</label>
+          <label for="qa-date-destroyed">{T('qaDateDestroyedLabel')}</label>
           <input type="date" id="qa-date-destroyed" required value={qaPrefill.rnd_date_destroyed} />
         </div>
         <div id="qa-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
-          Veuillez remplir les trois champs de destruction avant de signer.
+          {T('qaErrorMissing')}
         </div>
       </div>
     )}
 
     {needsRndEval && (
       <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
-        <h2>Votre évaluation R&D</h2>
-        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">Notez le produit selon vos observations (obligatoire pour signer).</p>
+        <h2>{T('evalHeading')}</h2>
+        <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">{T('evalHint')}</p>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr>
-              <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">Critère</th>
+              <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">{T('evalCriterionHeader')}</th>
               {[1, 2, 3, 4, 5].map((n) => (
                 <th style="text-align:center;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;width:56px;">{n}</th>
               ))}
@@ -209,6 +231,7 @@ const kindLabel: Record<string, string> = {
           <tbody>
             {RATING_KEYS.map((k) => (
               <tr>
+                {/* RATING_LABELS is shared with the printed R&D document — always French, never translated here. */}
                 <td style="padding:8px 6px;font-size:.92rem;">{RATING_LABELS[k]}</td>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <td style="text-align:center;padding:8px 6px;">
@@ -220,41 +243,41 @@ const kindLabel: Record<string, string> = {
           </tbody>
         </table>
         <div class="form-row" style="margin-top: 16px;">
-          <label for="rnd-comments">Rétroaction / Commentaires</label>
-          <textarea id="rnd-comments" rows="4" placeholder="Vos observations sur le produit…" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
+          <label for="rnd-comments">{T('commentsLabel')}</label>
+          <textarea id="rnd-comments" rows="4" placeholder={T('commentsPlaceholder')} style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
         </div>
         <div id="rnd-eval-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
-          Veuillez noter chaque critère avant de signer.
+          {T('evalErrorMissing')}
         </div>
       </div>
     )}
 
     <div class="card">
-      <h2>Votre signature</h2>
+      <h2>{T('signatureHeading')}</h2>
       <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 12px 0 14px; border-bottom: 1px solid var(--p-border);">
-        <button type="button" class="sig-tab active" role="tab" data-method="draw">Dessiner</button>
-        <button type="button" class="sig-tab" role="tab" data-method="type">Taper</button>
-        <button type="button" class="sig-tab" role="tab" data-method="upload">Téléverser</button>
+        <button type="button" class="sig-tab active" role="tab" data-method="draw">{T('tabDraw')}</button>
+        <button type="button" class="sig-tab" role="tab" data-method="type">{T('tabType')}</button>
+        <button type="button" class="sig-tab" role="tab" data-method="upload">{T('tabUpload')}</button>
       </div>
-      <div class="sig-panel" data-panel="draw"><p class="hint" style="margin-bottom: 10px;">Dessinez ci-dessous avec la souris ou le doigt.</p></div>
+      <div class="sig-panel" data-panel="draw"><p class="hint" style="margin-bottom: 10px;">{T('drawHint')}</p></div>
       <div class="sig-panel" data-panel="type" style="display: none;">
-        <p class="hint" style="margin-bottom: 10px;">Tapez votre nom complet.</p>
+        <p class="hint" style="margin-bottom: 10px;">{T('typeHint')}</p>
         <input type="text" id="type-input" placeholder={staff.full_name} style="margin-bottom: 12px;" autocomplete="name" />
       </div>
       <div class="sig-panel" data-panel="upload" style="display: none;">
-        <p class="hint" style="margin-bottom: 10px;">Téléversez une image de votre signature (PNG, JPG).</p>
+        <p class="hint" style="margin-bottom: 10px;">{T('uploadHint')}</p>
         <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
       </div>
       <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
         <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
       </div>
-      {savedSignature && <p class="hint" style="margin-top: 10px;">✓ Votre signature enregistrée est chargée. Cliquez « Effacer » pour en dessiner une nouvelle.</p>}
+      {savedSignature && <p class="hint" style="margin-top: 10px;">{T('savedSigLoaded')}</p>}
       <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap;">
-        <button type="button" id="btn-clear" class="btn btn-secondary">Effacer</button>
-        <button type="button" id="btn-submit" class="btn btn-primary" disabled>Signer et envoyer</button>
+        <button type="button" id="btn-clear" class="btn btn-secondary">{T('btnClear')}</button>
+        <button type="button" id="btn-submit" class="btn btn-primary" disabled>{T('btnSubmit')}</button>
         <label style="display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--p-muted);margin-left:6px;cursor:pointer;">
           <input type="checkbox" id="save-sig-checkbox" checked={!savedSignature} />
-          <span>Enregistrer ma signature pour la prochaine fois</span>
+          <span>{T('saveSigCheckbox')}</span>
         </label>
         <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
       </div>
@@ -274,7 +297,7 @@ const kindLabel: Record<string, string> = {
     @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   </style>
 
-  <script is:inline define:vars={{ submissionId: id, needsRndEval, needsQaVerification, savedSig: savedSignature }}>
+  <script is:inline define:vars={{ submissionId: id, needsRndEval, needsQaVerification, savedSig: savedSignature, strings: clientStrings }}>
     (function () {
       const canvas = document.getElementById('sig-pad');
       const ctx2d = canvas.getContext('2d');
@@ -357,7 +380,7 @@ const kindLabel: Record<string, string> = {
       uploadInput.addEventListener('change', (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
-        if (file.size > 4 * 1024 * 1024) { flashEl.innerHTML = '<div class="flash flash-error">Image trop volumineuse.</div>'; return; }
+        if (file.size > 4 * 1024 * 1024) { flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorImageTooLarge + '</div>'; return; }
         const reader = new FileReader();
         reader.onload = (ev) => {
           const img = new Image();
@@ -387,7 +410,7 @@ const kindLabel: Record<string, string> = {
         if (!t) return;
         const open = t.style.display !== 'none';
         t.style.display = open ? 'none' : 'block';
-        btn.textContent = open ? 'Voir le document' : 'Masquer';
+        btn.textContent = open ? strings.viewDocument : strings.hideDocument;
       }));
 
       btnClear.addEventListener('click', () => { clearCanvas(); if (typeInput) typeInput.value = ''; if (uploadInput) uploadInput.value = ''; });
@@ -427,7 +450,7 @@ const kindLabel: Record<string, string> = {
           qaErrorEl.style.display = 'none';
         }
         btnSubmit.disabled = true;
-        statusEl.textContent = 'Envoi en cours…';
+        statusEl.textContent = strings.statusSending;
         const dataUrl = canvas.toDataURL('image/png');
         const saveSig = !!(saveSigCheckbox && saveSigCheckbox.checked);
         try {
@@ -442,16 +465,16 @@ const kindLabel: Record<string, string> = {
           const body = await res.json();
           if (!res.ok || body.error) {
             statusEl.textContent = '';
-            flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'nothing_to_sign' ? 'Rien à signer.' : 'Erreur — réessayez.') + '</div>';
+            flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'nothing_to_sign' ? strings.errorNothingToSign : strings.errorGeneric) + '</div>';
             btnSubmit.disabled = false;
             return;
           }
           statusEl.textContent = '';
-          flashEl.innerHTML = '<div class="flash flash-success">Signature enregistrée. Redirection…</div>';
+          flashEl.innerHTML = '<div class="flash flash-success">' + strings.successSaved + '</div>';
           setTimeout(() => window.location.href = '/portail/demande/' + submissionId + '?info=signed', 1200);
         } catch (e) {
           statusEl.textContent = '';
-          flashEl.innerHTML = '<div class="flash flash-error">Erreur réseau — réessayez.</div>';
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorNetwork + '</div>';
           btnSubmit.disabled = false;
         }
       });

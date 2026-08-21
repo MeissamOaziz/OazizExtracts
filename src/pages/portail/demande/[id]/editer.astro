@@ -3,10 +3,17 @@ export const prerender = false;
 
 import PortailLayout from '../../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frDemandeEditer, enDemandeEditer } from '../../../../i18n/portail/demande-editer';
+import { frCommon, enCommon } from '../../../../i18n/portail/common';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDemandeEditer, enDemandeEditer);
+const Tc = makeT(locale, frCommon, enCommon);
 
 const { id } = Astro.params;
 if (!id) return Astro.redirect('/portail/formulaires');
@@ -48,42 +55,34 @@ const stephane = findByEmail('stephane@oaziz.ca');
 const url = new URL(Astro.request.url);
 const errCode = url.searchParams.get('error');
 const errorMessages: Record<string, string> = {
-  missing: 'Veuillez remplir tous les champs obligatoires.',
-  no_participants: 'Sélectionnez au moins un participant.',
-  not_creator: 'Seul le créateur peut modifier cette demande.',
-  unknown: 'Une erreur est survenue lors de la mise à jour.',
+  missing: T('error.missing'),
+  no_participants: T('error.no_participants'),
+  not_creator: T('error.not_creator'),
+  unknown: T('error.unknown'),
 };
 
-const statusLabel: Record<string, string> = {
-  draft: 'Brouillon',
-  sent: 'Envoyé',
-  signing: 'En signature',
-  complete: 'Complet',
-  finalized: 'Finalisé',
-  cancelled: 'Annulé',
-};
+const statusKey = `status.${submission.status}` as keyof typeof frCommon;
 const isSigned = submission.status !== 'draft';
 ---
-<PortailLayout title="Modifier la demande" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
     <a href={`/portail/demande/${id}`} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour à la demande
+      {T('backLink')}
     </a>
   </div>
-  <h1>Modifier la demande</h1>
+  <h1>{T('heading')}</h1>
   <p style="color: var(--p-muted); margin-bottom: 8px;">
-    Statut actuel : <span class={`badge badge-${submission.status}`}>{statusLabel[submission.status]}</span>
+    {T('currentStatus')} <span class={`badge badge-${submission.status}`}>{Tc(statusKey)}</span>
   </p>
 
   {isSigned && (
     <div class="flash flash-error" style="margin: 16px 0;">
-      <strong>⚠ Attention :</strong> cette demande a déjà été envoyée pour signature.
-      Enregistrer les modifications va&nbsp;:
+      <strong>{T('warning.label')}</strong> {T('warning.intro')}
       <ul style="margin: 6px 0 0 20px;">
-        <li>Supprimer tous les jetons de signature actuels (les liens envoyés cesseront de fonctionner)</li>
-        <li>Effacer toutes les signatures déjà collectées</li>
-        <li>Supprimer le PDF signé s'il existait</li>
-        <li>Remettre la demande à l'état <strong>Brouillon</strong> — vous devrez cliquer « Envoyer pour signature » à nouveau</li>
+        <li>{T('warning.item1')}</li>
+        <li>{T('warning.item2')}</li>
+        <li>{T('warning.item3')}</li>
+        <li>{T('warning.item4Before')}<strong>{Tc('status.draft')}</strong>{T('warning.item4After')}</li>
       </ul>
     </div>
   )}
@@ -92,43 +91,43 @@ const isSigned = submission.status !== 'draft';
     <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
   )}
 
-  <form method="POST" action={`/api/portail/submissions/${id}/update`} class="card" onsubmit={isSigned ? "return confirm('Confirmer la modification ? Toutes les signatures actuelles seront effacées.');" : undefined}>
+  <form method="POST" action={`/api/portail/submissions/${id}/update`} class="card" onsubmit={isSigned ? `return confirm(${JSON.stringify(T('confirmDialog'))});` : undefined}>
     <div class="form-row">
-      <label for="form_date">Date (JJ/MM/AAAA)</label>
+      <label for="form_date">{T('label.formDate')}</label>
       <input type="date" name="form_date" id="form_date" value={submission.form_date} required />
     </div>
 
     <div class="form-row">
-      <label>Nom de l'initiateur</label>
+      <label>{T('label.initiatorName')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
         {jorge?.full_name ?? 'Jorge Sousa'}
-        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
 
     <div class="form-row">
-      <label for="product_name">Nom du produit / souche</label>
+      <label for="product_name">{T('label.productName')}</label>
       <input type="text" name="product_name" id="product_name" value={submission.product_name} required />
     </div>
 
     <div class="form-row">
-      <label for="product_type">Type de produit</label>
+      <label for="product_type">{T('label.productType')}</label>
       <input type="text" name="product_type" id="product_type" value={submission.product_type} required />
     </div>
 
     <div class="form-row">
-      <label for="quantity">Quantité totale (g ou unités)</label>
+      <label for="quantity">{T('label.quantity')}</label>
       <input type="text" name="quantity" id="quantity" value={submission.quantity} required />
-      <div class="hint">Divisée automatiquement entre les participants sur les formulaires R&D.</div>
+      <div class="hint">{T('hint.quantity')}</div>
     </div>
 
     <div class="form-row">
-      <label for="rnd_objective">Objectif de l'étude</label>
+      <label for="rnd_objective">{T('label.objective')}</label>
       <textarea name="rnd_objective" id="rnd_objective" rows="4" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{submission.rnd_objective ?? ''}</textarea>
     </div>
 
     <div class="form-row">
-      <label>Participants</label>
+      <label>{T('label.participants')}</label>
       <div class="participants-grid">
         {roster.map((s) => (
           <label>
@@ -139,10 +138,10 @@ const isSigned = submission.status !== 'draft';
       </div>
     </div>
 
-    <h2 style="margin-top: 28px;">À remplir par le personnel de production</h2>
+    <h2 style="margin-top: 28px;">{T('heading.production')}</h2>
 
     <div class="form-row">
-      <label for="production_staff_id">Personnel de production</label>
+      <label for="production_staff_id">{T('label.productionStaff')}</label>
       <select name="production_staff_id" id="production_staff_id" required>
         {roster.map((s) => (
           <option value={s.id} selected={s.id === submission.production_staff_id}>{s.full_name}</option>
@@ -151,41 +150,41 @@ const isSigned = submission.status !== 'draft';
     </div>
 
     <div class="form-row">
-      <label>État de production</label>
+      <label>{T('label.productionState')}</label>
       <div style="display: flex; gap: 20px; padding-top: 4px;">
         <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
-          <input type="radio" name="production_state" value="vrac" checked={submission.production_state === 'vrac'} /> Vrac
+          <input type="radio" name="production_state" value="vrac" checked={submission.production_state === 'vrac'} /> {Tc('state.vrac')}
         </label>
         <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
-          <input type="radio" name="production_state" value="emballe" checked={submission.production_state === 'emballe'} /> Emballé
+          <input type="radio" name="production_state" value="emballe" checked={submission.production_state === 'emballe'} /> {Tc('state.emballe')}
         </label>
       </div>
     </div>
 
     <div class="form-row">
-      <label for="production_id">Identifiant du lot (ID)</label>
+      <label for="production_id">{T('label.productionId')}</label>
       <input type="text" name="production_id" id="production_id" value={submission.production_id ?? ''} />
     </div>
 
-    <h2 style="margin-top: 28px;">Rôles pour la signature</h2>
+    <h2 style="margin-top: 28px;">{T('heading.signatureRoles')}</h2>
     <div class="form-row">
-      <label>Vérification AQ</label>
+      <label>{Tc('role.qa_verifier')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px;">
-        {stephane?.full_name ?? 'Stephane Paquin'} <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        {stephane?.full_name ?? 'Stephane Paquin'} <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
     <div class="form-row">
-      <label>Personne obtenant le consentement</label>
+      <label>{Tc('role.consent_obtainer')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px;">
-        {jorge?.full_name ?? 'Jorge Sousa'} <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        {jorge?.full_name ?? 'Jorge Sousa'} <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
 
     <div style="display: flex; gap: 12px; margin-top: 28px;">
       <button type="submit" class="btn btn-primary">
-        {isSigned ? 'Enregistrer et repasser en brouillon' : 'Enregistrer les modifications'}
+        {isSigned ? T('submit.draft') : T('submit.normal')}
       </button>
-      <a href={`/portail/demande/${id}`} class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
+      <a href={`/portail/demande/${id}`} class="btn btn-secondary" style="margin-left:auto;">{Tc('btn.cancel')}</a>
     </div>
   </form>
 </PortailLayout>

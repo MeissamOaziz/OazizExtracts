@@ -3,136 +3,166 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frExportAustralieVape, enExportAustralieVape } from '../../../i18n/portail/export-australie-vape';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frExportAustralieVape, enExportAustralieVape);
+
+const clientStrings = {
+  locale,
+  warnMaterialZero: T('warnMaterialZero'),
+  yieldBreakdownTitle: T('yieldBreakdownTitle'),
+  rawMaterialInputLine: T('rawMaterialInputLine'),
+  postWashLine: T('postWashLine'),
+  postPressLine: T('postPressLine'),
+  retainedOazizLine: T('retainedOazizLine'),
+  retainedContingencyLine: T('retainedContingencyLine'),
+  productAvailableLine: T('productAvailableLine'),
+  gramsUnitsSuffix: T('gramsUnitsSuffix'),
+  costSummaryTitle: T('costSummaryTitle'),
+  thComponent: T('thComponent'),
+  thTotalCad: T('thTotalCad'),
+  thPerUnitCad: T('thPerUnitCad'),
+  thPerUnitAud: T('thPerUnitAud'),
+  compRawMaterial: T('compRawMaterial'),
+  compLabTests: T('compLabTests'),
+  compProcessing: T('compProcessing'),
+  compOneTime: T('compOneTime'),
+  compFilling: T('compFilling'),
+  totalBatchRowLabel: T('totalBatchRowLabel'),
+  headlineCostPerUnit: T('headlineCostPerUnit'),
+  equivalentLabel: T('equivalentLabel'),
+  costPerUnitBeforeMarkup: T('costPerUnitBeforeMarkup'),
+};
 ---
-<PortailLayout title="Export Australie — Vape" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitle')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Export Australie — Vape</h1>
+    <h1>{T('heading')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Modélise le parcours Oaziz Extracts (Montréal) → transformation vape → partenaire de distribution
-      australien → marché australien, sur la base d'estimations internes et de la soumission logistique
-      Beam Suntory.
+      {T('intro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Devises</h2>
+      <h2>{T('currencySectionTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="cadToAud">Taux de conversion CAD → AUD</label>
+          <label for="cadToAud">{T('fxRateLabel')}</label>
           <input type="number" id="cadToAud" value="1.10" step="0.01" />
         </div>
         <div class="form-row">
-          <label>Taux AUD → CAD (dérivé)</label>
+          <label>{T('fxRateDerivedLabel')}</label>
           <div id="audToCadDisplay" class="derived-value">—</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Matière de départ</h2>
+      <h2>{T('startingMaterialSectionTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="totalInputG">Grammes de matière première (trim/têtes)</label>
+          <label for="totalInputG">{T('rawMaterialGramsLabel')}</label>
           <input type="number" id="totalInputG" value="30000" step="1000" />
         </div>
         <div class="form-row">
-          <label for="costPerGCad">Coût par gramme (CA$/g)</label>
+          <label for="costPerGCad">{T('costPerGramLabel')}</label>
           <input type="number" id="costPerGCad" value="0.15" step="0.01" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Tests de laboratoire</h2>
+      <h2>{T('labTestsSectionTitle')}</h2>
       <div class="form-row">
-        <label for="numLots">Nombre de lots/souches</label>
+        <label for="numLots">{T('numLotsLabel')}</label>
         <input type="number" id="numLots" value="1" step="1" />
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="oazizCoaCad">Coût COA Oaziz (CA$, par lot)</label>
+          <label for="oazizCoaCad">{T('oazizCoaLabel')}</label>
           <input type="number" id="oazizCoaCad" value="1500" step="50" />
         </div>
         <div class="form-row">
-          <label for="australianCoaCad">Coût COA australien (CA$, par lot)</label>
+          <label for="australianCoaCad">{T('australianCoaLabel')}</label>
           <input type="number" id="australianCoaCad" value="3000" step="50" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Transformation Oaziz</h2>
+      <h2>{T('processingSectionTitle')}</h2>
       <div class="form-row">
-        <label for="oazizProcessingCadPerG">Transformation, emballage et transport par gramme (CA$/g)</label>
+        <label for="oazizProcessingCadPerG">{T('processingCostLabel')}</label>
         <input type="number" id="oazizProcessingCadPerG" value="4.00" step="0.05" />
       </div>
-      <p class="hint">Appliqué sur les grammes de matière première en entrée (et non sur le rendement extrait).</p>
+      <p class="hint">{T('processingHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Rendement</h2>
+      <h2>{T('yieldSectionTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="washYieldPct">Rendement du lavage (%)</label>
+          <label for="washYieldPct">{T('washYieldLabel')}</label>
           <input type="number" id="washYieldPct" value="10" step="0.5" />
         </div>
         <div class="form-row">
-          <label for="pressYieldPct">Rendement de presse (%)</label>
+          <label for="pressYieldPct">{T('pressYieldLabel')}</label>
           <input type="number" id="pressYieldPct" value="60" step="1" />
         </div>
       </div>
-      <p class="hint">Échantillons retenus (Oaziz + contingence) : 7,5 % chacun du rendement post-presse — fixe, non modifiable.</p>
+      <p class="hint">{T('yieldHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts uniques</h2>
+      <h2>{T('oneTimeCostsSectionTitle')}</h2>
       <div class="form-row">
-        <label for="lpAuditFeeCad">Frais d'audit LP (CA$)</label>
+        <label for="lpAuditFeeCad">{T('lpAuditFeeLabel')}</label>
         <input type="number" id="lpAuditFeeCad" value="1750" step="50" />
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label for="productValidationCad">Validation du produit (CA$, par souche)</label>
+          <label for="productValidationCad">{T('productValidationLabel')}</label>
           <input type="number" id="productValidationCad" value="17500" step="500" />
         </div>
         <div class="form-row">
-          <label for="stabilityStudyCad">Étude de stabilité (CA$, par souche)</label>
+          <label for="stabilityStudyCad">{T('stabilityStudyLabel')}</label>
           <input type="number" id="stabilityStudyCad" value="12500" step="500" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Emballage et remplissage australien</h2>
+      <h2>{T('fillingSectionTitle')}</h2>
       <div class="form-row">
-        <label for="fillingTier">Palier de remplissage</label>
+        <label for="fillingTier">{T('fillingTierLabel')}</label>
         <select id="fillingTier">
-          <option value="low">Low (A$14 × taux)</option>
-          <option value="high" selected>High (A$18 × taux)</option>
-          <option value="custom">Custom</option>
+          <option value="low">{T('tierLowOption')}</option>
+          <option value="high" selected>{T('tierHighOption')}</option>
+          <option value="custom">{T('tierCustomOption')}</option>
         </select>
       </div>
       <div class="form-row" id="customFillRow" hidden>
-        <label for="customFillCostCad">Coût de remplissage personnalisé par unité (CA$)</label>
+        <label for="customFillCostCad">{T('customFillCostLabel')}</label>
         <input type="number" id="customFillCostCad" value="18" step="0.5" />
       </div>
-      <p class="hint">1 unité = 1 gramme de remplissage (correspond à la feuille source).</p>
+      <p class="hint">{T('fillingHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Majoration</h2>
+      <h2>{T('markupSectionTitle')}</h2>
       <div class="form-row">
-        <label for="oazizMarkupPct">Majoration Oaziz (%)</label>
+        <label for="oazizMarkupPct">{T('markupLabel')}</label>
         <input type="number" id="oazizMarkupPct" value="30" step="1" />
       </div>
     </div>
@@ -140,6 +170,8 @@ if (!staff) {
     <div id="result"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .derived-value {
@@ -177,6 +209,9 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const NUM_LOCALE = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -185,16 +220,16 @@ if (!staff) {
   }
 
   const fmtMoney2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtMoney0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtAud2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtPerUnitCad = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPerUnitAud = (n: number) => (isFinite(n) ? 'A$' + n.toFixed(4) : '—');
   const fmtRate = (n: number) => (isFinite(n) ? n.toFixed(4) : '—');
-  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
-  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) + ' g' : '—');
+  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) : '—');
 
   document.getElementById('fillingTier')?.addEventListener('change', render);
 
@@ -211,7 +246,7 @@ if (!staff) {
     const costPerGCad = num('costPerGCad');
 
     if (totalInputG <= 0) {
-      out.innerHTML = `<div class="warn-banner">La quantité de matière première doit être supérieure à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.warnMaterialZero}</div>`;
       return;
     }
 
@@ -264,11 +299,11 @@ if (!staff) {
     const perUnit = (total: number) => (totalUnitsAvailable > 0 ? total / totalUnitsAvailable : 0);
 
     const components = [
-      { label: 'Matière première', total: totalMaterialCost },
-      { label: 'Tests de laboratoire', total: totalLabTestCost },
-      { label: 'Transformation Oaziz', total: totalProcessingCost },
-      { label: 'Coûts uniques (démarrage)', total: totalOneTimeCosts },
-      { label: 'Remplissage australien', total: totalFillingCost },
+      { label: I18N.compRawMaterial, total: totalMaterialCost },
+      { label: I18N.compLabTests, total: totalLabTestCost },
+      { label: I18N.compProcessing, total: totalProcessingCost },
+      { label: I18N.compOneTime, total: totalOneTimeCosts },
+      { label: I18N.compFilling, total: totalFillingCost },
     ];
 
     const rows = components
@@ -285,7 +320,7 @@ if (!staff) {
       .join('');
 
     const totalRow = `<tr class="total-row">
-      <td>Coût total du lot</td>
+      <td>${I18N.totalBatchRowLabel}</td>
       <td>${fmtMoney0(totalBatchCostCad)}</td>
       <td>${fmtPerUnitCad(totalCostPerUnitCad)}</td>
       <td>${fmtPerUnitAud(totalCostPerUnitAud)}</td>
@@ -293,22 +328,22 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Rendement — de la matière première au produit disponible</h2>
-        <div class="cost-line"><span>Matière première (entrée)</span><span>${fmtG(totalInputG)}</span></div>
-        <div class="cost-line"><span>Post-lavage (${washYieldPct}%)</span><span>${fmtG(postWashYieldG)}</span></div>
-        <div class="cost-line"><span>Post-presse (${pressYieldPct}%)</span><span>${fmtG(postPressYieldG)}</span></div>
-        <div class="cost-line"><span>Échantillon retenu Oaziz (7,5 %)</span><span>− ${fmtG(retainedOazizG)}</span></div>
-        <div class="cost-line"><span>Échantillon retenu contingence (7,5 %)</span><span>− ${fmtG(retainedContingencyG)}</span></div>
-        <div class="cost-line subtotal"><span>Produit disponible (unités)</span><span>${fmtUnits(totalUnitsAvailable)} g / unités</span></div>
+        <h2>${I18N.yieldBreakdownTitle}</h2>
+        <div class="cost-line"><span>${I18N.rawMaterialInputLine}</span><span>${fmtG(totalInputG)}</span></div>
+        <div class="cost-line"><span>${I18N.postWashLine} (${washYieldPct}%)</span><span>${fmtG(postWashYieldG)}</span></div>
+        <div class="cost-line"><span>${I18N.postPressLine} (${pressYieldPct}%)</span><span>${fmtG(postPressYieldG)}</span></div>
+        <div class="cost-line"><span>${I18N.retainedOazizLine}</span><span>− ${fmtG(retainedOazizG)}</span></div>
+        <div class="cost-line"><span>${I18N.retainedContingencyLine}</span><span>− ${fmtG(retainedContingencyG)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.productAvailableLine}</span><span>${fmtUnits(totalUnitsAvailable)} ${I18N.gramsUnitsSuffix}</span></div>
       </div>
 
       <div class="card">
-        <h2>Résumé des coûts</h2>
+        <h2>${I18N.costSummaryTitle}</h2>
         <div style="overflow-x:auto;">
           <table class="cost-summary">
             <thead>
               <tr>
-                <th>Composante</th><th>Total (CA$)</th><th>Coût/unité (CA$)</th><th>Coût/unité (AU$)</th>
+                <th>${I18N.thComponent}</th><th>${I18N.thTotalCad}</th><th>${I18N.thPerUnitCad}</th><th>${I18N.thPerUnitAud}</th>
               </tr>
             </thead>
             <tbody>${rows}${totalRow}</tbody>
@@ -316,9 +351,9 @@ if (!staff) {
         </div>
 
         <div class="landed-highlight">
-          <div class="cost-line"><span>★ COÛT / UNITÉ INCL. MAJORATION (FOB MONTRÉAL)</span><span>${fmtMoney2(finalCostPerUnitInclMarkupCad)}</span></div>
-          <div class="cost-line small"><span>Équivalent</span><span>${fmtAud2(finalCostPerUnitInclMarkupAud)}</span></div>
-          <div class="cost-line small"><span>Coût / unité avant majoration</span><span>${fmtPerUnitCad(totalCostPerUnitCad)} · ${fmtPerUnitAud(totalCostPerUnitAud)}</span></div>
+          <div class="cost-line"><span>${I18N.headlineCostPerUnit}</span><span>${fmtMoney2(finalCostPerUnitInclMarkupCad)}</span></div>
+          <div class="cost-line small"><span>${I18N.equivalentLabel}</span><span>${fmtAud2(finalCostPerUnitInclMarkupAud)}</span></div>
+          <div class="cost-line small"><span>${I18N.costPerUnitBeforeMarkup}</span><span>${fmtPerUnitCad(totalCostPerUnitCad)} · ${fmtPerUnitAud(totalCostPerUnitAud)}</span></div>
         </div>
       </div>
     `;

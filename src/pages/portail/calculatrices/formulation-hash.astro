@@ -3,115 +3,180 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frFormulationHash, enFormulationHash } from '../../../i18n/portail/formulation-hash';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFormulationHash, enFormulationHash);
+
+// Strings needed by the client-side render() functions (JSON data island — see
+// the <script type="application/json"> below). Keep in sync with every I18N.xxx
+// reference in the <script> block further down.
+const clientStrings = {
+  locale,
+  batchSizeWarning: T('batchSizeWarning'),
+  feasibleOk: T('feasibleOk'),
+  sqdcInfeasible: T('sqdcInfeasible'),
+  cbdCapExceeded: T('cbdCapExceeded'),
+  recipeCardTitle: T('recipeCardTitle'),
+  ingredientKief: T('ingredientKief'),
+  ingredientDistCbd: T('ingredientDistCbd'),
+  ingredientTerp: T('ingredientTerp'),
+  ingredientIsolate: T('ingredientIsolate'),
+  ingredientDistThc: T('ingredientDistThc'),
+  sanityThc: T('sanityThc'),
+  sanityCbd: T('sanityCbd'),
+  sanityCbdAssumed: T('sanityCbdAssumed'),
+  sanityTotalCost: T('sanityTotalCost'),
+  sanityCostPerG: T('sanityCostPerG'),
+  econCardTitleSqdc: T('econCardTitleSqdc'),
+  econCardTitleDom: T('econCardTitleDom'),
+  econNewMethod: T('econNewMethod'),
+  econCurrentMethod: T('econCurrentMethod'),
+  econRevenue: T('econRevenue'),
+  econMaterialsCost: T('econMaterialsCost'),
+  econGrossProfit: T('econGrossProfit'),
+  econGrossMargin: T('econGrossMargin'),
+  econAllInCost: T('econAllInCost'),
+  deltaLabel: T('deltaLabel'),
+  deltaCheaper: T('deltaCheaper'),
+  deltaMoreExpensive: T('deltaMoreExpensive'),
+  deltaMoreProfit: T('deltaMoreProfit'),
+  deltaLessProfit: T('deltaLessProfit'),
+  deltaOnBatch: T('deltaOnBatch'),
+  scenarioCardTitle: T('scenarioCardTitle'),
+  scenarioHint: T('scenarioHint'),
+  scenarioColScenario: T('scenarioColScenario'),
+  scenarioColKief: T('scenarioColKief'),
+  scenarioColDistillat: T('scenarioColDistillat'),
+  scenarioColIsolat: T('scenarioColIsolat'),
+  scenarioColCostPerG: T('scenarioColCostPerG'),
+  scenarioColBatchCost: T('scenarioColBatchCost'),
+  scenarioColProfit: T('scenarioColProfit'),
+  scenarioColMargin: T('scenarioColMargin'),
+  scenarioConservative: T('scenarioConservative'),
+  scenarioNominal: T('scenarioNominal'),
+  scenarioFavorable: T('scenarioFavorable'),
+  scenarioTerpSuffix: T('scenarioTerpSuffix'),
+  benchmarkRowLabel: T('benchmarkRowLabel'),
+  domInfeasible: T('domInfeasible'),
+  domCapExceeded: T('domCapExceeded'),
+  enterSellPrice: T('enterSellPrice'),
+  batchCompareCardTitle: T('batchCompareCardTitle'),
+  batchCompareHint: T('batchCompareHint'),
+  batchCol8kg: T('batchCol8kg'),
+  batchCol10kg: T('batchCol10kg'),
+  rowKiefG: T('rowKiefG'),
+  rowDistThcG: T('rowDistThcG'),
+  rowCostPerG: T('rowCostPerG'),
+};
 ---
-<PortailLayout title="Calculatrice de formulation de Hash" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitleTag')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Formulation de Hash</h1>
+    <h1>{T('pageTitle')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Basé sur le modèle « Oaziz Hash Formulation Calculator ».
+      {T('pageIntro')}
     </p>
 
     <div class="tab-bar" role="tablist">
-      <button type="button" class="tab-btn selected" data-tab="sqdc">SQDC — dilution</button>
-      <button type="button" class="tab-btn" data-tab="dom">DOM — boost</button>
+      <button type="button" class="tab-btn selected" data-tab="sqdc">{T('tabSqdc')}</button>
+      <button type="button" class="tab-btn" data-tab="dom">{T('tabDom')}</button>
     </div>
 
     <div id="tab-sqdc">
       <p style="color: var(--p-muted); margin-bottom: 24px;">
-        Le kief (33–34 % THC) dépasse déjà le cap SQDC — le distillat CBD, l'isolat et le terpène diluent
-        vers le bas. Entrez les puissances réelles (COA) de ce lot ; la recette se recalcule pour respecter
-        les cibles avec le moins d'isolat/terpène possible.
+        {T('sqdcIntro')}
       </p>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Coûts &amp; puissances des matières premières</h2>
+        <h2 set:html={T('cardRawMaterials')} />
         <div class="two-col">
           <div class="form-row">
-            <label for="kiefCost">Coût kief ($/g)</label>
+            <label for="kiefCost">{T('kiefCostLabel')}</label>
             <input type="number" id="kiefCost" value="0.80" step="0.01" />
           </div>
           <div class="form-row">
-            <label for="kiefThc">Puissance THC du kief, ce lot — COA (%)</label>
+            <label for="kiefThc">{T('kiefThcLabel')}</label>
             <input type="number" id="kiefThc" value="33.5" step="0.1" />
           </div>
         </div>
         <div class="two-col">
           <div class="form-row">
-            <label for="distCost">Coût distillat CBD ($/g)</label>
+            <label for="distCost">{T('distCostCbdLabel')}</label>
             <input type="number" id="distCost" value="1.00" step="0.01" />
           </div>
           <div class="form-row">
-            <label for="distCbd">Puissance CBD du distillat, ce lot — COA (%)</label>
+            <label for="distCbd">{T('distCbdLabel')}</label>
             <input type="number" id="distCbd" value="84.5" step="0.1" />
           </div>
         </div>
         <div class="form-row">
-          <label for="isolateCost">Coût isolat CBN/CBG ($/g)</label>
+          <label for="isolateCost">{T('isolateCostLabel')}</label>
           <input type="number" id="isolateCost" value="4.50" step="0.01" />
         </div>
         <div class="two-col">
           <div class="form-row">
-            <label for="terpCostMl">Coût terpène ($/mL)</label>
+            <label for="terpCostMl">{T('terpCostLabel')}</label>
             <input type="number" id="terpCostMl" value="30" step="0.5" />
           </div>
           <div class="form-row">
-            <label for="terpDensity">Densité terpène (g/mL)</label>
+            <label for="terpDensity">{T('terpDensityLabel')}</label>
             <input type="number" id="terpDensity" value="0.90" step="0.01" />
           </div>
         </div>
-        <p class="hint">⚠ Densité estimée — confirmer avec le fournisseur, c'est le plus gros facteur de variation de coût si un terpène est utilisé.</p>
+        <p class="hint">{T('densityHint')}</p>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Cibles de conformité</h2>
+        <h2>{T('cardTargetsCompliance')}</h2>
         <div class="two-col">
           <div class="form-row">
-            <label for="maxThc">THC max autorisé, produit fini (%)</label>
+            <label for="maxThc">{T('maxThcLabel')}</label>
             <input type="number" id="maxThc" value="29.5" step="0.1" />
           </div>
           <div class="form-row">
-            <label for="maxCbd">CBD max autorisé, produit fini — cap (%)</label>
+            <label for="maxCbd">{T('maxCbdLabel')}</label>
             <input type="number" id="maxCbd" value="4.0" step="0.1" />
           </div>
         </div>
         <div class="two-col">
           <div class="form-row">
-            <label for="cbdFillLevel">Niveau de remplissage CBD visé (%)</label>
+            <label for="cbdFillLevel">{T('cbdFillLevelLabel')}</label>
             <input type="number" id="cbdFillLevel" value="3.75" step="0.05" />
           </div>
           <div class="form-row">
-            <label for="terpFraction">Fraction de terpène à utiliser (% du lot)</label>
+            <label for="terpFraction">{T('terpFractionLabel')}</label>
             <input type="number" id="terpFraction" value="0" step="0.1" />
           </div>
         </div>
-        <p class="hint">Réglez le remplissage CBD = au cap pour minimiser le coût d'isolat ; baissez-le pour une marge de sécurité.</p>
+        <p class="hint">{T('fillLevelHint')}</p>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Lot &amp; prix</h2>
+        <h2 set:html={T('cardBatchPrice')} />
         <div class="two-col">
           <div class="form-row">
-            <label for="batchKg">Taille du lot (kg)</label>
+            <label for="batchKg">{T('batchKgLabel')}</label>
             <input type="number" id="batchKg" value="50" step="1" />
           </div>
           <div class="form-row">
-            <label for="sellPrice">Prix de vente ($/g, produit fini)</label>
+            <label for="sellPrice">{T('sellPriceLabel')}</label>
             <input type="number" id="sellPrice" value="1.50" step="0.01" />
           </div>
         </div>
         <div class="form-row">
-          <label for="currentCost">Coût actuel tout compris ($/g) — méthode trim → kief, référence</label>
+          <label for="currentCost">{T('currentCostLabel')}</label>
           <input type="number" id="currentCost" value="0.97" step="0.01" />
         </div>
       </div>
@@ -120,60 +185,57 @@ if (!staff) {
     </div>
 
     <div id="tab-dom" hidden>
-      <p style="color: var(--p-muted); margin-bottom: 24px;">
-        Mélange de <strong>boost</strong>, pas de dilution : le kief (33–34 % THC) est sous la cible, donc
-        du distillat THC (bien plus puissant) est ajouté pour monter la moyenne — l'inverse du hash SQDC.
-      </p>
+      <p style="color: var(--p-muted); margin-bottom: 24px;" set:html={T('domIntro')} />
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Coûts &amp; puissances des matières premières</h2>
+        <h2 set:html={T('cardRawMaterials')} />
         <div class="two-col">
           <div class="form-row">
-            <label for="dom_kiefCost">Coût kief ($/g)</label>
+            <label for="dom_kiefCost">{T('kiefCostLabel')}</label>
             <input type="number" id="dom_kiefCost" value="0.80" step="0.01" />
           </div>
           <div class="form-row">
-            <label for="dom_kiefThc">Puissance THC du kief, ce lot — COA (%)</label>
+            <label for="dom_kiefThc">{T('kiefThcLabel')}</label>
             <input type="number" id="dom_kiefThc" value="33.5" step="0.1" />
           </div>
         </div>
         <div class="two-col">
           <div class="form-row">
-            <label for="dom_distCost">Coût distillat THC ($/g)</label>
+            <label for="dom_distCost">{T('distCostThcLabel')}</label>
             <input type="number" id="dom_distCost" value="1.60" step="0.01" />
           </div>
           <div class="form-row">
-            <label for="dom_distThc">Puissance THC du distillat, ce lot — COA (%)</label>
+            <label for="dom_distThc">{T('distThcLabel')}</label>
             <input type="number" id="dom_distThc" value="84" step="0.1" />
           </div>
         </div>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Cibles de conformité / spécification</h2>
+        <h2>{T('cardSpecCompliance')}</h2>
         <div class="two-col">
           <div class="form-row">
-            <label for="dom_thcTarget">THC cible de conception (%)</label>
+            <label for="dom_thcTarget">{T('domThcTargetLabel')}</label>
             <input type="number" id="dom_thcTarget" value="48" step="0.5" />
           </div>
           <div class="form-row">
-            <label for="dom_maxThc">THC max autorisé, produit fini — cap (%)</label>
+            <label for="dom_maxThc">{T('domMaxThcLabel')}</label>
             <input type="number" id="dom_maxThc" value="50" step="0.5" />
           </div>
         </div>
-        <p class="hint">Une cible plus basse = plus de kief (bon marché), moins de distillat (cher) = coût plus bas.</p>
-        <p class="hint">CBD max autorisé, produit fini — cap : 10 %. Toujours respecté : ni le kief ni le distillat THC ne portent de CBD significatif.</p>
+        <p class="hint">{T('domHintLowerTarget')}</p>
+        <p class="hint">{T('domHintCbdCap')}</p>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Lot &amp; prix</h2>
+        <h2 set:html={T('cardBatchPrice')} />
         <div class="two-col">
           <div class="form-row">
-            <label for="dom_batchKg">Taille du lot (kg)</label>
+            <label for="dom_batchKg">{T('batchKgLabel')}</label>
             <input type="number" id="dom_batchKg" value="10" step="1" />
           </div>
           <div class="form-row">
-            <label for="dom_sellPrice">Prix de vente ($/g, produit fini) — optionnel</label>
+            <label for="dom_sellPrice">{T('domSellPriceLabel')}</label>
             <input type="number" id="dom_sellPrice" value="0" step="0.01" />
           </div>
         </div>
@@ -183,6 +245,8 @@ if (!staff) {
     </div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .tab-bar { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--p-border); }
@@ -242,6 +306,8 @@ if (!staff) {
 </style>
 
 <script>
+  const I18N = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -252,14 +318,15 @@ if (!staff) {
     return num(id) / 100;
   }
 
+  const localeTag = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
   const fmtMoney2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(localeTag, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtMoney0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(localeTag, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPct1 = (n: number) => (isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
   const fmtPct2 = (n: number) => (isFinite(n) ? (n * 100).toFixed(2) + '%' : '—');
-  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(localeTag) + ' g' : '—');
 
   // ---------- Tabs ----------
   document.querySelectorAll<HTMLElement>('.tab-btn').forEach((btn) => {
@@ -312,9 +379,9 @@ if (!staff) {
   }
 
   const SCENARIOS = [
-    { label: 'Conservateur (pire cas) — kief 34%, dist 83%', kiefThc: 0.34, distCbd: 0.83 },
-    { label: 'Nominal — kief 33.5%, dist 84.5%', kiefThc: 0.335, distCbd: 0.845 },
-    { label: 'Favorable — kief 33%, dist 86%', kiefThc: 0.33, distCbd: 0.86 },
+    { label: I18N.scenarioConservative, kiefThc: 0.34, distCbd: 0.83 },
+    { label: I18N.scenarioNominal, kiefThc: 0.335, distCbd: 0.845 },
+    { label: I18N.scenarioFavorable, kiefThc: 0.33, distCbd: 0.86 },
   ];
 
   function renderSqdc() {
@@ -339,7 +406,7 @@ if (!staff) {
     const currentCostPerGram = num('currentCost');
 
     if (batchKg <= 0) {
-      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.batchSizeWarning}</div>`;
       return;
     }
 
@@ -366,16 +433,19 @@ if (!staff) {
     const deltaTotal = newProfit - currentProfit;
 
     let feasibilityHtml = r.feasible
-      ? `<div class="feasibility-banner feasibility-ok">✓ Recette faisable</div>`
-      : `<div class="feasibility-banner feasibility-bad">⚠ INFAISABLE — la fraction d'isolat est négative. Le kief + distillat + terpène dépassent déjà 100 % à eux seuls ; augmentez le cap THC, baissez le remplissage CBD, ou réduisez le terpène.</div>`;
+      ? `<div class="feasibility-banner feasibility-ok">${I18N.feasibleOk}</div>`
+      : `<div class="feasibility-banner feasibility-bad">${I18N.sqdcInfeasible}</div>`;
     if (r.feasible && cbdFillLevel > maxCbd) {
-      feasibilityHtml += `<div class="feasibility-banner feasibility-bad">⚠ Le remplissage CBD visé (${fmtPct2(cbdFillLevel)}) dépasse le cap autorisé (${fmtPct2(maxCbd)}) — non conforme.</div>`;
+      const cbdCapMsg = I18N.cbdCapExceeded
+        .replace('{fill}', fmtPct2(cbdFillLevel))
+        .replace('{cap}', fmtPct2(maxCbd));
+      feasibilityHtml += `<div class="feasibility-banner feasibility-bad">${cbdCapMsg}</div>`;
     }
 
     const scenarioRows = SCENARIOS
       .flatMap((s) => [
         { ...s, terpLevel: 0, terpLabel: '' },
-        { ...s, terpLevel: 0.01, terpLabel: ' + 1% terpène' },
+        { ...s, terpLevel: 0.01, terpLabel: I18N.scenarioTerpSuffix },
       ])
       .map((s) => {
         const sr = computeRecipe(maxThc, s.kiefThc, cbdFillLevel, s.distCbd, s.terpLevel, kiefCost, distCost, terpCostPerG, isolateCost);
@@ -396,7 +466,7 @@ if (!staff) {
       .join('');
 
     const benchmarkRow = `<tr class="benchmark-row">
-      <td>Méthode actuelle (référence, trim → kief)</td>
+      <td>${I18N.benchmarkRowLabel}</td>
       <td>—</td><td>—</td><td>—</td>
       <td>${fmtPerG(currentCostPerGram)}</td>
       <td>${fmtMoney0(currentCostTotal)}</td>
@@ -404,76 +474,77 @@ if (!staff) {
       <td>${fmtPct1(currentMargin)}</td>
     </tr>`;
 
+    const deltaMsg = `${deltaPerG >= 0 ? '✓' : '⚠'} ${I18N.deltaLabel} ${fmtPerG(Math.abs(deltaPerG))}/g ${deltaPerG >= 0 ? I18N.deltaCheaper : I18N.deltaMoreExpensive}
+          — ${fmtMoney0(Math.abs(deltaTotal))} ${deltaTotal >= 0 ? I18N.deltaMoreProfit : I18N.deltaLessProfit} ${I18N.deltaOnBatch}`;
+
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Recette (minimisant le coût)</h2>
+        <h2>${I18N.recipeCardTitle}</h2>
         ${feasibilityHtml}
         <div class="formulation-recipe">
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Kief</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientKief}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(r.kiefFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(kiefMass)} · ${fmtMoney2(kiefCostTotal)}</div>
           </div>
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Distillat CBD</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientDistCbd}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(r.distFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(distMass)} · ${fmtMoney2(distCostTotal)}</div>
           </div>
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Terpène</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientTerp}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(r.terpFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(terpMass)} · ${fmtMoney2(terpCostTotal)}</div>
           </div>
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Isolat CBN/CBG (comble le reste)</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientIsolate}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(r.isolateFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(isolateMass)} · ${fmtMoney2(isolateCostTotal)}</div>
           </div>
         </div>
         <div class="sanity-row">
-          <div class="sanity-item">THC résultant (vérification)<strong>${fmtPct2(r.resultingThc)}</strong></div>
-          <div class="sanity-item">CBD résultant (vérification)<strong>${fmtPct2(r.resultingCbd)}</strong></div>
-          <div class="sanity-item">Coût total des matières<strong>${fmtMoney2(totalCost)}</strong></div>
-          <div class="sanity-item">Coût / gramme, produit fini<strong>${fmtPerG(r.costPerG)}</strong></div>
+          <div class="sanity-item">${I18N.sanityThc}<strong>${fmtPct2(r.resultingThc)}</strong></div>
+          <div class="sanity-item">${I18N.sanityCbd}<strong>${fmtPct2(r.resultingCbd)}</strong></div>
+          <div class="sanity-item">${I18N.sanityTotalCost}<strong>${fmtMoney2(totalCost)}</strong></div>
+          <div class="sanity-item">${I18N.sanityCostPerG}<strong>${fmtPerG(r.costPerG)}</strong></div>
         </div>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Économie — nouvelle méthode vs méthode actuelle</h2>
+        <h2>${I18N.econCardTitleSqdc}</h2>
         <div class="econ-compare">
           <div class="econ-col new-method">
-            <h3>Nouvelle méthode (formulation)</h3>
-            <div class="econ-line"><span>Revenu</span><span>${fmtMoney0(revenue)}</span></div>
-            <div class="econ-line"><span>Coût des matières</span><span>${fmtMoney0(totalCost)}</span></div>
-            <div class="econ-line total"><span>Profit brut</span><span>${fmtMoney0(newProfit)}</span></div>
-            <div class="econ-line"><span>Marge brute</span><span>${fmtPct1(newMargin)}</span></div>
+            <h3>${I18N.econNewMethod}</h3>
+            <div class="econ-line"><span>${I18N.econRevenue}</span><span>${fmtMoney0(revenue)}</span></div>
+            <div class="econ-line"><span>${I18N.econMaterialsCost}</span><span>${fmtMoney0(totalCost)}</span></div>
+            <div class="econ-line total"><span>${I18N.econGrossProfit}</span><span>${fmtMoney0(newProfit)}</span></div>
+            <div class="econ-line"><span>${I18N.econGrossMargin}</span><span>${fmtPct1(newMargin)}</span></div>
           </div>
           <div class="econ-col">
-            <h3>Méthode actuelle (référence)</h3>
-            <div class="econ-line"><span>Revenu</span><span>${fmtMoney0(revenue)}</span></div>
-            <div class="econ-line"><span>Coût tout compris</span><span>${fmtMoney0(currentCostTotal)}</span></div>
-            <div class="econ-line total"><span>Profit brut</span><span>${fmtMoney0(currentProfit)}</span></div>
-            <div class="econ-line"><span>Marge brute</span><span>${fmtPct1(currentMargin)}</span></div>
+            <h3>${I18N.econCurrentMethod}</h3>
+            <div class="econ-line"><span>${I18N.econRevenue}</span><span>${fmtMoney0(revenue)}</span></div>
+            <div class="econ-line"><span>${I18N.econAllInCost}</span><span>${fmtMoney0(currentCostTotal)}</span></div>
+            <div class="econ-line total"><span>${I18N.econGrossProfit}</span><span>${fmtMoney0(currentProfit)}</span></div>
+            <div class="econ-line"><span>${I18N.econGrossMargin}</span><span>${fmtPct1(currentMargin)}</span></div>
           </div>
         </div>
         <div class="delta-banner ${deltaPerG >= 0 ? 'delta-positive' : 'delta-negative'}">
-          ${deltaPerG >= 0 ? '✓' : '⚠'} Nouvelle méthode vs actuelle : ${fmtPerG(Math.abs(deltaPerG))}/g ${deltaPerG >= 0 ? 'moins cher' : 'plus cher'}
-          — ${fmtMoney0(Math.abs(deltaTotal))} ${deltaTotal >= 0 ? 'de profit en plus' : 'de profit en moins'} sur ce lot
+          ${deltaMsg}
         </div>
       </div>
 
       <div class="card">
-        <h2>Comparaison de scénarios — incertitude des puissances (kief 33–34 %, distillat 83–86 %)</h2>
+        <h2>${I18N.scenarioCardTitle}</h2>
         <p class="hint" style="margin-bottom: 12px;">
-          Chaque scénario place le kief au cap THC et le distillat au niveau de remplissage CBD ci-dessus ;
-          l'isolat comble le reste. Coûts, prix de vente, cibles et lot proviennent des sections ci-dessus.
+          ${I18N.scenarioHint}
         </p>
         <div style="overflow-x:auto;">
           <table class="scenario-table">
             <thead>
               <tr>
-                <th>Scénario</th><th>Kief</th><th>Distillat</th><th>Isolat</th>
-                <th>Coût/g</th><th>Coût du lot</th><th>Profit</th><th>Marge</th>
+                <th>${I18N.scenarioColScenario}</th><th>${I18N.scenarioColKief}</th><th>${I18N.scenarioColDistillat}</th><th>${I18N.scenarioColIsolat}</th>
+                <th>${I18N.scenarioColCostPerG}</th><th>${I18N.scenarioColBatchCost}</th><th>${I18N.scenarioColProfit}</th><th>${I18N.scenarioColMargin}</th>
               </tr>
             </thead>
             <tbody>${scenarioRows}${benchmarkRow}</tbody>
@@ -501,7 +572,7 @@ if (!staff) {
     const sellPrice = num('dom_sellPrice');
 
     if (batchKg <= 0) {
-      out.innerHTML = `<div class="warn-banner">La taille du lot doit être supérieure à 0.</div>`;
+      out.innerHTML = `<div class="warn-banner">${I18N.batchSizeWarning}</div>`;
       return;
     }
 
@@ -522,14 +593,14 @@ if (!staff) {
 
     const revenue = batchG * sellPrice;
     const profit = revenue - totalCost;
-    const marginHtml = sellPrice === 0 ? 'Entrez un prix de vente ci-dessus' : fmtPct1(profit / revenue);
+    const marginHtml = sellPrice === 0 ? I18N.enterSellPrice : fmtPct1(profit / revenue);
 
     const feasibilityHtml = feasible
-      ? `<div class="feasibility-banner feasibility-ok">✓ Recette faisable</div>`
-      : `<div class="feasibility-banner feasibility-bad">⚠ INFAISABLE — la cible THC doit se situer entre la puissance du kief et celle du distillat (kief &lt; cible &lt; distillat).</div>`;
+      ? `<div class="feasibility-banner feasibility-ok">${I18N.feasibleOk}</div>`
+      : `<div class="feasibility-banner feasibility-bad">${I18N.domInfeasible}</div>`;
 
     const capHtml = resultingThc > maxThc
-      ? `<div class="feasibility-banner feasibility-bad">⚠ Dépasse le cap de ${fmtPct1(maxThc)} THC — augmentez le cap ou baissez la cible THC.</div>`
+      ? `<div class="feasibility-banner feasibility-bad">${I18N.domCapExceeded.replace('{cap}', fmtPct1(maxThc))}</div>`
       : '';
 
     const kief8 = kiefFraction * 8000;
@@ -541,51 +612,51 @@ if (!staff) {
 
     out.innerHTML = `
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Recette (minimisant le coût)</h2>
+        <h2>${I18N.recipeCardTitle}</h2>
         ${feasibilityHtml}
         ${capHtml}
         <div class="formulation-recipe">
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Kief</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientKief}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(kiefFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(kiefMass)} · ${fmtMoney2(kiefCostTotal)}</div>
           </div>
           <div class="formulation-ingredient">
-            <div class="formulation-ingredient-name">Distillat THC</div>
+            <div class="formulation-ingredient-name">${I18N.ingredientDistThc}</div>
             <div class="formulation-ingredient-pct">${fmtPct1(distFraction)}</div>
             <div class="formulation-ingredient-mass">${fmtG(distMass)} · ${fmtMoney2(distCostTotal)}</div>
           </div>
         </div>
         <div class="sanity-row">
-          <div class="sanity-item">THC résultant (vérification)<strong>${fmtPct2(resultingThc)}</strong></div>
-          <div class="sanity-item">CBD résultant (assumé ~0%)<strong>${fmtPct2(resultingCbd)}</strong></div>
-          <div class="sanity-item">Coût total des matières<strong>${fmtMoney2(totalCost)}</strong></div>
-          <div class="sanity-item">Coût / gramme, produit fini<strong>${fmtPerG(costPerG)}</strong></div>
+          <div class="sanity-item">${I18N.sanityThc}<strong>${fmtPct2(resultingThc)}</strong></div>
+          <div class="sanity-item">${I18N.sanityCbdAssumed}<strong>${fmtPct2(resultingCbd)}</strong></div>
+          <div class="sanity-item">${I18N.sanityTotalCost}<strong>${fmtMoney2(totalCost)}</strong></div>
+          <div class="sanity-item">${I18N.sanityCostPerG}<strong>${fmtPerG(costPerG)}</strong></div>
         </div>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Économie</h2>
+        <h2>${I18N.econCardTitleDom}</h2>
         <div class="econ-compare" style="grid-template-columns: 1fr;">
           <div class="econ-col new-method">
-            <div class="econ-line"><span>Revenu</span><span>${fmtMoney0(revenue)}</span></div>
-            <div class="econ-line"><span>Coût des matières</span><span>${fmtMoney0(totalCost)}</span></div>
-            <div class="econ-line total"><span>Profit brut</span><span>${fmtMoney0(profit)}</span></div>
-            <div class="econ-line"><span>Marge brute</span><span>${marginHtml}</span></div>
+            <div class="econ-line"><span>${I18N.econRevenue}</span><span>${fmtMoney0(revenue)}</span></div>
+            <div class="econ-line"><span>${I18N.econMaterialsCost}</span><span>${fmtMoney0(totalCost)}</span></div>
+            <div class="econ-line total"><span>${I18N.econGrossProfit}</span><span>${fmtMoney0(profit)}</span></div>
+            <div class="econ-line"><span>${I18N.econGrossMargin}</span><span>${marginHtml}</span></div>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h2>Comparaison 8 kg vs 10 kg</h2>
-        <p class="hint" style="margin-bottom: 12px;">Même ratio de recette à la cible THC ci-dessus, simplement mis à l'échelle.</p>
+        <h2>${I18N.batchCompareCardTitle}</h2>
+        <p class="hint" style="margin-bottom: 12px;">${I18N.batchCompareHint}</p>
         <table class="batch-compare">
-          <thead><tr><th></th><th>Lot de 8 kg</th><th>Lot de 10 kg</th></tr></thead>
+          <thead><tr><th></th><th>${I18N.batchCol8kg}</th><th>${I18N.batchCol10kg}</th></tr></thead>
           <tbody>
-            <tr><td>Kief (g)</td><td>${fmtG(kief8)}</td><td>${fmtG(kief10)}</td></tr>
-            <tr><td>Distillat THC (g)</td><td>${fmtG(dist8)}</td><td>${fmtG(dist10)}</td></tr>
-            <tr><td>Coût / gramme</td><td>${fmtPerG(costPerG)}</td><td>${fmtPerG(costPerG)}</td></tr>
-            <tr><td>Coût total des matières</td><td>${fmtMoney2(cost8)}</td><td>${fmtMoney2(cost10)}</td></tr>
+            <tr><td>${I18N.rowKiefG}</td><td>${fmtG(kief8)}</td><td>${fmtG(kief10)}</td></tr>
+            <tr><td>${I18N.rowDistThcG}</td><td>${fmtG(dist8)}</td><td>${fmtG(dist10)}</td></tr>
+            <tr><td>${I18N.rowCostPerG}</td><td>${fmtPerG(costPerG)}</td><td>${fmtPerG(costPerG)}</td></tr>
+            <tr><td>${I18N.sanityTotalCost}</td><td>${fmtMoney2(cost8)}</td><td>${fmtMoney2(cost10)}</td></tr>
           </tbody>
         </table>
       </div>

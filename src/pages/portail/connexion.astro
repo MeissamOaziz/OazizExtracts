@@ -3,6 +3,8 @@ export const prerender = false;
 
 import PortailLayout from '../../layouts/PortailLayout.astro';
 import { createServerClient } from '../../lib/supabase';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frConnexion, enConnexion } from '../../i18n/portail/connexion';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const { data: userResult } = await supabase.auth.getUser();
@@ -10,30 +12,33 @@ if (userResult.user) {
   return Astro.redirect('/portail');
 }
 
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frConnexion, enConnexion);
+
 const url = new URL(Astro.request.url);
 const error = url.searchParams.get('error');
 const info = url.searchParams.get('info');
 
 const errorMessages: Record<string, string> = {
-  invalid: 'Mot de passe invalide.',
-  missing: 'Veuillez remplir les deux champs.',
-  unknown: 'Une erreur inattendue est survenue. Réessayez.',
-  not_staff: 'Cette adresse n\'est pas dans la liste du personnel.',
-  inactive: 'Ce compte a été désactivé.',
-  no_account: 'Aucun mot de passe défini pour ce compte. Créez-le d\'abord (voir instructions ci-dessous).',
-  db: 'Impossible de joindre la base de données. Réessayez dans un instant.',
+  invalid: T('error.invalid'),
+  missing: T('error.missing'),
+  unknown: T('error.unknown'),
+  not_staff: T('error.not_staff'),
+  inactive: T('error.inactive'),
+  no_account: T('error.no_account'),
+  db: T('error.db'),
 };
 const infoMessages: Record<string, string> = {
-  invite_sent: 'Si votre adresse est reconnue, une invitation vous a été envoyée par courriel.',
-  logged_out: 'Vous êtes déconnecté.',
+  invite_sent: T('info.invite_sent'),
+  logged_out: T('info.logged_out'),
 };
 ---
-<PortailLayout title="Connexion" minimal>
+<PortailLayout title={T('title')} minimal>
   <div style="max-width: 420px; margin: 40px auto;">
     <div class="card">
-      <h1 style="margin-bottom: 4px;">Connexion</h1>
+      <h1 style="margin-bottom: 4px;">{T('title')}</h1>
       <p style="color: var(--p-muted); font-size: .9rem; margin-bottom: 24px;">
-        Portail interne — réservé au personnel d'Oaziz Extracts.
+        {T('subtitle')}
       </p>
 
       {error && (
@@ -45,32 +50,32 @@ const infoMessages: Record<string, string> = {
 
       <form method="POST" action="/api/portail/login">
         <div class="form-row">
-          <label for="email">Courriel</label>
+          <label for="email">{T('email')}</label>
           <input type="email" name="email" id="email" required autocomplete="email" />
         </div>
         <div class="form-row">
-          <label for="password">Mot de passe</label>
+          <label for="password">{T('password')}</label>
           <input type="password" name="password" id="password" required autocomplete="current-password" />
         </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%;">Se connecter</button>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">{T('submit')}</button>
       </form>
 
       <hr style="margin: 28px 0; border: 0; border-top: 1px solid var(--p-border);" />
 
       <details>
         <summary style="cursor: pointer; font-size: .9rem; color: var(--p-muted);">
-          Première connexion ou mot de passe oublié
+          {T('firstTime')}
         </summary>
         <form method="POST" action="/api/portail/request-invite" style="margin-top: 14px;">
           <div class="form-row">
-            <label for="invite-email">Adresse courriel Oaziz</label>
+            <label for="invite-email">{T('inviteEmail')}</label>
             <input type="email" name="email" id="invite-email" required autocomplete="email" />
             <div class="hint">
-              Vous recevrez un lien pour définir (ou réinitialiser) votre mot de passe.
+              {T('inviteHint')}
             </div>
           </div>
           <button type="submit" class="btn btn-secondary" style="width: 100%;">
-            Envoyer le lien
+            {T('inviteSubmit')}
           </button>
         </form>
       </details>

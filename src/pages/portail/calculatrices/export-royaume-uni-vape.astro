@@ -3,149 +3,196 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frExportRoyaumeUniVape, enExportRoyaumeUniVape } from '../../../i18n/portail/export-royaume-uni-vape';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frExportRoyaumeUniVape, enExportRoyaumeUniVape);
+
+const clientStrings = {
+  locale,
+  tier500Label: T('tier500Label'),
+  tier1000Label: T('tier1000Label'),
+  tier2000Label: T('tier2000Label'),
+  tier5000Label: T('tier5000Label'),
+  warnMaterialQty: T('warnMaterialQty'),
+  warnProductAvailable: T('warnProductAvailable'),
+  warnCartFillWeight: T('warnCartFillWeight'),
+  yieldCardTitle: T('yieldCardTitle'),
+  yieldPostWash: T('yieldPostWash'),
+  yieldPostPress: T('yieldPostPress'),
+  yieldTotalAvailable: T('yieldTotalAvailable'),
+  yieldCartsProducible: T('yieldCartsProducible'),
+  yieldHint: T('yieldHint'),
+  costPoolsTitle: T('costPoolsTitle'),
+  costLineMaterial: T('costLineMaterial'),
+  costLineLabTests: T('costLineLabTests'),
+  costLineLabTestsSuffix: T('costLineLabTestsSuffix'),
+  costLineOazizProcessing: T('costLineOazizProcessing'),
+  costLineOneTime: T('costLineOneTime'),
+  costLineAgMedica: T('costLineAgMedica'),
+  costLineOtherRx: T('costLineOtherRx'),
+  costLineBulkRosin: T('costLineBulkRosin'),
+  bulkRosinUnitSuffix: T('bulkRosinUnitSuffix'),
+  costLineTotalFixed: T('costLineTotalFixed'),
+  costPerCartTitle: T('costPerCartTitle'),
+  applicableNoteApplies: T('applicableNoteApplies'),
+  applicableNoteNone: T('applicableNoteNone'),
+  costTableColTier: T('costTableColTier'),
+  costTableColTolling: T('costTableColTolling'),
+  costTableColVariableRosin: T('costTableColVariableRosin'),
+  costTableColFixedAmortized: T('costTableColFixedAmortized'),
+  costTableColTotalCad: T('costTableColTotalCad'),
+  costTableColTotalGbp: T('costTableColTotalGbp'),
+  marginTitle: T('marginTitle'),
+  marginColTier: T('marginColTier'),
+  marginColWholesale: T('marginColWholesale'),
+  marginColProfit: T('marginColProfit'),
+  marginColMarginPct: T('marginColMarginPct'),
+  marginColBatchProfit: T('marginColBatchProfit'),
+};
 ---
-<PortailLayout title="Export Royaume-Uni — Vape" staffName={staff.full_name}>
+<PortailLayout title={T('pageTitle')} staffName={staff.full_name}>
   <div class="calc-wizard">
     <div style="margin-bottom: 20px;">
       <a href="/portail/calculatrices" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-        ← Retour aux calculatrices
+        {T('backLink')}
       </a>
     </div>
-    <h1>Export Royaume-Uni — Vape</h1>
+    <h1>{T('pageTitle')}</h1>
     <p style="color: var(--p-muted); margin-bottom: 20px;">
-      Modélise le parcours Oaziz Extracts → AgMedica (Canada) → RX Distributor (UK) → Grow Group UK → Détail UK,
-      du trim brut jusqu'au coût par cartouche vape selon le palier de volume de tolling, avec analyse de marge.
+      {T('pageIntro')}
     </p>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Devises</h2>
+      <h2>{T('currenciesTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="gbpToCad">Taux de conversion GBP → CAD</label>
+          <label for="gbpToCad">{T('gbpToCadLabel')}</label>
           <input type="number" id="gbpToCad" value="1.92" step="0.01" />
         </div>
         <div class="form-row">
-          <label>Taux CAD → GBP (dérivé)</label>
+          <label>{T('cadToGbpLabel')}</label>
           <div id="cadToGbpDisplay" class="derived-value">—</div>
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Matière de départ</h2>
+      <h2>{T('startingMaterialTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="totalInputG">Grammes de matière première (trim/têtes)</label>
+          <label for="totalInputG">{T('totalInputLabel')}</label>
           <input type="number" id="totalInputG" value="69000" step="100" />
         </div>
         <div class="form-row">
-          <label for="costPerGCad">Coût par gramme (CA$/g)</label>
+          <label for="costPerGCad">{T('costPerGLabel')}</label>
           <input type="number" id="costPerGCad" value="0.12" step="0.01" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Tests de laboratoire (COA)</h2>
+      <h2>{T('labTestsTitle')}</h2>
       <div class="form-row">
-        <label for="numLots">Nombre de lots/souches</label>
+        <label for="numLots">{T('numLotsLabel')}</label>
         <input type="number" id="numLots" value="1" step="1" />
       </div>
-      <p class="hint">Coût par COA (fixe, non modifiable) : Test A 1 750,00 $ + Test B 3 675,00 $ = 5 425,00 $ / lot.</p>
+      <p class="hint">{T('labTestsHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Transformation Oaziz</h2>
+      <h2>{T('oazizProcessingTitle')}</h2>
       <div class="form-row">
-        <label for="oazizProcessingCadPerG">Transformation, emballage et transport par gramme (CA$/g)</label>
+        <label for="oazizProcessingCadPerG">{T('oazizProcessingLabel')}</label>
         <input type="number" id="oazizProcessingCadPerG" value="4.75" step="0.05" />
       </div>
-      <p class="hint">Appliqué au rendement post-presse (après lavage et pressage), pas à la matière première brute.</p>
+      <p class="hint">{T('oazizProcessingHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Rendement</h2>
+      <h2>{T('yieldTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="washYieldPct">Rendement du lavage (%)</label>
+          <label for="washYieldPct">{T('washYieldLabel')}</label>
           <input type="number" id="washYieldPct" value="10" step="0.5" />
         </div>
         <div class="form-row">
-          <label for="pressYieldPct">Rendement de presse (%)</label>
+          <label for="pressYieldPct">{T('pressYieldLabel')}</label>
           <input type="number" id="pressYieldPct" value="60" step="1" />
         </div>
       </div>
       <div class="three-col">
         <div class="form-row">
-          <label for="retainedOazizG">Échantillon retenu — Oaziz (g)</label>
+          <label for="retainedOazizG">{T('retainedOazizLabel')}</label>
           <input type="number" id="retainedOazizG" value="150" step="10" />
         </div>
         <div class="form-row">
-          <label for="retainedAgMedicaG">Échantillon retenu — AgMedica (g)</label>
+          <label for="retainedAgMedicaG">{T('retainedAgMedicaLabel')}</label>
           <input type="number" id="retainedAgMedicaG" value="150" step="10" />
         </div>
         <div class="form-row">
-          <label for="retainedRxG">Échantillon retenu — RX (g)</label>
+          <label for="retainedRxG">{T('retainedRxLabel')}</label>
           <input type="number" id="retainedRxG" value="150" step="10" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts uniques</h2>
+      <h2>{T('oneTimeCostsTitle')}</h2>
       <div class="form-row">
-        <label for="lpAuditFeeCad">Frais d'audit LP (CA$)</label>
+        <label for="lpAuditFeeCad">{T('lpAuditFeeLabel')}</label>
         <input type="number" id="lpAuditFeeCad" value="1750" step="50" />
       </div>
       <div class="form-row">
-        <label for="productValidationCadPerStrain">Validation du produit par souche (CA$)</label>
+        <label for="productValidationCadPerStrain">{T('productValidationLabel')}</label>
         <input type="number" id="productValidationCadPerStrain" value="17500" step="500" />
       </div>
       <div class="form-row">
-        <label for="packagingFormeGbp">Emballage — forme de découpe composite, unique (£)</label>
+        <label for="packagingFormeGbp">{T('packagingFormeLabel')}</label>
         <input type="number" id="packagingFormeGbp" value="270" step="10" />
       </div>
-      <p class="hint">Étude de stabilité par souche : confirmée à 0 $ — omise du calcul.</p>
+      <p class="hint">{T('oneTimeCostsHint')}</p>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts AgMedica (transformation côté Canada)</h2>
+      <h2>{T('agMedicaCostsTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="agMedicaProcessingCadPerG">Fabrication et transformation par gramme (CA$/g)</label>
+          <label for="agMedicaProcessingCadPerG">{T('agMedicaProcessingLabel')}</label>
           <input type="number" id="agMedicaProcessingCadPerG" value="4.50" step="0.05" />
         </div>
         <div class="form-row">
-          <label for="agMedicaShippingFlat">Expédition AgMedica → RX UK, forfaitaire (CA$)</label>
+          <label for="agMedicaShippingFlat">{T('agMedicaShippingLabel')}</label>
           <input type="number" id="agMedicaShippingFlat" value="4590" step="10" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Coûts de tolling RX UK par palier de lot</h2>
-      <p class="hint" style="margin-bottom: 12px;">Table de référence fixe — non modifiable.</p>
+      <h2>{T('tollingTableTitle')}</h2>
+      <p class="hint" style="margin-bottom: 12px;">{T('tollingTableHint')}</p>
       <div style="overflow-x:auto;">
         <table class="calc-table">
           <thead>
             <tr>
-              <th>Palier</th>
-              <th>Remplissage vape (CA$/u)</th>
-              <th>Cartouche (CA$/u)</th>
-              <th>Cueillette &amp; emballage (CA$/u)</th>
-              <th>Emballage (CA$/u)</th>
-              <th>Total tolling (CA$/u)</th>
+              <th>{T('tollingColTier')}</th>
+              <th>{T('tollingColFill')}</th>
+              <th>{T('tollingColCart')}</th>
+              <th>{T('tollingColPick')}</th>
+              <th>{T('tollingColPack')}</th>
+              <th>{T('tollingColTotal')}</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>500–999 unités</td>
+              <td>{T('tier500Label')}</td>
               <td>4,29 $</td>
               <td>4,23 $</td>
               <td>2,471625 $</td>
@@ -153,7 +200,7 @@ if (!staff) {
               <td>11,941625 $</td>
             </tr>
             <tr>
-              <td>1000–1999 unités</td>
+              <td>{T('tier1000Label')}</td>
               <td>3,705 $</td>
               <td>4,23 $</td>
               <td>2,471625 $</td>
@@ -161,7 +208,7 @@ if (!staff) {
               <td>11,356625 $</td>
             </tr>
             <tr>
-              <td>2000–4999 unités</td>
+              <td>{T('tier2000Label')}</td>
               <td>3,12 $</td>
               <td>4,23 $</td>
               <td>2,471625 $</td>
@@ -169,7 +216,7 @@ if (!staff) {
               <td>10,771625 $</td>
             </tr>
             <tr>
-              <td>5000+ unités</td>
+              <td>{T('tier5000Label')}</td>
               <td>2,34 $</td>
               <td>4,08 $</td>
               <td>2,471625 $</td>
@@ -182,31 +229,31 @@ if (!staff) {
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Autres coûts RX</h2>
+      <h2>{T('otherRxTitle')}</h2>
       <div class="two-col">
         <div class="form-row">
-          <label for="incomingOutgoingTestingCad">Tests entrants/sortants (CA$)</label>
+          <label for="incomingOutgoingTestingCad">{T('incomingOutgoingLabel')}</label>
           <input type="number" id="incomingOutgoingTestingCad" value="5850" step="50" />
         </div>
         <div class="form-row">
-          <label for="rxLabTestingCad">Test de labo RX (3e labo, sur échantillon 150 g) (CA$)</label>
+          <label for="rxLabTestingCad">{T('rxLabTestingLabel')}</label>
           <input type="number" id="rxLabTestingCad" value="1750" step="50" />
         </div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Décomposition du coût par cartouche</h2>
+      <h2>{T('cartBreakdownTitle')}</h2>
       <div class="form-row">
-        <label for="cartFillWeightG">Poids de remplissage par cartouche (g/cart)</label>
+        <label for="cartFillWeightG">{T('cartFillWeightLabel')}</label>
         <input type="number" id="cartFillWeightG" value="1" step="0.1" />
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 16px;">
-      <h2>Analyse de marge</h2>
+      <h2>{T('marginAnalysisSectionTitle')}</h2>
       <div class="form-row">
-        <label for="wholesalePriceGbpPerUnit">Prix de gros par unité (£)</label>
+        <label for="wholesalePriceGbpPerUnit">{T('wholesalePriceLabel')}</label>
         <input type="number" id="wholesalePriceGbpPerUnit" value="25" step="0.5" />
       </div>
     </div>
@@ -214,6 +261,8 @@ if (!staff) {
     <div id="result"></div>
   </div>
 </PortailLayout>
+
+<script type="application/json" id="calc-i18n-data" set:html={JSON.stringify(clientStrings)}></script>
 
 <style is:global>
   .derived-value {
@@ -250,6 +299,52 @@ if (!staff) {
 </style>
 
 <script>
+  type ClientStrings = {
+    locale: 'fr' | 'en';
+    tier500Label: string;
+    tier1000Label: string;
+    tier2000Label: string;
+    tier5000Label: string;
+    warnMaterialQty: string;
+    warnProductAvailable: string;
+    warnCartFillWeight: string;
+    yieldCardTitle: string;
+    yieldPostWash: string;
+    yieldPostPress: string;
+    yieldTotalAvailable: string;
+    yieldCartsProducible: string;
+    yieldHint: string;
+    costPoolsTitle: string;
+    costLineMaterial: string;
+    costLineLabTests: string;
+    costLineLabTestsSuffix: string;
+    costLineOazizProcessing: string;
+    costLineOneTime: string;
+    costLineAgMedica: string;
+    costLineOtherRx: string;
+    costLineBulkRosin: string;
+    bulkRosinUnitSuffix: string;
+    costLineTotalFixed: string;
+    costPerCartTitle: string;
+    applicableNoteApplies: string;
+    applicableNoteNone: string;
+    costTableColTier: string;
+    costTableColTolling: string;
+    costTableColVariableRosin: string;
+    costTableColFixedAmortized: string;
+    costTableColTotalCad: string;
+    costTableColTotalGbp: string;
+    marginTitle: string;
+    marginColTier: string;
+    marginColWholesale: string;
+    marginColProfit: string;
+    marginColMarginPct: string;
+    marginColBatchProfit: string;
+  };
+
+  const I18N: ClientStrings = JSON.parse(document.getElementById('calc-i18n-data')!.textContent!);
+  const NUM_LOCALE = I18N.locale === 'en' ? 'en-CA' : 'fr-CA';
+
   function num(id: string): number {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return 0;
@@ -258,16 +353,16 @@ if (!staff) {
   }
 
   const fmtMoney2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtMoney0 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }) : '—';
   const fmtGbp2 = (n: number) =>
-    isFinite(n) ? n.toLocaleString('fr-CA', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    isFinite(n) ? n.toLocaleString(NUM_LOCALE, { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
   const fmtPerG = (n: number) => (isFinite(n) ? '$' + n.toFixed(4) : '—');
   const fmtPct2 = (n: number) => (isFinite(n) ? (n * 100).toFixed(2) + '%' : '—');
-  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') + ' g' : '—');
+  const fmtG = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) + ' g' : '—');
   const fmtRate6 = (n: number) => (isFinite(n) ? n.toFixed(6) : '—');
-  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString('fr-CA') : '—');
+  const fmtUnits = (n: number) => (isFinite(n) ? Math.round(n).toLocaleString(NUM_LOCALE) : '—');
 
   type Tier = {
     label: string;
@@ -280,10 +375,10 @@ if (!staff) {
   };
 
   const TIERS: Tier[] = [
-    { label: '500–999 unités', min: 500, max: 999, fill: 4.29, cart: 4.23, pick: 2.471625, pack: 0.95 },
-    { label: '1000–1999 unités', min: 1000, max: 1999, fill: 3.705, cart: 4.23, pick: 2.471625, pack: 0.95 },
-    { label: '2000–4999 unités', min: 2000, max: 4999, fill: 3.12, cart: 4.23, pick: 2.471625, pack: 0.95 },
-    { label: '5000+ unités', min: 5000, max: Infinity, fill: 2.34, cart: 4.08, pick: 2.471625, pack: 0.95 },
+    { label: I18N.tier500Label, min: 500, max: 999, fill: 4.29, cart: 4.23, pick: 2.471625, pack: 0.95 },
+    { label: I18N.tier1000Label, min: 1000, max: 1999, fill: 3.705, cart: 4.23, pick: 2.471625, pack: 0.95 },
+    { label: I18N.tier2000Label, min: 2000, max: 4999, fill: 3.12, cart: 4.23, pick: 2.471625, pack: 0.95 },
+    { label: I18N.tier5000Label, min: 5000, max: Infinity, fill: 2.34, cart: 4.08, pick: 2.471625, pack: 0.95 },
   ];
 
   function render() {
@@ -351,13 +446,13 @@ if (!staff) {
 
     let warnHtml = '';
     if (totalInputG <= 0) {
-      warnHtml += `<div class="warn-banner">La quantité de matière première doit être supérieure à 0.</div>`;
+      warnHtml += `<div class="warn-banner">${I18N.warnMaterialQty}</div>`;
     }
     if (totalProductAvailableG <= 0) {
-      warnHtml += `<div class="warn-banner">⚠ Le produit disponible est nul ou négatif — les échantillons retenus dépassent le rendement post-presse.</div>`;
+      warnHtml += `<div class="warn-banner">${I18N.warnProductAvailable}</div>`;
     }
     if (cartFillWeightG <= 0) {
-      warnHtml += `<div class="warn-banner">Le poids de remplissage par cartouche doit être supérieur à 0.</div>`;
+      warnHtml += `<div class="warn-banner">${I18N.warnCartFillWeight}</div>`;
     }
 
     const fixedPerCart = totalCartsProducible > 0 ? totalTrulyFixedCosts / totalCartsProducible : 0;
@@ -401,51 +496,57 @@ if (!staff) {
 
     const appliedTier = tierRows.find((r) => r.applies);
     const applicableNote = appliedTier
-      ? `<p class="applicable-note">★ Palier applicable au volume actuel (${fmtUnits(totalCartsProducible)} cartouches) : ${appliedTier.tier.label}</p>`
-      : `<p class="hint">Aucun palier de tolling ne s'applique — le volume de cartouches produit (${fmtUnits(totalCartsProducible)}) est sous le minimum de 500 unités.</p>`;
+      ? `<p class="applicable-note">${I18N.applicableNoteApplies
+          .replace('{units}', fmtUnits(totalCartsProducible))
+          .replace('{tier}', appliedTier.tier.label)}</p>`
+      : `<p class="hint">${I18N.applicableNoteNone.replace('{units}', fmtUnits(totalCartsProducible))}</p>`;
+
+    const yieldHint = I18N.yieldHint
+      .replace('{oaziz}', fmtG(retainedOazizG))
+      .replace('{agMedica}', fmtG(retainedAgMedicaG))
+      .replace('{rx}', fmtG(retainedRxG));
 
     out.innerHTML = `
       ${warnHtml}
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Chaîne de rendement</h2>
+        <h2>${I18N.yieldCardTitle}</h2>
         <div class="yield-row">
-          <div class="yield-item">Rendement post-lavage<strong>${fmtG(postWashYieldG)}</strong></div>
-          <div class="yield-item">Rendement post-presse<strong>${fmtG(postPressYieldG)}</strong></div>
-          <div class="yield-item">Total produit disponible<strong>${fmtG(totalProductAvailableG)}</strong></div>
-          <div class="yield-item">Cartouches réalisables<strong>${fmtUnits(totalCartsProducible)}</strong></div>
+          <div class="yield-item">${I18N.yieldPostWash}<strong>${fmtG(postWashYieldG)}</strong></div>
+          <div class="yield-item">${I18N.yieldPostPress}<strong>${fmtG(postPressYieldG)}</strong></div>
+          <div class="yield-item">${I18N.yieldTotalAvailable}<strong>${fmtG(totalProductAvailableG)}</strong></div>
+          <div class="yield-item">${I18N.yieldCartsProducible}<strong>${fmtUnits(totalCartsProducible)}</strong></div>
         </div>
         <p class="hint">
-          Produit disponible = rendement post-presse − échantillons retenus (Oaziz ${fmtG(retainedOazizG)},
-          AgMedica ${fmtG(retainedAgMedicaG)}, RX ${fmtG(retainedRxG)}).
+          ${yieldHint}
         </p>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Bassins de coûts</h2>
-        <div class="cost-line"><span>Coût total de la matière première</span><span>${fmtMoney2(totalMaterialCost)}</span></div>
-        <div class="cost-line"><span>Coût total des tests de labo (COA)</span><span>${fmtMoney2(totalLabTestCost)} · ${fmtPerG(labCostPerG)}/g d'intrant</span></div>
-        <div class="cost-line"><span>Coût de transformation Oaziz (post-presse)</span><span>${fmtMoney2(totalOazizProcessingCost)}</span></div>
-        <div class="cost-line"><span>Coûts uniques (audit, validation, emballage)</span><span>${fmtMoney2(totalOneTimeCosts)}</span></div>
-        <div class="cost-line"><span>Coûts AgMedica (transformation + expédition)</span><span>${fmtMoney2(totalAgMedicaCosts)}</span></div>
-        <div class="cost-line"><span>Autres coûts RX (tests entrants/sortants + labo RX)</span><span>${fmtMoney2(totalOtherRxCosts)}</span></div>
-        <div class="cost-line subtotal"><span>Coût du rosin en vrac ($/g de produit disponible)</span><span>${fmtPerG(bulkRosinCostPerG)}/g</span></div>
-        <div class="cost-line subtotal"><span>Total des coûts véritablement fixes (amortis sur les cartouches)</span><span>${fmtMoney2(totalTrulyFixedCosts)}</span></div>
+        <h2>${I18N.costPoolsTitle}</h2>
+        <div class="cost-line"><span>${I18N.costLineMaterial}</span><span>${fmtMoney2(totalMaterialCost)}</span></div>
+        <div class="cost-line"><span>${I18N.costLineLabTests}</span><span>${fmtMoney2(totalLabTestCost)} · ${fmtPerG(labCostPerG)}${I18N.costLineLabTestsSuffix}</span></div>
+        <div class="cost-line"><span>${I18N.costLineOazizProcessing}</span><span>${fmtMoney2(totalOazizProcessingCost)}</span></div>
+        <div class="cost-line"><span>${I18N.costLineOneTime}</span><span>${fmtMoney2(totalOneTimeCosts)}</span></div>
+        <div class="cost-line"><span>${I18N.costLineAgMedica}</span><span>${fmtMoney2(totalAgMedicaCosts)}</span></div>
+        <div class="cost-line"><span>${I18N.costLineOtherRx}</span><span>${fmtMoney2(totalOtherRxCosts)}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.costLineBulkRosin}</span><span>${fmtPerG(bulkRosinCostPerG)}${I18N.bulkRosinUnitSuffix}</span></div>
+        <div class="cost-line subtotal"><span>${I18N.costLineTotalFixed}</span><span>${fmtMoney2(totalTrulyFixedCosts)}</span></div>
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Coût par cartouche, selon le palier de tolling</h2>
+        <h2>${I18N.costPerCartTitle}</h2>
         ${applicableNote}
         <div style="overflow-x:auto; margin-top: 10px;">
           <table class="calc-table">
             <thead>
               <tr>
-                <th>Palier</th>
-                <th>Tolling/cart</th>
-                <th>Rosin variable/cart</th>
-                <th>Fixe amorti/cart</th>
-                <th>Total/cart (CA$)</th>
-                <th>Total/cart (£)</th>
+                <th>${I18N.costTableColTier}</th>
+                <th>${I18N.costTableColTolling}</th>
+                <th>${I18N.costTableColVariableRosin}</th>
+                <th>${I18N.costTableColFixedAmortized}</th>
+                <th>${I18N.costTableColTotalCad}</th>
+                <th>${I18N.costTableColTotalGbp}</th>
               </tr>
             </thead>
             <tbody>${costTableRows}</tbody>
@@ -454,17 +555,17 @@ if (!staff) {
       </div>
 
       <div class="card">
-        <h2>Analyse de marge, selon le palier de tolling</h2>
+        <h2>${I18N.marginTitle}</h2>
         ${applicableNote}
         <div style="overflow-x:auto; margin-top: 10px;">
           <table class="calc-table">
             <thead>
               <tr>
-                <th>Palier</th>
-                <th>Gros/cart (CA$)</th>
-                <th>Profit/cart (CA$)</th>
-                <th>Marge %</th>
-                <th>Profit total du lot</th>
+                <th>${I18N.marginColTier}</th>
+                <th>${I18N.marginColWholesale}</th>
+                <th>${I18N.marginColProfit}</th>
+                <th>${I18N.marginColMarginPct}</th>
+                <th>${I18N.marginColBatchProfit}</th>
               </tr>
             </thead>
             <tbody>${marginRows}</tbody>

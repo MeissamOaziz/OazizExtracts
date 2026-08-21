@@ -3,12 +3,19 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frFormulaires, enFormulaires } from '../../../i18n/portail/formulaires';
+import { frCommon, enCommon } from '../../../i18n/portail/common';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFormulaires, enFormulaires);
+const Tc = makeT(locale, frCommon, enCommon);
 
 const { data: submissions } = await supabase
   .from('submissions')
@@ -71,50 +78,41 @@ for (const row of docRows) {
   docsBySubmission.get(row.submission_id)!.push(row);
 }
 
-const statusLabel: Record<string, string> = {
-  draft: 'Brouillon',
-  sent: 'Envoyé',
-  signing: 'En signature',
-  complete: 'Complet',
-  finalized: 'Finalisé',
-  cancelled: 'Annulé',
-};
-
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 ---
-<PortailLayout title="Formulaires R&D" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
     <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour à l'accueil
+      {T('backLink')}
     </a>
   </div>
   <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:24px;">
     <div>
-      <h1>Formulaires R&D</h1>
-      <p style="color: var(--p-muted);">Suivi de vos demandes d'échantillon.</p>
+      <h1>{T('title')}</h1>
+      <p style="color: var(--p-muted);">{T('subtitle')}</p>
     </div>
-    <a href="/portail/nouvelle" class="btn btn-primary">+ Nouvelle demande</a>
+    <a href="/portail/nouvelle" class="btn btn-primary">{T('newRequest')}</a>
   </div>
 
   <div class="card" style="padding: 0;">
     {(!submissions || submissions.length === 0) ? (
       <div class="empty-state">
-        <p style="margin-bottom: 12px;">Aucune demande pour le moment.</p>
-        <a href="/portail/nouvelle" class="btn btn-primary">Créer la première</a>
+        <p style="margin-bottom: 12px;">{T('emptyState')}</p>
+        <a href="/portail/nouvelle" class="btn btn-primary">{T('emptyStateBtn')}</a>
       </div>
     ) : (
       <table class="data">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Produit</th>
-            <th>Participants</th>
-            <th>Signatures</th>
-            <th>Statut</th>
-            <th>Document</th>
+            <th>{T('th.date')}</th>
+            <th>{T('th.product')}</th>
+            <th>{T('th.participants')}</th>
+            <th>{T('th.signatures')}</th>
+            <th>{T('th.status')}</th>
+            <th>{T('th.document')}</th>
             <th></th>
           </tr>
         </thead>
@@ -128,7 +126,7 @@ function formatDate(iso: string): string {
                 <td>{formatDate(s.form_date)}</td>
                 <td>
                   <a href={`/portail/demande/${s.id}`}>
-                    <strong>{s.product_name || '(sans nom)'}</strong>
+                    <strong>{s.product_name || T('unnamedProduct')}</strong>
                   </a>
                   <div style="color: var(--p-muted); font-size: .82rem;">{s.product_type}</div>
                 </td>
@@ -137,12 +135,12 @@ function formatDate(iso: string): string {
                   {sig ? `${sig.signed} / ${sig.total}` : (s.status === 'draft' ? '—' : '0 / 0')}
                 </td>
                 <td>
-                  <span class={`badge badge-${s.status}`}>{statusLabel[s.status] ?? s.status}</span>
+                  <span class={`badge badge-${s.status}`}>{Tc(`status.${s.status}` as keyof typeof frCommon) ?? s.status}</span>
                 </td>
                 <td>
                   {['finalized', 'complete', 'signing', 'sent'].includes(s.status) ? (
-                    <a href={`/api/portail/documents/${s.id}/download`} class="btn btn-secondary" style="font-size: .78rem; padding: 4px 10px;" title="Télécharger le PDF">
-                      ⬇ PDF
+                    <a href={`/api/portail/documents/${s.id}/download`} class="btn btn-secondary" style="font-size: .78rem; padding: 4px 10px;" title={T('downloadPdfTitle')}>
+                      {T('downloadPdfText')}
                     </a>
                   ) : (
                     <span style="color: var(--p-muted); font-size: .82rem;">—</span>
@@ -151,10 +149,10 @@ function formatDate(iso: string): string {
                 <td style="text-align: right;">
                   {pendingSignSet.has(s.id) && (
                     <a href={`/portail/demande/${s.id}/signer`} class="btn btn-primary" style="font-size: .82rem; padding: 6px 14px; margin-right: 8px;">
-                      Signer
+                      {T('signBtn')}
                     </a>
                   )}
-                  <a href={`/portail/demande/${s.id}`} style="font-size: .85rem;">Ouvrir →</a>
+                  <a href={`/portail/demande/${s.id}`} style="font-size: .85rem;">{T('openLink')}</a>
                 </td>
               </tr>
             );

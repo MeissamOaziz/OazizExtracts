@@ -3,12 +3,19 @@ export const prerender = false;
 
 import PortailLayout from '../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../lib/supabase';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frNouvelle, enNouvelle } from '../../i18n/portail/nouvelle';
+import { frCommon, enCommon } from '../../i18n/portail/common';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frNouvelle, enNouvelle);
+const Tc = makeT(locale, frCommon, enCommon);
 
 const { data: allStaff } = await supabase
   .from('staff')
@@ -30,24 +37,24 @@ const DEFAULT_OBJECTIVE = "Contrôle qualité, essai de traction, analyse physiq
 const url = new URL(Astro.request.url);
 const error = url.searchParams.get('error');
 const errorMessages: Record<string, string> = {
-  missing: 'Veuillez remplir tous les champs obligatoires.',
-  no_participants: 'Sélectionnez au moins un participant.',
-  no_jorge: 'Jorge Sousa doit exister dans la liste du personnel (rôles fixes).',
-  no_stephane: 'Stephane Paquin doit exister dans la liste du personnel (rôle AQ).',
-  unknown: 'Une erreur est survenue lors de l\'enregistrement.',
+  missing: T('error.missing'),
+  no_participants: T('error.no_participants'),
+  no_jorge: T('error.no_jorge'),
+  no_stephane: T('error.no_stephane'),
+  unknown: T('error.unknown'),
 };
 
 const today = new Date().toISOString().slice(0, 10);
 ---
-<PortailLayout title="Nouvelle demande" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
     <a href="/portail/formulaires" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour aux formulaires
+      {T('backLink')}
     </a>
   </div>
-  <h1>Nouvelle demande d'échantillon</h1>
+  <h1>{T('heading')}</h1>
   <p style="color: var(--p-muted); margin-bottom: 24px;">
-    F5-SOP-PRO-013/00 · Section « À remplir par l'initiateur »
+    F5-SOP-PRO-013/00 · {T('subtitleSection')}
   </p>
 
   {error && (
@@ -56,42 +63,42 @@ const today = new Date().toISOString().slice(0, 10);
 
   <form method="POST" action="/api/portail/submissions" class="card">
     <div class="form-row">
-      <label for="form_date">Date (JJ/MM/AAAA)</label>
+      <label for="form_date">{T('label.formDate')}</label>
       <input type="date" name="form_date" id="form_date" value={today} required />
     </div>
 
     <div class="form-row">
-      <label>Nom de l'initiateur</label>
+      <label>{T('label.initiatorName')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
         {jorge?.full_name ?? 'Jorge Sousa'}
-        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
 
     <div class="form-row">
-      <label for="product_name">Nom du produit / souche</label>
+      <label for="product_name">{T('label.productName')}</label>
       <input type="text" name="product_name" id="product_name" required />
     </div>
 
     <div class="form-row">
-      <label for="product_type">Type de produit</label>
-      <input type="text" name="product_type" id="product_type" placeholder="ex: Rosin, Hash, Kief…" required />
+      <label for="product_type">{T('label.productType')}</label>
+      <input type="text" name="product_type" id="product_type" placeholder={T('placeholder.productType')} required />
     </div>
 
     <div class="form-row">
-      <label for="quantity">Quantité totale (g ou unités)</label>
-      <input type="text" name="quantity" id="quantity" placeholder="ex: 20 g" required />
-      <div class="hint">Sera automatiquement divisée en parts égales entre les participants sur les formulaires R&D.</div>
+      <label for="quantity">{T('label.quantity')}</label>
+      <input type="text" name="quantity" id="quantity" placeholder={T('placeholder.quantity')} required />
+      <div class="hint">{T('hint.quantity')}</div>
     </div>
 
     <div class="form-row">
-      <label for="rnd_objective">Objectif de l'étude</label>
+      <label for="rnd_objective">{T('label.objective')}</label>
       <textarea name="rnd_objective" id="rnd_objective" rows="4" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{DEFAULT_OBJECTIVE}</textarea>
-      <div class="hint">Modifiable. Apparaîtra dans la section DESCRIPTION du formulaire R&D.</div>
+      <div class="hint">{T('hint.objective')}</div>
     </div>
 
     <div class="form-row">
-      <label>Participants</label>
+      <label>{T('label.participants')}</label>
       <div class="participants-grid">
         {roster.map((s) => (
           <label>
@@ -100,13 +107,13 @@ const today = new Date().toISOString().slice(0, 10);
           </label>
         ))}
       </div>
-      <div class="hint">Un formulaire R&D et un consentement seront générés par participant.</div>
+      <div class="hint">{T('hint.participants')}</div>
     </div>
 
-    <h2 style="margin-top: 28px;">À remplir par le personnel de production</h2>
+    <h2 style="margin-top: 28px;">{T('heading.production')}</h2>
 
     <div class="form-row">
-      <label for="production_staff_id">Personnel de production</label>
+      <label for="production_staff_id">{Tc('role.production')}</label>
       <select name="production_staff_id" id="production_staff_id" required>
         {roster.map((s) => (
           <option value={s.id} selected={s.id === simon?.id}>{s.full_name}</option>
@@ -115,46 +122,46 @@ const today = new Date().toISOString().slice(0, 10);
     </div>
 
     <div class="form-row">
-      <label>État de production</label>
+      <label>{T('label.productionState')}</label>
       <div style="display: flex; gap: 20px; padding-top: 4px;">
         <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
-          <input type="radio" name="production_state" value="vrac" /> Vrac
+          <input type="radio" name="production_state" value="vrac" /> {Tc('state.vrac')}
         </label>
         <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
-          <input type="radio" name="production_state" value="emballe" /> Emballé
+          <input type="radio" name="production_state" value="emballe" /> {Tc('state.emballe')}
         </label>
       </div>
     </div>
 
     <div class="form-row">
-      <label for="production_id">Identifiant du lot (ID)</label>
+      <label for="production_id">{T('label.productionId')}</label>
       <input type="text" name="production_id" id="production_id" />
     </div>
 
-    <h2 style="margin-top: 28px;">Rôles pour la signature</h2>
-    <p class="hint" style="margin-bottom: 16px;">Les rôles ci-dessous sont fixés pour toutes les demandes.</p>
+    <h2 style="margin-top: 28px;">{T('heading.signatureRoles')}</h2>
+    <p class="hint" style="margin-bottom: 16px;">{T('hint.signatureRoles')}</p>
 
     <div class="form-row">
-      <label>Vérification AQ</label>
+      <label>{Tc('role.qa_verifier')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
         {stephane?.full_name ?? 'Stephane Paquin'}
-        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
 
     <div class="form-row">
-      <label>Personne obtenant le consentement</label>
+      <label>{Tc('role.consent_obtainer')}</label>
       <div style="padding: 9px 12px; border: 1px solid var(--p-border); background: #fafbfc; border-radius: 6px; color: var(--p-text);">
         {jorge?.full_name ?? 'Jorge Sousa'}
-        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">(fixé)</span>
+        <span style="color: var(--p-muted); font-size: .82rem; margin-left: 8px;">{T('fixedTag')}</span>
       </div>
     </div>
 
     <div style="display: flex; gap: 12px; margin-top: 28px;">
       <button type="submit" name="action" value="save_draft" class="btn btn-primary">
-        Enregistrer le brouillon
+        {T('submit')}
       </button>
-      <a href="/portail/formulaires" class="btn btn-secondary" style="margin-left:auto;">Annuler</a>
+      <a href="/portail/formulaires" class="btn btn-secondary" style="margin-left:auto;">{Tc('btn.cancel')}</a>
     </div>
   </form>
 </PortailLayout>

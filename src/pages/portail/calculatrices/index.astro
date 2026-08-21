@@ -3,12 +3,17 @@ export const prerender = false;
 
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frCalculatricesIndex, enCalculatricesIndex } from '../../../i18n/portail/calculatrices-index';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) {
   return Astro.redirect('/portail/connexion');
 }
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCalculatricesIndex, enCalculatricesIndex);
 
 const calculators = [
   {
@@ -58,15 +63,15 @@ const calculators = [
   },
 ];
 ---
-<PortailLayout title="Calculatrices" staffName={staff.full_name}>
+<PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
     <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
-      ← Retour au tableau de bord
+      {T('backLink')}
     </a>
   </div>
-  <h1>Calculatrices</h1>
+  <h1>{T('title')}</h1>
   <p style="color: var(--p-muted); margin-bottom: 24px;">
-    Outils internes de calcul de coûts et de prix.
+    {T('subtitle')}
   </p>
 
   <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
