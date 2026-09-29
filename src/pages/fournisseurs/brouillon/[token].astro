@@ -68,6 +68,7 @@ const errorMessages: Record<string, string> = {
         action="/api/vendor/submit"
         values={{
           vendor_type: submission.vendor_type,
+          products_sold: submission.products_sold ?? '',
           company_name: submission.company_name ?? '', address: submission.address ?? '',
           city: submission.city ?? '', province: submission.province ?? '', postal_code: submission.postal_code ?? '',
           contact_person: submission.contact_person ?? '', phone: submission.phone ?? '', email: submission.email ?? '',
@@ -86,7 +87,7 @@ const errorMessages: Record<string, string> = {
           production_type: submission.production_type, cultivation_methods: submission.cultivation_methods ?? [],
           lighting_type: submission.lighting_type ?? '', medium_type: submission.medium_type ?? '',
           nutrient_type: submission.nutrient_type ?? '', cultivar_name: submission.cultivar_name ?? '',
-          existing_coas: submission.existing_coas, starting_material: submission.starting_material ?? [],
+          starting_material: submission.starting_material ?? [],
           pesticides_used: submission.pesticides_used ?? '',
           certified_by_name: submission.certified_by_name ?? '', certified_by_title: submission.certified_by_title ?? '',
         }}

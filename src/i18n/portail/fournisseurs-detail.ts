@@ -13,6 +13,7 @@ export const frFournisseursDetail = {
   'label.accountingContact': 'Comptabilité',
 
   'field.vendorType': "Type d'entreprise",
+  'field.productsSold': 'Produits / services offerts',
 
   'section.company': 'A) Renseignements sur l\'entreprise',
   'field.companyName': "Nom de l'entreprise",
@@ -52,8 +53,7 @@ export const frFournisseursDetail = {
   'field.lightingType': "Type d'éclairage",
   'field.mediumType': 'Type de substrat',
   'field.nutrientType': 'Type de nutriments',
-  'field.cultivarName': 'Nom du cultivar',
-  'field.existingCoas': 'COA existants',
+  'field.cultivarName': 'Cultivars cultivés',
   'field.startingMaterial': 'Matériel de départ',
   'field.pesticidesUsed': 'Pesticides / fongicides / herbicides',
 
@@ -91,6 +91,7 @@ export const enFournisseursDetail: Partial<Record<keyof FournisseursDetailDict, 
   'label.accountingContact': 'Accounting',
 
   'field.vendorType': 'Business type',
+  'field.productsSold': 'Products / services offered',
 
   'section.company': 'A) Company information',
   'field.companyName': 'Company name',
@@ -130,8 +131,7 @@ export const enFournisseursDetail: Partial<Record<keyof FournisseursDetailDict, 
   'field.lightingType': 'Type of lighting',
   'field.mediumType': 'Type of medium',
   'field.nutrientType': 'Type of nutriments',
-  'field.cultivarName': 'Cultivar name',
-  'field.existingCoas': 'Existing COAs',
+  'field.cultivarName': 'Cultivars grown',
   'field.startingMaterial': 'Starting material',
   'field.pesticidesUsed': 'Pesticides / fungicides / herbicides',
 

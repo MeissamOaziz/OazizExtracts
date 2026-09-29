@@ -15,8 +15,9 @@ interface VendorFormValues {
   accounting_contact_email: string; accounting_contact_phone: string;
   business_number: string; gst_hst_number: string; qst_number: string;
   bank_institution_number: string; bank_transit_number: string; bank_account_number: string; bank_address: string;
+  products_sold: string;
   production_type: string | null; cultivation_methods: string[]; lighting_type: string; medium_type: string;
-  nutrient_type: string; cultivar_name: string; existing_coas: boolean | null; starting_material: string[];
+  nutrient_type: string; cultivar_name: string; starting_material: string[];
   pesticides_used: string;
   certified_by_name: string; certified_by_title: string;
 }
@@ -50,37 +51,44 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <div class="hint">{T('hint.vendorType')}</div>
   </div>
 
+  <div class="section-hdr"><h2>{T('section.products.title')}</h2></div>
+  <div class="form-row">
+    <label for="products_sold">{T('label.productsSold')}</label>
+    <textarea id="products_sold" name="products_sold" rows="3" placeholder={T('placeholder.productsSold')}>{v.products_sold}</textarea>
+    <div class="hint">{T('hint.productsSold')}</div>
+  </div>
+
   <div class="section-hdr">
     <h2>{T('section.contacts.title')}</h2>
     <p>{T('section.contacts.desc')}</p>
   </div>
+  <div class="form-row">
+    <label for="sales_contact_name">{T('label.salesContactName')}</label>
+    <input type="text" id="sales_contact_name" name="sales_contact_name" value={v.sales_contact_name} required />
+  </div>
   <div class="two-col">
-    <div class="form-row">
-      <label for="sales_contact_name">{T('label.salesContactName')}</label>
-      <input type="text" id="sales_contact_name" name="sales_contact_name" value={v.sales_contact_name} required />
-    </div>
     <div class="form-row">
       <label for="sales_contact_email">{T('label.salesContactEmail')}</label>
       <input type="email" id="sales_contact_email" name="sales_contact_email" value={v.sales_contact_email} required />
     </div>
+    <div class="form-row">
+      <label for="sales_contact_phone">{T('label.salesContactPhone')}</label>
+      <input type="tel" id="sales_contact_phone" name="sales_contact_phone" value={v.sales_contact_phone} class="contact-phone" />
+    </div>
   </div>
   <div class="form-row">
-    <label for="sales_contact_phone">{T('label.salesContactPhone')}</label>
-    <input type="tel" id="sales_contact_phone" name="sales_contact_phone" value={v.sales_contact_phone} class="contact-phone" />
+    <label for="qa_contact_name">{T('label.qaContactName')}</label>
+    <input type="text" id="qa_contact_name" name="qa_contact_name" value={v.qa_contact_name} required />
   </div>
   <div class="two-col">
-    <div class="form-row">
-      <label for="qa_contact_name">{T('label.qaContactName')}</label>
-      <input type="text" id="qa_contact_name" name="qa_contact_name" value={v.qa_contact_name} required />
-    </div>
     <div class="form-row">
       <label for="qa_contact_email">{T('label.qaContactEmail')}</label>
       <input type="email" id="qa_contact_email" name="qa_contact_email" value={v.qa_contact_email} required />
     </div>
-  </div>
-  <div class="form-row">
-    <label for="qa_contact_phone">{T('label.qaContactPhone')}</label>
-    <input type="tel" id="qa_contact_phone" name="qa_contact_phone" value={v.qa_contact_phone} class="contact-phone" />
+    <div class="form-row">
+      <label for="qa_contact_phone">{T('label.qaContactPhone')}</label>
+      <input type="tel" id="qa_contact_phone" name="qa_contact_phone" value={v.qa_contact_phone} class="contact-phone" />
+    </div>
   </div>
   <div class="two-col">
     <div class="form-row">
@@ -246,22 +254,13 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
       <input type="text" id="medium_type" name="medium_type" value={v.medium_type} />
     </div>
   </div>
-  <div class="two-col">
-    <div class="form-row">
-      <label for="nutrient_type">{T('label.nutrientType')}</label>
-      <input type="text" id="nutrient_type" name="nutrient_type" value={v.nutrient_type} />
-    </div>
-    <div class="form-row">
-      <label for="cultivar_name">{T('label.cultivarName')}</label>
-      <input type="text" id="cultivar_name" name="cultivar_name" value={v.cultivar_name} />
-    </div>
+  <div class="form-row">
+    <label for="nutrient_type">{T('label.nutrientType')}</label>
+    <input type="text" id="nutrient_type" name="nutrient_type" value={v.nutrient_type} />
   </div>
   <div class="form-row">
-    <label>{T('label.existingCoas')}</label>
-    <div class="radio-group">
-      <label><input type="radio" name="existing_coas" value="yes" checked={v.existing_coas === true} /> {T('option.yes')}</label>
-      <label><input type="radio" name="existing_coas" value="no" checked={v.existing_coas === false} /> {T('option.no')}</label>
-    </div>
+    <label for="cultivar_name">{T('label.cultivarName')}</label>
+    <textarea id="cultivar_name" name="cultivar_name" rows="2">{v.cultivar_name}</textarea>
   </div>
   <div class="form-row">
     <label>{T('label.startingMaterial')}</label>

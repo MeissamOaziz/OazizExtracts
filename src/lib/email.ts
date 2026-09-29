@@ -131,6 +131,117 @@ function renderEmailShell(o: ShellOpts): string {
 }
 
 // ============================================================
+// Bilingual shell for vendor-facing emails (external recipients — these are
+// often a supplier's first impression of Oaziz, so FR and EN are both shown
+// in the same email rather than picking one). Separate from renderEmailShell
+// above (which is French-only and branded "Portail R&D" — not appropriate to
+// show an outside vendor). Uses a bulletproof VML button so the CTA still
+// renders as a proper rounded button in Outlook desktop, which ignores
+// border-radius on a plain <a> tag.
+// ============================================================
+
+interface VendorShellOpts {
+  preheaderFr: string;
+  preheaderEn: string;
+  headingFr: string;
+  headingEn: string;
+  introFr: string;
+  introEn: string;
+  ctaLabelFr: string;
+  ctaLabelEn: string;
+  ctaUrl: string;
+  fallbackNoteFr?: string;
+  fallbackNoteEn?: string;
+  footerNote?: string;
+}
+
+function vmlButton(url: string, label: string): string {
+  const escapedLabel = escapeHtml(label);
+  return `<!--[if mso]>
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:46px;v-text-anchor:middle;width:280px;" arcsize="14%" stroke="f" fillcolor="${OAZIZ_ORANGE}">
+<w:anchorlock/>
+<center style="color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:600;">${escapedLabel}</center>
+</v:roundrect>
+<![endif]-->
+<!--[if !mso]><!-- -->
+<a href="${url}" style="display:inline-block;background:${OAZIZ_ORANGE};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 30px;border-radius:8px;box-shadow:0 2px 6px rgba(208,88,38,0.3);mso-hide:all;">${escapedLabel}</a>
+<!--<![endif]-->`;
+}
+
+function renderVendorEmailShell(o: VendorShellOpts): string {
+  const langBlock = (heading: string, intro: string, fallback: string | undefined, langTag: string) => `
+    <tr><td style="padding:0 28px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#c9cdd6;text-transform:uppercase;margin-bottom:6px;">${langTag}</div>
+      <h1 style="color:#1a1d24;font-size:20px;font-weight:700;margin:0 0 8px;line-height:1.3;">${escapeHtml(heading)}</h1>
+      <p style="color:#4b5063;font-size:15px;line-height:1.55;margin:0 0 6px;">${intro}</p>
+      ${fallback ? `<p style="color:#8a8f9c;font-size:12px;line-height:1.5;margin:0;">${escapeHtml(fallback)}</p>` : ''}
+    </td></tr>`;
+
+  return `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Oaziz Extracts</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1d24;">
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#f4f5f7;opacity:0;">
+    ${escapeHtml(o.preheaderFr)} — ${escapeHtml(o.preheaderEn)}
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(16,24,40,0.06);border-top:4px solid ${OAZIZ_ORANGE};">
+
+        <tr>
+          <td style="background:#ffffff;padding:26px 28px 18px;text-align:center;border-bottom:1px solid #eef0f3;">
+            <img src="https://www.oaziz.ca/icon-192.png" width="56" height="56" alt="Oaziz Extracts" style="display:inline-block;height:56px;width:56px;border:0;"/>
+            <div style="color:${OAZIZ_ORANGE_DEEP};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;">
+              Oaziz Extracts
+            </div>
+          </td>
+        </tr>
+
+        <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+        ${langBlock(o.headingFr, o.introFr, o.fallbackNoteFr, 'Français')}
+        <tr><td style="padding:18px 28px;"><div style="border-top:1px solid #eef0f3;"></div></td></tr>
+        ${langBlock(o.headingEn, o.introEn, o.fallbackNoteEn, 'English')}
+        <tr><td style="height:10px;line-height:10px;font-size:0;">&nbsp;</td></tr>
+
+        <tr>
+          <td style="padding:20px 28px 8px;text-align:center;">
+            ${vmlButton(o.ctaUrl, `${o.ctaLabelFr} / ${o.ctaLabelEn}`)}
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 28px 24px;">
+            <div style="background:#fdf6f1;border-left:3px solid ${OAZIZ_ORANGE_DEEP};padding:12px 14px;border-radius:6px;">
+              <div style="font-size:11px;font-weight:600;color:#8a8f9c;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">
+                Ou copiez ce lien / Or copy this link
+              </div>
+              <div style="font-size:12px;color:#4b5063;word-break:break-all;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;">
+                ${escapeHtml(o.ctaUrl)}
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background:#fafbfc;padding:18px 28px;border-top:1px solid #eef0f3;text-align:center;">
+            <div style="color:#8a8f9c;font-size:11px;line-height:1.5;">
+              ${o.footerNote ?? ''}
+              ${o.footerNote ? '<br/>' : ''}
+              Oaziz Extracts Inc. &middot; 322 rue de Port-Royal Ouest, Montréal, QC &middot; <a href="https://www.oaziz.ca" style="color:${OAZIZ_ORANGE_DEEP};text-decoration:none;">oaziz.ca</a>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+// ============================================================
 // Signer invite (F5-SOP-PRO-013 signature flow)
 // ============================================================
 
@@ -411,18 +522,21 @@ export async function sendVendorDraftLink(
   const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
   const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
 
-  const html = renderEmailShell({
-    preheader: 'Continuez votre formulaire de qualification fournisseur Oaziz Extracts quand vous serez prêt.',
-    badge: 'Brouillon enregistré',
-    greeting: 'Votre brouillon a été enregistré',
-    intro: `Voici votre lien personnel pour continuer et soumettre le formulaire de qualification fournisseur pour <strong>${escapeHtml(n.companyName)}</strong> — vos renseignements déjà saisis sont conservés.`,
-    ctaLabel: 'Continuer le formulaire',
+  const html = renderVendorEmailShell({
+    preheaderFr: 'Continuez votre formulaire de qualification fournisseur Oaziz Extracts quand vous serez prêt.',
+    preheaderEn: 'Continue your Oaziz Extracts vendor qualification form whenever you\'re ready.',
+    headingFr: 'Votre brouillon a été enregistré',
+    headingEn: 'Your draft has been saved',
+    introFr: `Voici votre lien personnel pour continuer et soumettre le formulaire de qualification fournisseur pour <strong>${escapeHtml(n.companyName)}</strong> — vos renseignements déjà saisis sont conservés.`,
+    introEn: `Here is your personal link to continue and submit the vendor qualification form for <strong>${escapeHtml(n.companyName)}</strong> — your previously entered information has been saved.`,
+    ctaLabelFr: 'Continuer le formulaire',
+    ctaLabelEn: 'Continue the form',
     ctaUrl: n.resumeUrl,
-    fallbackNote: 'Conservez ce lien — il vous permet de revenir compléter le dossier à tout moment avant de le soumettre.',
-    footerNote: 'Oaziz Extracts — Qualification fournisseur.',
+    fallbackNoteFr: 'Conservez ce lien — il vous permet de revenir compléter le dossier à tout moment avant de le soumettre.',
+    fallbackNoteEn: 'Keep this link — it lets you come back and complete the file at any time before submitting.',
   });
 
-  const subject = `[Oaziz] Continuez votre dossier fournisseur - ${n.companyName}`;
+  const subject = `Oaziz Extracts — Continuez votre dossier fournisseur / Continue your vendor file — ${n.companyName}`;
 
   try {
     const resend = new Resend(apiKey);
@@ -462,18 +576,22 @@ export async function sendVendorInviteEmail(
   const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
   const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
 
-  const html = renderEmailShell({
-    preheader: 'Oaziz Extracts vous invite à compléter le formulaire de qualification fournisseur.',
-    badge: 'Invitation fournisseur',
-    greeting: 'Bienvenue chez Oaziz Extracts',
-    intro: "Oaziz Extracts Inc. vous invite à compléter notre formulaire de qualification fournisseur avant que nous puissions faire affaire ensemble. Vous trouverez également ci-joint nos licences (Agence du revenu du Canada et Santé Canada) pour vos dossiers.",
-    ctaLabel: 'Remplir le formulaire',
+  const html = renderVendorEmailShell({
+    preheaderFr: 'Oaziz Extracts vous invite à compléter le formulaire de qualification fournisseur.',
+    preheaderEn: 'Oaziz Extracts invites you to complete the vendor qualification form.',
+    headingFr: 'Bienvenue chez Oaziz Extracts',
+    headingEn: 'Welcome to Oaziz Extracts',
+    introFr: "Oaziz Extracts Inc. vous invite à compléter notre formulaire de qualification fournisseur avant que nous puissions faire affaire ensemble. Vous trouverez également ci-joint nos licences (Agence du revenu du Canada et Santé Canada) pour vos dossiers.",
+    introEn: "Oaziz Extracts Inc. invites you to complete our vendor qualification form before we can do business together. You'll also find our licenses (Canada Revenue Agency and Health Canada) attached for your records.",
+    ctaLabelFr: 'Remplir le formulaire',
+    ctaLabelEn: 'Fill out the form',
     ctaUrl: n.formUrl,
-    fallbackNote: 'Vous pouvez enregistrer votre progression et y revenir plus tard.',
+    fallbackNoteFr: 'Vous pouvez enregistrer votre progression et y revenir plus tard.',
+    fallbackNoteEn: 'You can save your progress and come back later.',
     footerNote: 'Oaziz Extracts Inc. — 322 rue de Port-Royal Ouest, Montréal, QC.',
   });
 
-  const subject = '[Oaziz] Invitation — Formulaire de qualification fournisseur';
+  const subject = 'Oaziz Extracts — Licences et lien de qualification fournisseur / Licenses and vendor qualification link';
 
   try {
     const resend = new Resend(apiKey);
@@ -513,17 +631,20 @@ export async function sendCompanyLicensesEmail(
   const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
   const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
 
-  const html = renderEmailShell({
-    preheader: 'Licences Oaziz Extracts (Agence du revenu du Canada et Santé Canada) ci-jointes.',
-    badge: 'Licences Oaziz Extracts',
-    greeting: 'Nos licences',
-    intro: 'Veuillez trouver ci-joint nos licences en vigueur : Agence du revenu du Canada (cannabis) et Santé Canada.',
-    ctaLabel: 'oaziz.ca',
+  const html = renderVendorEmailShell({
+    preheaderFr: 'Licences Oaziz Extracts (Agence du revenu du Canada et Santé Canada) ci-jointes.',
+    preheaderEn: 'Oaziz Extracts licenses (Canada Revenue Agency and Health Canada) attached.',
+    headingFr: 'Nos licences',
+    headingEn: 'Our licenses',
+    introFr: 'Veuillez trouver ci-joint nos licences en vigueur : Agence du revenu du Canada (cannabis) et Santé Canada.',
+    introEn: 'Please find attached our current licenses: Canada Revenue Agency (cannabis) and Health Canada.',
+    ctaLabelFr: 'Visiter oaziz.ca',
+    ctaLabelEn: 'Visit oaziz.ca',
     ctaUrl: 'https://www.oaziz.ca',
     footerNote: 'Oaziz Extracts Inc. — 322 rue de Port-Royal Ouest, Montréal, QC.',
   });
 
-  const subject = '[Oaziz] Licences — Agence du revenu du Canada et Santé Canada';
+  const subject = 'Oaziz Extracts — Licences (ARC et Santé Canada) / Licenses (CRA and Health Canada)';
 
   try {
     const resend = new Resend(apiKey);

@@ -82,10 +82,11 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const medium_type = isCannabisGrower ? getOrNull('medium_type') : null;
   const nutrient_type = isCannabisGrower ? getOrNull('nutrient_type') : null;
   const cultivar_name = isCannabisGrower ? getOrNull('cultivar_name') : null;
-  const existingCoasRaw = isCannabisGrower ? get('existing_coas') : '';
-  const existing_coas = existingCoasRaw === 'yes' ? true : existingCoasRaw === 'no' ? false : null;
   const starting_material = isCannabisGrower ? form.getAll('starting_material').map(String).filter(Boolean) : [];
   const pesticides_used = isCannabisGrower ? getOrNull('pesticides_used') : null;
+
+  // Universal — applies to every vendor type.
+  const products_sold = getOrNull('products_sold');
 
   const certified = form.get('certified') === '1';
   const certified_by_name = get('certified_by_name');
@@ -100,8 +101,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     accounting_contact_email, accounting_contact_phone,
     business_number, gst_hst_number, qst_number,
     bank_institution_number, bank_transit_number, bank_account_number, bank_address,
+    products_sold,
     production_type, cultivation_methods, lighting_type, medium_type, nutrient_type,
-    cultivar_name, existing_coas, starting_material, pesticides_used,
+    cultivar_name, starting_material, pesticides_used,
     certified, certified_by_name, certified_by_title,
   };
 

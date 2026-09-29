@@ -143,6 +143,7 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
     <table class="data" style="margin-top: 12px;">
       <tbody>
         <tr><th style="width:260px;">{T('field.vendorType')}</th><td>{submission.vendor_type ? (vendorTypeLabels[submission.vendor_type] ?? submission.vendor_type) : '—'}</td></tr>
+        <tr><th>{T('field.productsSold')}</th><td style="white-space:pre-wrap;">{submission.products_sold || '—'}</td></tr>
         <tr><th>{T('field.companyName')}</th><td>{submission.company_name}</td></tr>
         <tr><th>{T('field.address')}</th><td>{submission.address}</td></tr>
         <tr><th>{T('field.cityProvincePostal')}</th><td>{submission.city} / {submission.province} / {submission.postal_code}</td></tr>
@@ -233,8 +234,7 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
         <tr><th>{T('field.lightingType')}</th><td>{submission.lighting_type || '—'}</td></tr>
         <tr><th>{T('field.mediumType')}</th><td>{submission.medium_type || '—'}</td></tr>
         <tr><th>{T('field.nutrientType')}</th><td>{submission.nutrient_type || '—'}</td></tr>
-        <tr><th>{T('field.cultivarName')}</th><td>{submission.cultivar_name || '—'}</td></tr>
-        <tr><th>{T('field.existingCoas')}</th><td>{submission.existing_coas === null ? '—' : (submission.existing_coas ? Tv('option.yes') : Tv('option.no'))}</td></tr>
+        <tr><th>{T('field.cultivarName')}</th><td style="white-space:pre-wrap;">{submission.cultivar_name || '—'}</td></tr>
         <tr><th>{T('field.startingMaterial')}</th><td>{joinLabels(submission.starting_material, startingMaterialLabels)}</td></tr>
         <tr><th>{T('field.pesticidesUsed')}</th><td style="white-space:pre-wrap;">{submission.pesticides_used || '—'}</td></tr>
       </tbody>
