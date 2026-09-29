@@ -22,7 +22,7 @@ const { data: submission } = await supabase
   .from('submissions')
   .select(`
     id, status, created_by_email, form_date, product_name, product_type, quantity,
-    production_state, production_id, created_at, updated_at, sent_at, finalized_at,
+    production_state, production_id, packaging_id, qa_staff_id, created_at, updated_at, sent_at, finalized_at,
     initiator:initiator_staff_id ( full_name, email ),
     production:production_staff_id ( full_name, email ),
     qa:qa_staff_id ( full_name, email ),
@@ -68,6 +68,7 @@ for (const row of signerRowList) {
 }
 
 const isCreator = submission.created_by_email === staff.email;
+const isQaVerifier = submission.qa_staff_id === staff.id;
 const isDraft = submission.status === 'draft';
 
 // Does the CURRENT user have a pending signer_token on this submission?
@@ -94,9 +95,11 @@ const infoMessages: Record<string, string> = {
   edited: T('info.edited'),
   signed: T('info.signed'),
   resent: T('info.resent'),
+  qa_edited: T('info.qa_edited'),
 };
 const errorMessages: Record<string, string> = {
   not_creator: T('error.not_creator'),
+  not_qa: T('error.not_qa'),
   already_sent: T('error.already_sent'),
   already_signed_row: T('error.already_signed_row'),
   no_participants: T('error.no_participants'),
@@ -218,6 +221,7 @@ function fmtDate(iso?: string | null): string {
         <tr><th>{T('field.quantity')}</th><td>{submission.quantity}</td></tr>
         <tr><th>{T('field.productionState')}</th><td>{submission.production_state ? (Tc(`state.${submission.production_state}` as keyof typeof frCommon) ?? submission.production_state) : '—'}</td></tr>
         <tr><th>{T('field.productionId')}</th><td>{submission.production_id || '—'}</td></tr>
+        <tr><th>{T('field.packagingId')}</th><td>{submission.packaging_id || '—'}</td></tr>
         <tr><th>{T('field.productionStaff')}</th><td>{(submission.production as any)?.full_name ?? '—'}</td></tr>
         <tr><th>{T('field.qaVerification')}</th><td>{(submission.qa as any)?.full_name ?? '—'}</td></tr>
         <tr><th>{T('field.consentObtainer')}</th><td>{(submission.consent_obtainer as any)?.full_name ?? '—'}</td></tr>
@@ -298,6 +302,14 @@ function fmtDate(iso?: string | null): string {
       </table>
     )}
   </div>
+
+  {isQaVerifier && (
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+      <a href={`/portail/demande/${id}/qa-editer`} class="btn btn-secondary">
+        {T('btn.qaEdit')}
+      </a>
+    </div>
+  )}
 
   {isCreator && (
     <div style="display: flex; gap: 12px; flex-wrap: wrap;">

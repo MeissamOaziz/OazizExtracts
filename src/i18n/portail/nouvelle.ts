@@ -36,6 +36,8 @@ export const frNouvelle = {
   'heading.production': 'À remplir par le personnel de production',
   'label.productionState': 'État de production',
   'label.productionId': 'Identifiant du lot (ID)',
+  'label.packagingId': "N° d'identification de l'emballage",
+  'hint.packagingId': "Si l'unité ou les unités testées sont emballées.",
 
   'heading.signatureRoles': 'Rôles pour la signature',
   'hint.signatureRoles': 'Les rôles ci-dessous sont fixés pour toutes les demandes.',
@@ -74,6 +76,8 @@ export const enNouvelle: Partial<Record<keyof NouvelleDict, string>> = {
   'heading.production': 'To be completed by production staff',
   'label.productionState': 'Production state',
   'label.productionId': 'Batch ID',
+  'label.packagingId': 'Packaging ID number',
+  'hint.packagingId': 'If the tested unit(s) are packaged.',
 
   'heading.signatureRoles': 'Roles for signature',
   'hint.signatureRoles': 'The roles below are fixed for all requests.',

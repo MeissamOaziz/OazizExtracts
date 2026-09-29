@@ -52,9 +52,14 @@ export const frDemandeDetail = {
   'field.quantity': 'Quantité',
   'field.productionState': 'État de production',
   'field.productionId': 'Identifiant du lot',
+  'field.packagingId': "N° d'identification de l'emballage",
   'field.productionStaff': 'Personnel de production',
   'field.qaVerification': 'Vérification AQ',
   'field.consentObtainer': 'Personne obtenant le consentement',
+
+  'btn.qaEdit': "Corriger (AQ)",
+  'info.qa_edited': 'Correction enregistrée par l\'AQ.',
+  'error.not_qa': "Seule la personne assignée à la vérification AQ peut effectuer cette action.",
 
   'participants.empty': 'Aucun participant.',
 
@@ -131,9 +136,14 @@ export const enDemandeDetail: Partial<Record<keyof DemandeDetailDict, string>> =
   'field.quantity': 'Quantity',
   'field.productionState': 'Production state',
   'field.productionId': 'Batch ID',
+  'field.packagingId': 'Packaging ID number',
   'field.productionStaff': 'Production staff',
   'field.qaVerification': 'QA verification',
   'field.consentObtainer': 'Consent collector',
+
+  'btn.qaEdit': 'Correct (QA)',
+  'info.qa_edited': 'Correction saved by QA.',
+  'error.not_qa': 'Only the person assigned to QA verification can perform this action.',
 
   'participants.empty': 'No participants.',
 

@@ -43,6 +43,8 @@ export const frDemandeEditer = {
   'label.productionStaff': 'Personnel de production',
   'label.productionState': 'État de production',
   'label.productionId': 'Identifiant du lot (ID)',
+  'label.packagingId': "N° d'identification de l'emballage",
+  'hint.packagingId': "Si l'unité ou les unités testées sont emballées.",
 
   'heading.signatureRoles': 'Rôles pour la signature',
 
@@ -87,6 +89,8 @@ export const enDemandeEditer: Partial<Record<keyof DemandeEditerDict, string>> =
   'label.productionStaff': 'Production staff',
   'label.productionState': 'Production state',
   'label.productionId': 'Batch ID',
+  'label.packagingId': 'Packaging ID number',
+  'hint.packagingId': 'If the tested unit(s) are packaged.',
 
   'heading.signatureRoles': 'Roles for signature',
 

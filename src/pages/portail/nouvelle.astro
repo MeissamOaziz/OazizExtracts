@@ -138,6 +138,12 @@ const today = new Date().toISOString().slice(0, 10);
       <input type="text" name="production_id" id="production_id" />
     </div>
 
+    <div class="form-row">
+      <label for="packaging_id">{T('label.packagingId')}</label>
+      <input type="text" name="packaging_id" id="packaging_id" />
+      <div class="hint">{T('hint.packagingId')}</div>
+    </div>
+
     <h2 style="margin-top: 28px;">{T('heading.signatureRoles')}</h2>
     <p class="hint" style="margin-bottom: 16px;">{T('hint.signatureRoles')}</p>
 

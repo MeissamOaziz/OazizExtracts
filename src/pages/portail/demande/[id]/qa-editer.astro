@@ -1,0 +1,354 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frDemandeQaEditer, enDemandeQaEditer } from '../../../../i18n/portail/demande-qa-editer';
+import { frCommon, enCommon } from '../../../../i18n/portail/common';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDemandeQaEditer, enDemandeQaEditer);
+const Tc = makeT(locale, frCommon, enCommon);
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/portail/formulaires');
+
+// Only the assigned QA verifier may reach this page — use the admin client
+// since we need to check qa_staff_id regardless of RLS visibility rules.
+const admin = getAdminClient();
+const { data: submission } = await admin
+  .from('submissions')
+  .select(`
+    id, status, qa_staff_id, form_date, product_name, product_type, quantity,
+    production_state, production_id, packaging_id, rnd_objective, production_staff_id
+  `)
+  .eq('id', id)
+  .maybeSingle();
+
+if (!submission) return new Response('Demande introuvable.', { status: 404 });
+if (submission.qa_staff_id !== staff.id) {
+  return Astro.redirect(`/portail/demande/${id}?error=not_qa`);
+}
+
+const { data: allStaff } = await admin
+  .from('staff')
+  .select('id, full_name')
+  .eq('is_active', true)
+  .order('full_name');
+const roster = allStaff ?? [];
+
+const { data: qaSignerRows } = await admin
+  .from('signers')
+  .select('id')
+  .eq('submission_id', id)
+  .eq('role', 'qa_verifier')
+  .eq('status', 'signed');
+const needsResign = (qaSignerRows?.length ?? 0) > 0;
+
+const { data: savedSig } = await admin
+  .from('staff').select('saved_signature').eq('id', staff.id).maybeSingle();
+const savedSignature = savedSig?.saved_signature ?? null;
+
+const statusKey = `status.${submission.status}` as keyof typeof frCommon;
+
+const clientStrings = {
+  errorImageTooLarge: T('errorImageTooLarge'),
+  errorMissing: T('error.missing'),
+  errorSignatureRequired: T('error.signatureRequired'),
+  errorGeneric: T('error.generic'),
+  errorNetwork: T('error.network'),
+  statusSending: T('statusSending'),
+  successSaved: T('successSaved'),
+};
+---
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <div style="max-width: 760px; margin: 0 auto;">
+    <div style="margin-bottom: 20px;">
+      <a href={`/portail/demande/${id}`} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+        {T('backLink')}
+      </a>
+    </div>
+    <h1>{T('heading')}</h1>
+    <p style="color: var(--p-muted); margin-bottom: 16px;">
+      {T('currentStatus')} <span class={`badge badge-${submission.status}`}>{Tc(statusKey)}</span>
+    </p>
+
+    {needsResign && (
+      <div class="warn-banner" style="margin-bottom: 16px;">{T('resignNotice')}</div>
+    )}
+
+    <div id="flash"></div>
+
+    <div class="card">
+      <div class="form-row">
+        <label for="form_date">{T('label.formDate')}</label>
+        <input type="date" id="form_date" value={submission.form_date} required />
+      </div>
+
+      <div class="form-row">
+        <label for="product_name">{T('label.productName')}</label>
+        <input type="text" id="product_name" value={submission.product_name} required />
+      </div>
+
+      <div class="form-row">
+        <label for="product_type">{T('label.productType')}</label>
+        <input type="text" id="product_type" value={submission.product_type} required />
+      </div>
+
+      <div class="form-row">
+        <label for="quantity">{T('label.quantity')}</label>
+        <input type="text" id="quantity" value={submission.quantity} required />
+      </div>
+
+      <div class="form-row">
+        <label for="rnd_objective">{T('label.objective')}</label>
+        <textarea id="rnd_objective" rows="4" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{submission.rnd_objective ?? ''}</textarea>
+      </div>
+
+      <div class="form-row">
+        <label for="production_staff_id">{T('label.productionStaff')}</label>
+        <select id="production_staff_id" required>
+          {roster.map((s) => (
+            <option value={s.id} selected={s.id === submission.production_staff_id}>{s.full_name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>{T('label.productionState')}</label>
+        <div style="display: flex; gap: 20px; padding-top: 4px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
+            <input type="radio" name="production_state" value="vrac" checked={submission.production_state === 'vrac'} /> {Tc('state.vrac')}
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;margin:0;">
+            <input type="radio" name="production_state" value="emballe" checked={submission.production_state === 'emballe'} /> {Tc('state.emballe')}
+          </label>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="production_id">{T('label.productionId')}</label>
+        <input type="text" id="production_id" value={submission.production_id ?? ''} />
+      </div>
+
+      <div class="form-row">
+        <label for="packaging_id">{T('label.packagingId')}</label>
+        <input type="text" id="packaging_id" value={submission.packaging_id ?? ''} />
+        <div class="hint">{T('hint.packagingId')}</div>
+      </div>
+    </div>
+
+    {needsResign && (
+      <div class="card" style="margin-top: 16px;">
+        <h2>{T('signatureHeading')}</h2>
+        <p class="hint" style="margin: 4px 0 14px;">{T('signatureHint')}</p>
+        <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--p-border);">
+          <button type="button" class="sig-tab active" role="tab" data-method="draw">{T('tabDraw')}</button>
+          <button type="button" class="sig-tab" role="tab" data-method="type">{T('tabType')}</button>
+          <button type="button" class="sig-tab" role="tab" data-method="upload">{T('tabUpload')}</button>
+        </div>
+        <div class="sig-panel" data-panel="draw"><p class="hint" style="margin-bottom: 10px;">{T('drawHint')}</p></div>
+        <div class="sig-panel" data-panel="type" style="display: none;">
+          <p class="hint" style="margin-bottom: 10px;">{T('typeHint')}</p>
+          <input type="text" id="type-input" placeholder={staff.full_name} style="margin-bottom: 12px;" autocomplete="name" />
+        </div>
+        <div class="sig-panel" data-panel="upload" style="display: none;">
+          <p class="hint" style="margin-bottom: 10px;">{T('uploadHint')}</p>
+          <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
+        </div>
+        <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
+          <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
+        </div>
+        {savedSignature && <p class="hint" style="margin-top: 10px;">{T('savedSigLoaded')}</p>}
+        <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center;">
+          <button type="button" id="btn-clear" class="btn btn-secondary">{T('btnClear')}</button>
+          <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
+        </div>
+      </div>
+    )}
+
+    <div style="display: flex; gap: 12px; margin-top: 20px;">
+      <button type="button" id="btn-submit" class="btn btn-primary">
+        {needsResign ? T('submit.resign') : T('submit.plain')}
+      </button>
+      <a href={`/portail/demande/${id}`} class="btn btn-secondary" style="margin-left:auto;">{Tc('btn.cancel')}</a>
+    </div>
+  </div>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet" />
+  <style is:global>
+    .sig-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-family: inherit; font-size: .9rem; font-weight: 500; color: var(--p-muted); cursor: pointer; margin-bottom: -1px; }
+    .sig-tab:hover { color: var(--p-text); }
+    .sig-tab.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  </style>
+
+  <script is:inline define:vars={{ submissionId: id, needsResign, savedSig: savedSignature, strings: clientStrings }}>
+    (function () {
+      const btnSubmit = document.getElementById('btn-submit');
+      const flashEl = document.getElementById('flash');
+      let canvas, ctx2d, btnClear, statusEl, typeInput, uploadInput, tabs, panels;
+      let padW = 0, padH = 0, method = 'draw', hasSignature = false;
+
+      if (needsResign) {
+        canvas = document.getElementById('sig-pad');
+        ctx2d = canvas.getContext('2d');
+        btnClear = document.getElementById('btn-clear');
+        statusEl = document.getElementById('pad-status');
+        typeInput = document.getElementById('type-input');
+        uploadInput = document.getElementById('upload-input');
+        tabs = Array.from(document.querySelectorAll('.sig-tab'));
+        panels = Array.from(document.querySelectorAll('.sig-panel'));
+
+        var resizeCanvas = function () {
+          const rect = canvas.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          padW = rect.width; padH = rect.height;
+          canvas.width = padW * dpr; canvas.height = padH * dpr;
+          ctx2d.setTransform(1, 0, 0, 1, 0, 0); ctx2d.scale(dpr, dpr);
+          ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+          ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+        };
+        resizeCanvas();
+
+        var clearCanvas = function () {
+          ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+          ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+          const dpr = window.devicePixelRatio || 1; ctx2d.scale(dpr, dpr);
+          ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+          ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+          hasSignature = false;
+        };
+
+        var loadSavedSignature = function () {
+          if (!savedSig) return;
+          const img = new Image();
+          img.onload = function () {
+            const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
+            const w = img.width * ratio, h = img.height * ratio;
+            ctx2d.drawImage(img, (padW - w) / 2, (padH - h) / 2, w, h);
+            hasSignature = true;
+          };
+          img.src = savedSig;
+        };
+        loadSavedSignature();
+
+        let drawing = false, last = null;
+        var pointFrom = function (evt) { const r = canvas.getBoundingClientRect(); return { x: evt.clientX - r.left, y: evt.clientY - r.top }; };
+        canvas.addEventListener('pointerdown', (e) => { if (method !== 'draw') return; e.preventDefault(); drawing = true; last = pointFrom(e); });
+        canvas.addEventListener('pointermove', (e) => {
+          if (!drawing || method !== 'draw') return; e.preventDefault();
+          const p = pointFrom(e); ctx2d.beginPath(); ctx2d.moveTo(last.x, last.y); ctx2d.lineTo(p.x, p.y); ctx2d.stroke();
+          last = p; hasSignature = true;
+        });
+        const stopDraw = () => { drawing = false; last = null; };
+        canvas.addEventListener('pointerup', stopDraw); canvas.addEventListener('pointercancel', stopDraw); canvas.addEventListener('pointerleave', stopDraw);
+
+        var renderTypedSignature = function (text) {
+          clearCanvas();
+          if (!text.trim()) return;
+          ctx2d.fillStyle = '#111'; ctx2d.textBaseline = 'middle';
+          let fontSize = 72; const maxW = padW - 40;
+          var m;
+          do { ctx2d.font = `600 ${fontSize}px 'Dancing Script', 'Segoe Script', cursive`;
+               m = ctx2d.measureText(text); if (m.width <= maxW) break; fontSize -= 4;
+          } while (fontSize > 24);
+          ctx2d.fillText(text, (padW - m.width) / 2, padH / 2);
+          hasSignature = true;
+        };
+        typeInput.addEventListener('input', (e) => renderTypedSignature(e.target.value));
+
+        uploadInput.addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (file.size > 4 * 1024 * 1024) { flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorImageTooLarge + '</div>'; return; }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+              clearCanvas();
+              const r = Math.min(padW / img.width, padH / img.height) * 0.92;
+              const w = img.width * r, h = img.height * r;
+              ctx2d.drawImage(img, (padW - w) / 2, (padH - h) / 2, w, h);
+              hasSignature = true;
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+
+        tabs.forEach((tab) => tab.addEventListener('click', () => {
+          method = tab.getAttribute('data-method');
+          tabs.forEach((t) => t.classList.toggle('active', t === tab));
+          panels.forEach((p) => p.style.display = p.getAttribute('data-panel') === method ? '' : 'none');
+          canvas.style.cursor = method === 'draw' ? 'crosshair' : 'default';
+          clearCanvas();
+          if (method === 'type' && typeInput.value.trim()) renderTypedSignature(typeInput.value);
+        }));
+
+        btnClear.addEventListener('click', () => { clearCanvas(); if (typeInput) typeInput.value = ''; if (uploadInput) uploadInput.value = ''; });
+      }
+
+      btnSubmit.addEventListener('click', async () => {
+        const form_date = document.getElementById('form_date').value;
+        const product_name = document.getElementById('product_name').value.trim();
+        const product_type = document.getElementById('product_type').value.trim();
+        const quantity = document.getElementById('quantity').value.trim();
+        const rnd_objective = document.getElementById('rnd_objective').value;
+        const production_staff_id = document.getElementById('production_staff_id').value;
+        const stateInput = document.querySelector('input[name="production_state"]:checked');
+        const production_state = stateInput ? stateInput.value : null;
+        const production_id = document.getElementById('production_id').value.trim();
+        const packaging_id = document.getElementById('packaging_id').value.trim();
+
+        if (!form_date || !product_name || !product_type || !quantity || !production_staff_id) {
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorMissing + '</div>';
+          return;
+        }
+
+        let signature = null;
+        if (needsResign) {
+          if (!hasSignature) {
+            flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorSignatureRequired + '</div>';
+            document.getElementById('sig-pad').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+          signature = canvas.toDataURL('image/png');
+        }
+
+        btnSubmit.disabled = true;
+        if (statusEl) statusEl.textContent = strings.statusSending;
+        try {
+          const res = await fetch('/api/portail/submissions/' + encodeURIComponent(submissionId) + '/qa-edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              form_date, product_name, product_type, quantity, rnd_objective,
+              production_state, production_id, packaging_id, production_staff_id, signature,
+            }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.error) {
+            if (statusEl) statusEl.textContent = '';
+            flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorGeneric + '</div>';
+            btnSubmit.disabled = false;
+            return;
+          }
+          if (statusEl) statusEl.textContent = '';
+          flashEl.innerHTML = '<div class="flash flash-success">' + strings.successSaved + '</div>';
+          setTimeout(() => window.location.href = '/portail/demande/' + submissionId + '?info=qa_edited', 900);
+        } catch (e) {
+          if (statusEl) statusEl.textContent = '';
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorNetwork + '</div>';
+          btnSubmit.disabled = false;
+        }
+      });
+    })();
+  </script>
+</PortailLayout>

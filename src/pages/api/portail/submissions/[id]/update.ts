@@ -39,6 +39,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
   const rnd_objective = get('rnd_objective') || null;
   const production_state = get('production_state') || null;
   const production_id = get('production_id') || null;
+  const packaging_id = get('packaging_id') || null;
 
   const participants = form.getAll('participants').map(String).filter(Boolean);
 
@@ -91,6 +92,7 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
       rnd_objective,
       production_state: production_state as 'vrac' | 'emballe' | null,
       production_id,
+      packaging_id,
     })
     .eq('id', id);
   if (updErr) {

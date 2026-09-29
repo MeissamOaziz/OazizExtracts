@@ -23,7 +23,7 @@ const { data: submission } = await supabase
   .from('submissions')
   .select(`
     id, status, created_by_email, form_date, product_name, product_type, quantity,
-    production_state, production_id, rnd_objective,
+    production_state, production_id, packaging_id, rnd_objective,
     production_staff_id
   `)
   .eq('id', id)
@@ -164,6 +164,12 @@ const isSigned = submission.status !== 'draft';
     <div class="form-row">
       <label for="production_id">{T('label.productionId')}</label>
       <input type="text" name="production_id" id="production_id" value={submission.production_id ?? ''} />
+    </div>
+
+    <div class="form-row">
+      <label for="packaging_id">{T('label.packagingId')}</label>
+      <input type="text" name="packaging_id" id="packaging_id" value={submission.packaging_id ?? ''} />
+      <div class="hint">{T('hint.packagingId')}</div>
     </div>
 
     <h2 style="margin-top: 28px;">{T('heading.signatureRoles')}</h2>

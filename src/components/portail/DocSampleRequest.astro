@@ -68,6 +68,9 @@ const state = submission.production_state;
 
     <div class="label">ID :</div>
     <div><span class={`fill ${submission.production_id ? '' : 'empty'}`}>{submission.production_id ?? '(à remplir)'}</span></div>
+
+    <div class="label">N° d'emballage :</div>
+    <div><span class={`fill ${submission.packaging_id ? '' : 'empty'}`}>{submission.packaging_id ?? '(s.o. si vrac)'}</span></div>
   </div>
 
   <div class="sig-block">

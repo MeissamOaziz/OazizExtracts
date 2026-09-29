@@ -124,7 +124,7 @@ export async function loadAndBuildPdf(submissionId: string): Promise<Uint8Array>
     .from('submissions')
     .select(`
       id, form_date, product_name, product_type, quantity, production_state, production_id,
-      rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
+      packaging_id, rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
       rnd_destruction_id,
       initiator:initiator_staff_id ( id, full_name, email ),
       production:production_staff_id ( id, full_name, email ),
@@ -151,6 +151,7 @@ export async function loadAndBuildPdf(submissionId: string): Promise<Uint8Array>
     id: subRow.id, form_date: subRow.form_date, product_name: subRow.product_name,
     product_type: subRow.product_type, quantity: subRow.quantity,
     production_state: subRow.production_state, production_id: subRow.production_id,
+    packaging_id: subRow.packaging_id,
     rnd_objective: subRow.rnd_objective, rnd_quantity_for_test: subRow.rnd_quantity_for_test,
     rnd_lp_number: subRow.rnd_lp_number, rnd_qty_destroyed: subRow.rnd_qty_destroyed,
     rnd_date_destroyed: subRow.rnd_date_destroyed,
@@ -222,6 +223,7 @@ async function renderSampleRequestPage(
     input.submission.production_state === 'vrac' ? 'Vrac' :
     input.submission.production_state === 'emballe' ? 'Emballé' : '—');
   keyValueRow(c, 'ID / Lot', input.submission.production_id ?? '—');
+  keyValueRow(c, "N° d'emballage", input.submission.packaging_id ?? '—');
   gap(c, 20);
 
   signaturePair(c,
@@ -248,6 +250,7 @@ async function renderRndPage(
 
   section(c, "SECTION 2 — TEST D'ODEUR, DE GOÛT ET DE TEXTURE");
   keyValueRow(c, 'Nom du lot', input.submission.production_id ?? '—');
+  keyValueRow(c, "N° d'emballage", input.submission.packaging_id ?? '—');
   keyValueRow(c, 'Type de produit', input.submission.product_type);
   keyValueRow(c, 'Souche(s)', input.submission.product_name);
   paragraphRow(c, 'Objectif',

@@ -14,6 +14,7 @@ export interface SubmissionForRender {
   quantity: string;
   production_state: 'vrac' | 'emballe' | null;
   production_id: string | null;
+  packaging_id: string | null;
   rnd_objective: string | null;
   rnd_quantity_for_test: string | null;
   rnd_lp_number: string | null;

@@ -32,6 +32,7 @@ const quantityForTest = submission.rnd_quantity_for_test ?? splitQuantity(submis
   <table class="doc-table">
     <tr><th colspan="2">DESCRIPTION</th></tr>
     <tr><td style="width: 30%;">Nom du lot :</td><td><span class={`fill ${submission.production_id ? '' : 'empty'}`}>{submission.production_id ?? '(à remplir)'}</span></td></tr>
+    <tr><td>N° d'emballage :</td><td><span class={`fill ${submission.packaging_id ? '' : 'empty'}`}>{submission.packaging_id ?? '(s.o. si vrac)'}</span></td></tr>
     <tr><td>Type de produit :</td><td><span class="fill">{submission.product_type}</span></td></tr>
     <tr><td>Souche(s) :</td><td><span class="fill">{submission.product_name}</span></td></tr>
     <tr>

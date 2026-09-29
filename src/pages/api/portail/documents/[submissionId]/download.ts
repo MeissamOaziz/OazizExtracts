@@ -93,7 +93,7 @@ async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submis
     .from('submissions')
     .select(`
       id, form_date, product_name, product_type, quantity, production_state, production_id,
-      rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
+      packaging_id, rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
       rnd_destruction_id,
       initiator:initiator_staff_id ( id, full_name, email ),
       production:production_staff_id ( id, full_name, email ),
@@ -122,6 +122,7 @@ async function generateFreshPdf(admin: ReturnType<typeof getAdminClient>, submis
     quantity: subRow.quantity,
     production_state: subRow.production_state,
     production_id: subRow.production_id,
+    packaging_id: subRow.packaging_id,
     rnd_objective: subRow.rnd_objective,
     rnd_quantity_for_test: subRow.rnd_quantity_for_test,
     rnd_lp_number: subRow.rnd_lp_number,
