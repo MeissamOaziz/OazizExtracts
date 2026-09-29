@@ -21,6 +21,7 @@ export interface SubmissionForRender {
   rnd_qty_destroyed: string | null;
   rnd_date_destroyed: string | null;
   rnd_destruction_id: string | null;
+  rnd_qa_comments: string | null;
   initiator: StaffLite;
   production: StaffLite;
   qa: StaffLite;

@@ -37,6 +37,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     existing = data;
   }
 
+  const vendor_type = getOrNull('vendor_type');
+  const isCannabisGrower = vendor_type === 'cannabis_grower';
+
   const company_name = get('company_name');
   const address = get('address');
   const city = get('city');
@@ -70,22 +73,26 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const bank_account_number = getOrNull('bank_account_number');
   const bank_address = getOrNull('bank_address');
 
-  const production_type = getOrNull('production_type');
-  const cultivation_methods = form.getAll('cultivation_methods').map(String).filter(Boolean);
-  const lighting_type = getOrNull('lighting_type');
-  const medium_type = getOrNull('medium_type');
-  const nutrient_type = getOrNull('nutrient_type');
-  const cultivar_name = getOrNull('cultivar_name');
-  const existingCoasRaw = get('existing_coas');
+  // Culture-information fields only apply to cannabis growers — force them to
+  // null for any other vendor type regardless of what was posted, since the
+  // section is hidden (and thus untouched) in the UI for everyone else.
+  const production_type = isCannabisGrower ? getOrNull('production_type') : null;
+  const cultivation_methods = isCannabisGrower ? form.getAll('cultivation_methods').map(String).filter(Boolean) : [];
+  const lighting_type = isCannabisGrower ? getOrNull('lighting_type') : null;
+  const medium_type = isCannabisGrower ? getOrNull('medium_type') : null;
+  const nutrient_type = isCannabisGrower ? getOrNull('nutrient_type') : null;
+  const cultivar_name = isCannabisGrower ? getOrNull('cultivar_name') : null;
+  const existingCoasRaw = isCannabisGrower ? get('existing_coas') : '';
   const existing_coas = existingCoasRaw === 'yes' ? true : existingCoasRaw === 'no' ? false : null;
-  const starting_material = form.getAll('starting_material').map(String).filter(Boolean);
-  const pesticides_used = getOrNull('pesticides_used');
+  const starting_material = isCannabisGrower ? form.getAll('starting_material').map(String).filter(Boolean) : [];
+  const pesticides_used = isCannabisGrower ? getOrNull('pesticides_used') : null;
 
   const certified = form.get('certified') === '1';
   const certified_by_name = get('certified_by_name');
   const certified_by_title = get('certified_by_title');
 
   const fields = {
+    vendor_type,
     company_name, address, city, province, postal_code, contact_person, phone, email,
     shipping_same_as_billing, shipping_address, shipping_city, shipping_province, shipping_postal_code,
     sales_contact_name, sales_contact_email, sales_contact_phone,
@@ -133,6 +140,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   // ---------------- FULL SUBMIT ----------------
   if (
+    !vendor_type ||
     !company_name || !address || !city || !province || !postal_code || !contact_person || !phone || !email ||
     !sales_contact_name || !sales_contact_email ||
     !qa_contact_name || !qa_contact_email ||

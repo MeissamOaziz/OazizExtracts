@@ -67,6 +67,7 @@ const errorMessages: Record<string, string> = {
         T={T}
         action="/api/vendor/submit"
         values={{
+          vendor_type: submission.vendor_type,
           company_name: submission.company_name ?? '', address: submission.address ?? '',
           city: submission.city ?? '', province: submission.province ?? '', postal_code: submission.postal_code ?? '',
           contact_person: submission.contact_person ?? '', phone: submission.phone ?? '', email: submission.email ?? '',

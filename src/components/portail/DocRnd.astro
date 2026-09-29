@@ -81,6 +81,12 @@ const quantityForTest = submission.rnd_quantity_for_test ?? splitQuantity(submis
         )}
       </td>
     </tr>
+    {submission.rnd_qa_comments && (
+      <>
+        <tr><td colspan="6">Commentaire de l'AQ :</td></tr>
+        <tr><td colspan="6" style="white-space: pre-wrap;">{submission.rnd_qa_comments}</td></tr>
+      </>
+    )}
     <tr>
       <td colspan="3">Signature du A/RPIC ({participant.name}) : <div class="sig-line" style="min-width:180px;"></div></td>
       <td colspan="3">Date (JJ/MM/AAAA) : <span class="fill">{fmtDateFr(submission.form_date)}</span></td>

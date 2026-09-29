@@ -437,3 +437,151 @@ export async function sendVendorDraftLink(
     return { status: 'error', detail: String(e) };
   }
 }
+
+// ============================================================
+// New-vendor invite — sent by staff from the portal to a prospective
+// vendor's email, with a link to the public qualification form and Oaziz's
+// own CRA + Health Canada licenses attached for reciprocal verification.
+// ============================================================
+
+export interface VendorInviteEmail {
+  toEmail: string;
+  formUrl: string;
+  attachments: Array<{ filename: string; content: Buffer }>;
+}
+
+export async function sendVendorInviteEmail(
+  n: VendorInviteEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[vendor-invite-email] RESEND_API_KEY not set; would-have-sent invite to ${n.toEmail}: ${n.formUrl}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: 'Oaziz Extracts vous invite à compléter le formulaire de qualification fournisseur.',
+    badge: 'Invitation fournisseur',
+    greeting: 'Bienvenue chez Oaziz Extracts',
+    intro: "Oaziz Extracts Inc. vous invite à compléter notre formulaire de qualification fournisseur avant que nous puissions faire affaire ensemble. Vous trouverez également ci-joint nos licences (Agence du revenu du Canada et Santé Canada) pour vos dossiers.",
+    ctaLabel: 'Remplir le formulaire',
+    ctaUrl: n.formUrl,
+    fallbackNote: 'Vous pouvez enregistrer votre progression et y revenir plus tard.',
+    footerNote: 'Oaziz Extracts Inc. — 322 rue de Port-Royal Ouest, Montréal, QC.',
+  });
+
+  const subject = '[Oaziz] Invitation — Formulaire de qualification fournisseur';
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: [n.toEmail], replyTo, subject, html, attachments: n.attachments,
+    });
+    if (error) {
+      console.error('[vendor-invite-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-invite-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
+// Company licenses — quick-send our own CRA/Health Canada licenses to one or
+// more email addresses on request, and the 6-months-before-expiry reminder.
+// ============================================================
+
+export interface CompanyLicensesEmail {
+  toEmails: string[];
+  attachments: Array<{ filename: string; content: Buffer }>;
+}
+
+export async function sendCompanyLicensesEmail(
+  n: CompanyLicensesEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[company-license-email] RESEND_API_KEY not set; would-have-sent licenses to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: 'Licences Oaziz Extracts (Agence du revenu du Canada et Santé Canada) ci-jointes.',
+    badge: 'Licences Oaziz Extracts',
+    greeting: 'Nos licences',
+    intro: 'Veuillez trouver ci-joint nos licences en vigueur : Agence du revenu du Canada (cannabis) et Santé Canada.',
+    ctaLabel: 'oaziz.ca',
+    ctaUrl: 'https://www.oaziz.ca',
+    footerNote: 'Oaziz Extracts Inc. — 322 rue de Port-Royal Ouest, Montréal, QC.',
+  });
+
+  const subject = '[Oaziz] Licences — Agence du revenu du Canada et Santé Canada';
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: n.toEmails, replyTo, subject, html, attachments: n.attachments,
+    });
+    if (error) {
+      console.error('[company-license-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[company-license-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export interface LicenseExpiryReminderEmail {
+  toEmails: string[];
+  kindLabel: string;
+  expiryDate: string;
+}
+
+export async function sendLicenseExpiryReminder(
+  n: LicenseExpiryReminderEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[license-reminder-email] RESEND_API_KEY not set; would-have-reminded ${n.toEmails.join(', ')} about ${n.kindLabel}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
+
+  const html = renderEmailShell({
+    preheader: `La licence ${n.kindLabel} d'Oaziz Extracts expire le ${n.expiryDate} — pensez à entamer le renouvellement.`,
+    badge: 'Rappel — expiration de licence',
+    greeting: `La licence ${n.kindLabel} expire dans 6 mois`,
+    intro: `La licence <strong>${escapeHtml(n.kindLabel)}</strong> d'Oaziz Extracts Inc. expire le <strong>${escapeHtml(n.expiryDate)}</strong>. Ceci est un rappel automatique envoyé six mois avant l'échéance afin de laisser le temps d'entamer le renouvellement.`,
+    ctaLabel: 'Gérer les licences',
+    ctaUrl: `${siteUrl}/portail/fournisseurs/licences`,
+    footerNote: 'Rappel automatique du portail Oaziz.',
+  });
+
+  const subject = `[Oaziz] Rappel — la licence ${n.kindLabel} expire le ${n.expiryDate}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: n.toEmails, replyTo, subject, html });
+    if (error) {
+      console.error('[license-reminder-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[license-reminder-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}

@@ -47,6 +47,10 @@ const errorMessages: Record<string, string> = {
   unknown: T('error.unknown'),
 };
 
+const vendorTypeLabels: Record<string, string> = {
+  cannabis_grower: Tv('vendorType.cannabis_grower'), cannabis_extractor: Tv('vendorType.cannabis_extractor'),
+  test_laboratory: Tv('vendorType.test_laboratory'), distributor: Tv('vendorType.distributor'),
+};
 const productionTypeLabels: Record<string, string> = {
   indoor: Tv('option.indoor'), outdoor: Tv('option.outdoor'),
   greenhouse: Tv('option.greenhouse'), hybrid: Tv('option.hybrid'),
@@ -138,7 +142,8 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
     <h2>{T('section.company')}</h2>
     <table class="data" style="margin-top: 12px;">
       <tbody>
-        <tr><th style="width:260px;">{T('field.companyName')}</th><td>{submission.company_name}</td></tr>
+        <tr><th style="width:260px;">{T('field.vendorType')}</th><td>{submission.vendor_type ? (vendorTypeLabels[submission.vendor_type] ?? submission.vendor_type) : '—'}</td></tr>
+        <tr><th>{T('field.companyName')}</th><td>{submission.company_name}</td></tr>
         <tr><th>{T('field.address')}</th><td>{submission.address}</td></tr>
         <tr><th>{T('field.cityProvincePostal')}</th><td>{submission.city} / {submission.province} / {submission.postal_code}</td></tr>
         <tr><th>{T('field.contactPerson')}</th><td>{submission.contact_person}</td></tr>
@@ -218,6 +223,7 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
     </table>
   </div>
 
+  {submission.vendor_type === 'cannabis_grower' && (
   <div class="card" style="margin-bottom: 20px;">
     <h2>{T('section.culture')}</h2>
     <table class="data" style="margin-top: 12px;">
@@ -234,6 +240,7 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
       </tbody>
     </table>
   </div>
+  )}
 
   <div class="card">
     <h2>{T('section.certification')}</h2>

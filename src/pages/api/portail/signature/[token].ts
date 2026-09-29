@@ -26,6 +26,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     rnd_destruction_id?: string | null;
     rnd_qty_destroyed?: string | null;
     rnd_date_destroyed?: string | null;
+    rnd_qa_comments?: string | null;
   };
   try {
     payload = await request.json();
@@ -89,12 +90,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     const destroyDate = typeof payload.rnd_date_destroyed === 'string'
       && /^\d{4}-\d{2}-\d{2}$/.test(payload.rnd_date_destroyed)
       ? payload.rnd_date_destroyed : '';
-    if (destroyId || destroyQty || destroyDate) {
+    const qaComments = typeof payload.rnd_qa_comments === 'string'
+      ? payload.rnd_qa_comments.trim().slice(0, 4000) : '';
+    if (destroyId || destroyQty || destroyDate || qaComments) {
       const admin = getAdminClient();
       const update: Record<string, unknown> = {};
       if (destroyId)   update.rnd_destruction_id = destroyId;
       if (destroyQty)  update.rnd_qty_destroyed  = destroyQty;
       if (destroyDate) update.rnd_date_destroyed = destroyDate;
+      if (qaComments)  update.rnd_qa_comments    = qaComments;
       const { error: destErr } = await admin
         .from('submissions').update(update).eq('id', data.submission_id);
       if (destErr) console.error('[signature] QA destruction update failed:', destErr);

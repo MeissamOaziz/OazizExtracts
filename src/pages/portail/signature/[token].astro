@@ -76,6 +76,7 @@ const qaPrefill = {
   rnd_destruction_id: ctxTyped?.submission.rnd_destruction_id ?? '',
   rnd_qty_destroyed: ctxTyped?.submission.rnd_qty_destroyed ?? '',
   rnd_date_destroyed: ctxTyped?.submission.rnd_date_destroyed ?? '',
+  rnd_qa_comments: ctxTyped?.submission.rnd_qa_comments ?? '',
 };
 ---
 <PortailLayout title="Signature" minimal>
@@ -156,6 +157,11 @@ const qaPrefill = {
           <div class="form-row">
             <label for="qa-date-destroyed">Date de destruction</label>
             <input type="date" id="qa-date-destroyed" required value={qaPrefill.rnd_date_destroyed} />
+          </div>
+          <div class="form-row">
+            <label for="qa-comments">Commentaire de l'AQ (optionnel)</label>
+            <textarea id="qa-comments" rows="3" placeholder="Vos observations ou remarques sur ce formulaire…" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{qaPrefill.rnd_qa_comments}</textarea>
+            <div class="hint">Affiché sur le document final, juste au-dessus de votre signature.</div>
           </div>
           <div id="qa-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
             Veuillez remplir les trois champs de destruction avant de signer.
@@ -289,6 +295,7 @@ const qaPrefill = {
         const qaDestId = document.getElementById('qa-destruction-id');
         const qaQty = document.getElementById('qa-qty-destroyed');
         const qaDate = document.getElementById('qa-date-destroyed');
+        const qaComments = document.getElementById('qa-comments');
         const qaErrorEl = document.getElementById('qa-error');
 
         let padW = 0, padH = 0;
@@ -476,11 +483,12 @@ const qaPrefill = {
             comments = (commentsEl && commentsEl.value ? commentsEl.value : '').slice(0, 4000);
           }
 
-          let destId = null, destQty = null, destDate = null;
+          let destId = null, destQty = null, destDate = null, qaCommentsVal = null;
           if (needsQaVerification) {
             destId = (qaDestId && qaDestId.value || '').trim();
             destQty = (qaQty && qaQty.value || '').trim();
             destDate = (qaDate && qaDate.value || '').trim();
+            qaCommentsVal = (qaComments && qaComments.value ? qaComments.value : '').slice(0, 4000);
             if (!destId || !destQty || !destDate) {
               qaErrorEl.style.display = 'block';
               document.getElementById('qa-verif-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -505,6 +513,7 @@ const qaPrefill = {
                 rnd_destruction_id: destId,
                 rnd_qty_destroyed: destQty,
                 rnd_date_destroyed: destDate,
+                rnd_qa_comments: qaCommentsVal,
               }),
             });
             const body = await res.json();

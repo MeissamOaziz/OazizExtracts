@@ -50,6 +50,7 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
     form_date?: string; product_name?: string; product_type?: string; quantity?: string;
     rnd_objective?: string | null; production_state?: string | null;
     production_id?: string | null; packaging_id?: string | null;
+    rnd_qa_comments?: string | null;
     production_staff_id?: string; signature?: string | null;
   };
   try { payload = await request.json(); }
@@ -66,6 +67,7 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   const production_state = (payload.production_state ?? '').trim() || null;
   const production_id = (typeof payload.production_id === 'string' ? payload.production_id.trim() : '') || null;
   const packaging_id = (typeof payload.packaging_id === 'string' ? payload.packaging_id.trim() : '') || null;
+  const rnd_qa_comments = (typeof payload.rnd_qa_comments === 'string' ? payload.rnd_qa_comments.trim() : '') || null;
 
   if (!form_date || !product_name || !product_type || !quantity || !production_staff_id) {
     return Response.json({ error: 'missing' }, { status: 400 });
@@ -77,7 +79,7 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   const fields = {
     form_date, product_name, product_type, quantity, rnd_objective,
     production_state: production_state as 'vrac' | 'emballe' | null,
-    production_id, packaging_id, production_staff_id,
+    production_id, packaging_id, rnd_qa_comments, production_staff_id,
   };
 
   const ip = readIp(request);

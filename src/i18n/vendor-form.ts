@@ -22,6 +22,15 @@ export const frVendorForm = {
   'error.unknown': "Une erreur est survenue lors de l'envoi. Réessayez ou contactez info@oaziz.ca.",
   'error.expired_or_submitted': 'Ce lien de brouillon est invalide, expiré, ou ce dossier a déjà été soumis.',
 
+  'section.vendorType.title': "Type d'entreprise",
+  'label.vendorType': "Quel type de fournisseur êtes-vous ?",
+  'hint.vendorType': "Ceci détermine les sections du formulaire que vous devrez remplir.",
+  'vendorType.select': 'Sélectionnez…',
+  'vendorType.cannabis_grower': 'Cultivateur de cannabis',
+  'vendorType.cannabis_extractor': 'Extracteur de cannabis',
+  'vendorType.test_laboratory': "Laboratoire d'essai",
+  'vendorType.distributor': 'Distributeur',
+
   'section.contacts.title': 'Personnes-ressources',
   'section.contacts.desc': "Ces personnes seront contactées au besoin par notre équipe. Si une seule personne s'occupe de tout, vous pouvez répéter les mêmes coordonnées pour les trois. Le courriel est obligatoire pour chaque personne-ressource; un numéro de téléphone est requis pour au moins une des trois.",
   'label.salesContactName': 'Nom (Ventes)',
@@ -138,6 +147,15 @@ export const enVendorForm: Partial<Record<keyof VendorFormDict, string>> = {
   'error.file_size': 'File too large (10 MB maximum).',
   'error.unknown': 'An error occurred while submitting. Try again or contact info@oaziz.ca.',
   'error.expired_or_submitted': 'This draft link is invalid, expired, or this file has already been submitted.',
+
+  'section.vendorType.title': 'Business type',
+  'label.vendorType': 'What type of vendor are you?',
+  'hint.vendorType': 'This determines which sections of the form you need to fill in.',
+  'vendorType.select': 'Select…',
+  'vendorType.cannabis_grower': 'Cannabis Grower',
+  'vendorType.cannabis_extractor': 'Cannabis Extractor',
+  'vendorType.test_laboratory': 'Test Laboratory',
+  'vendorType.distributor': 'Distributor',
 
   'section.contacts.title': 'Contacts',
   'section.contacts.desc': 'These people will be contacted as needed by our team. If one person handles everything, you can repeat the same details for all three. Email is required for each contact; a phone number is required for at least one of the three.',

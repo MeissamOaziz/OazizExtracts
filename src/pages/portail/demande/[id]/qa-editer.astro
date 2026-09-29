@@ -25,7 +25,8 @@ const { data: submission } = await admin
   .from('submissions')
   .select(`
     id, status, qa_staff_id, form_date, product_name, product_type, quantity,
-    production_state, production_id, packaging_id, rnd_objective, production_staff_id
+    production_state, production_id, packaging_id, rnd_objective, production_staff_id,
+    rnd_qa_comments
   `)
   .eq('id', id)
   .maybeSingle();
@@ -145,6 +146,12 @@ const clientStrings = {
         <label for="packaging_id">{T('label.packagingId')}</label>
         <input type="text" id="packaging_id" value={submission.packaging_id ?? ''} />
         <div class="hint">{T('hint.packagingId')}</div>
+      </div>
+
+      <div class="form-row">
+        <label for="rnd_qa_comments">{T('label.qaComments')}</label>
+        <textarea id="rnd_qa_comments" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{submission.rnd_qa_comments ?? ''}</textarea>
+        <div class="hint">{T('hint.qaComments')}</div>
       </div>
     </div>
 
@@ -358,6 +365,7 @@ const clientStrings = {
           production_state: (document.querySelector('input[name="production_state"]:checked') || {}).value || null,
           production_id: document.getElementById('production_id').value.trim(),
           packaging_id: document.getElementById('packaging_id').value.trim(),
+          rnd_qa_comments: document.getElementById('rnd_qa_comments').value,
         };
       }
 

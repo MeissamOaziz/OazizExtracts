@@ -30,6 +30,8 @@ export const frDemandeQaEditer = {
   'label.productionId': 'Identifiant du lot (ID)',
   'label.packagingId': "N° d'identification de l'emballage",
   'hint.packagingId': "Si l'unité ou les unités testées sont emballées.",
+  'label.qaComments': "Commentaire de l'AQ (optionnel)",
+  'hint.qaComments': 'Affiché sur le document final, juste au-dessus de votre signature.',
 
   signatureHeading: 'Votre signature (AQ)',
   signatureHint: 'Requise pour approuver la correction — remplace votre signature précédente avec la date du jour.',
@@ -82,6 +84,8 @@ export const enDemandeQaEditer: Partial<Record<keyof DemandeQaEditerDict, string
   'label.productionId': 'Batch ID',
   'label.packagingId': 'Packaging ID number',
   'hint.packagingId': 'If the tested unit(s) are packaged.',
+  'label.qaComments': 'QA comment (optional)',
+  'hint.qaComments': 'Shown on the final document, just above your signature.',
 
   signatureHeading: 'Your signature (QA)',
   signatureHint: 'Required to approve the correction — replaces your previous signature with today\'s date.',

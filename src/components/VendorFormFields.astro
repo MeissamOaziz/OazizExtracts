@@ -5,6 +5,7 @@
 import type { VendorFormDict } from '../i18n/vendor-form';
 
 interface VendorFormValues {
+  vendor_type: string | null;
   company_name: string; address: string; city: string; province: string; postal_code: string;
   contact_person: string; phone: string; email: string;
   shipping_same_as_billing: boolean; shipping_address: string; shipping_city: string;
@@ -35,6 +36,19 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
 ---
 <form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form">
   {Object.entries(hiddenFields).map(([k, val]) => <input type="hidden" name={k} value={val} />)}
+
+  <div class="section-hdr"><h2>{T('section.vendorType.title')}</h2></div>
+  <div class="form-row">
+    <label for="vendor_type">{T('label.vendorType')}</label>
+    <select id="vendor_type" name="vendor_type" required>
+      <option value="" selected={!v.vendor_type}>{T('vendorType.select')}</option>
+      <option value="cannabis_grower" selected={v.vendor_type === 'cannabis_grower'}>{T('vendorType.cannabis_grower')}</option>
+      <option value="cannabis_extractor" selected={v.vendor_type === 'cannabis_extractor'}>{T('vendorType.cannabis_extractor')}</option>
+      <option value="test_laboratory" selected={v.vendor_type === 'test_laboratory'}>{T('vendorType.test_laboratory')}</option>
+      <option value="distributor" selected={v.vendor_type === 'distributor'}>{T('vendorType.distributor')}</option>
+    </select>
+    <div class="hint">{T('hint.vendorType')}</div>
+  </div>
 
   <div class="section-hdr">
     <h2>{T('section.contacts.title')}</h2>
@@ -201,6 +215,7 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <div class="hint">{hasFiles.hc ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
   </div>
 
+  <div id="culture-section" style={v.vendor_type === 'cannabis_grower' ? '' : 'display:none;'}>
   <div class="section-hdr"><h2>{T('section.culture.title')}</h2></div>
   <div class="form-row">
     <label>{T('label.productionType')}</label>
@@ -260,6 +275,7 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <label for="pesticides_used">{T('label.pesticidesUsed')}</label>
     <textarea id="pesticides_used" name="pesticides_used" rows="3">{v.pesticides_used}</textarea>
   </div>
+  </div>
 
   <div class="section-hdr"><h2>{T('section.certify.title')}</h2></div>
   <div class="two-col">
@@ -294,11 +310,19 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     const shippingFields = document.getElementById('shipping-fields');
     const shippingError = document.getElementById('shipping-error');
     const phoneError = document.getElementById('phone-error');
+    const vendorTypeSelect = document.getElementById('vendor_type') as HTMLSelectElement | null;
+    const cultureSection = document.getElementById('culture-section');
     if (!form || !shippingCheckbox || !shippingFields) return;
 
     shippingCheckbox.addEventListener('change', () => {
       shippingFields.style.display = shippingCheckbox.checked ? 'none' : '';
     });
+
+    if (vendorTypeSelect && cultureSection) {
+      vendorTypeSelect.addEventListener('change', () => {
+        cultureSection.style.display = vendorTypeSelect.value === 'cannabis_grower' ? '' : 'none';
+      });
+    }
 
     form.addEventListener('submit', (e: SubmitEvent) => {
       const submitter = e.submitter as HTMLButtonElement | null;

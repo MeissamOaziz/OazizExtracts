@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/license-reminders",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}

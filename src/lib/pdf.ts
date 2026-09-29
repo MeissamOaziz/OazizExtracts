@@ -125,7 +125,7 @@ export async function loadAndBuildPdf(submissionId: string): Promise<Uint8Array>
     .select(`
       id, form_date, product_name, product_type, quantity, production_state, production_id,
       packaging_id, rnd_objective, rnd_quantity_for_test, rnd_lp_number, rnd_qty_destroyed, rnd_date_destroyed,
-      rnd_destruction_id,
+      rnd_destruction_id, rnd_qa_comments,
       initiator:initiator_staff_id ( id, full_name, email ),
       production:production_staff_id ( id, full_name, email ),
       qa:qa_staff_id ( id, full_name, email ),
@@ -156,6 +156,7 @@ export async function loadAndBuildPdf(submissionId: string): Promise<Uint8Array>
     rnd_lp_number: subRow.rnd_lp_number, rnd_qty_destroyed: subRow.rnd_qty_destroyed,
     rnd_date_destroyed: subRow.rnd_date_destroyed,
     rnd_destruction_id: subRow.rnd_destruction_id,
+    rnd_qa_comments: subRow.rnd_qa_comments,
     initiator: toLite(subRow.initiator), production: toLite(subRow.production),
     qa: toLite(subRow.qa), consent_obtainer: toLite(subRow.consent_obtainer),
   };
@@ -274,6 +275,12 @@ async function renderRndPage(
   gap(c, 6);
   commentsBox(c, pRnd?.comments ?? '', 4);
   gap(c, 14);
+
+  if (input.submission.rnd_qa_comments) {
+    section(c, "COMMENTAIRE DE L'AQ");
+    commentsBox(c, input.submission.rnd_qa_comments, 3, "Commentaire de l'AQ :");
+    gap(c, 10);
+  }
 
   signaturePair(c,
     { label: 'Signature du A/RPIC (participant)', who: participant.name,
@@ -422,7 +429,7 @@ function ratingsTable(c: Cursor, ratings: RndRatings | null) {
   }
 }
 
-function commentsBox(c: Cursor, comments: string, minLines: number) {
+function commentsBox(c: Cursor, comments: string, minLines: number, label = 'Rétroaction / Commentaires :') {
   const lineHeight = 13;
   const lines = comments ? wrap(comments, c.fonts.reg, 10, CONTENT_W - 12) : [];
   const displayed = Math.max(minLines, lines.length);
@@ -431,7 +438,7 @@ function commentsBox(c: Cursor, comments: string, minLines: number) {
     x: MARGIN, y: c.y - boxH + 14, width: CONTENT_W, height: boxH,
     borderColor: SEP, borderWidth: 0.6,
   });
-  c.page.drawText('Rétroaction / Commentaires :', {
+  c.page.drawText(label, {
     x: MARGIN + 6, y: c.y + 2, size: 8, font: c.fonts.bold, color: GRAY,
   });
   for (let i = 0; i < lines.length; i++) {

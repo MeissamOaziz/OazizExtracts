@@ -17,6 +17,9 @@ export const frSigner = {
   qaQtyDestroyedLabel: 'Quantité de cannabis détruite (en g)',
   qaQtyDestroyedPlaceholder: 'ex: 5 g',
   qaDateDestroyedLabel: 'Date de destruction',
+  qaCommentsLabel: "Commentaire de l'AQ (optionnel)",
+  qaCommentsPlaceholder: 'Vos observations ou remarques sur ce formulaire…',
+  qaCommentsHint: "Affiché sur le document final, juste au-dessus de votre signature.",
   qaErrorMissing: 'Veuillez remplir les trois champs de destruction avant de signer.',
 
   evalHeading: 'Votre évaluation R&D',
@@ -70,6 +73,9 @@ export const enSigner: Partial<Record<keyof SignerDict, string>> = {
   qaQtyDestroyedLabel: 'Quantity of cannabis destroyed (in g)',
   qaQtyDestroyedPlaceholder: 'e.g. 5 g',
   qaDateDestroyedLabel: 'Destruction date',
+  qaCommentsLabel: 'QA comment (optional)',
+  qaCommentsPlaceholder: 'Your observations or remarks on this form…',
+  qaCommentsHint: 'Shown on the final document, just above your signature.',
   qaErrorMissing: 'Please fill in all three destruction fields before signing.',
 
   evalHeading: 'Your R&D evaluation',

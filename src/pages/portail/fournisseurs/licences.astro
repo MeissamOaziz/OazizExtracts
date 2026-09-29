@@ -1,0 +1,109 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frFournisseursLicences, enFournisseursLicences } from '../../../i18n/portail/fournisseurs-licences';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFournisseursLicences, enFournisseursLicences);
+
+const admin = getAdminClient();
+const { data: licenseRows } = await admin
+  .from('company_licenses')
+  .select('kind, file_path, expiry_date, reminder_recipients, reminder_sent_at')
+  .in('kind', ['cra', 'health_canada']);
+
+type LicenseRow = {
+  kind: string; file_path: string | null; expiry_date: string | null;
+  reminder_recipients: string[]; reminder_sent_at: string | null;
+};
+const byKind = new Map<string, LicenseRow>();
+for (const row of (licenseRows ?? []) as LicenseRow[]) byKind.set(row.kind, row);
+const kinds = ['cra', 'health_canada'] as const;
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const infoMessages: Record<string, string> = { saved: T('info.saved'), sent: T('info.sent') };
+const errorMessages: Record<string, string> = {
+  file_type: T('error.file_type'),
+  file_size: T('error.file_size'),
+  send_email_invalid: T('error.send_email_invalid'),
+  send_failed: T('error.send_failed'),
+  no_files: T('error.no_files'),
+  unknown: T('error.unknown'),
+};
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' });
+}
+---
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/fournisseurs" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  {kinds.map((kind) => {
+    const row = byKind.get(kind);
+    return (
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>{T(`kind.${kind}` as keyof typeof frFournisseursLicences)}</h2>
+        <form method="POST" action="/api/portail/company-licenses/update" enctype="multipart/form-data" style="margin-top: 14px;">
+          <input type="hidden" name="kind" value={kind} />
+          <div class="form-row">
+            <label>{T('currentFile')}</label>
+            {row?.file_path ? (
+              <a href={`/api/portail/company-licenses/${kind}/file`} class="btn btn-secondary" style="font-size:.85rem;padding:6px 14px;">{T('downloadBtn')}</a>
+            ) : (
+              <p style="color: var(--p-muted); font-size: .9rem;">{T('noFile')}</p>
+            )}
+          </div>
+          <div class="form-row">
+            <label for={`file-${kind}`}>{T('replaceFileLabel')}</label>
+            <input type="file" id={`file-${kind}`} name="file" accept="application/pdf" />
+          </div>
+          <div class="two-col" style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;">
+            <div class="form-row">
+              <label for={`expiry-${kind}`}>{T('expiryDateLabel')}</label>
+              <input type="date" id={`expiry-${kind}`} name="expiry_date" value={row?.expiry_date ?? ''} />
+              {row?.expiry_date && <div class="hint">{fmtDate(row.expiry_date)}</div>}
+            </div>
+            <div class="form-row">
+              <label for={`recipients-${kind}`}>{T('reminderRecipientsLabel')}</label>
+              <input type="text" id={`recipients-${kind}`} name="reminder_recipients" value={(row?.reminder_recipients ?? []).join(', ')} placeholder="ex: stephane@oaziz.ca, jacobp@oaziz.ca" />
+            </div>
+          </div>
+          <p class="hint" style="margin-bottom: 14px;">
+            {T('reminderRecipientsHint')}
+            {row?.reminder_sent_at && <> — {T('reminderSentNote')}</>}
+          </p>
+          <button type="submit" class="btn btn-primary">{T('saveBtn')}</button>
+        </form>
+      </div>
+    );
+  })}
+
+  <div class="card">
+    <h2>{T('send.heading')}</h2>
+    <p class="hint" style="margin: 4px 0 14px;">{T('send.desc')}</p>
+    <form method="POST" action="/api/portail/company-licenses/send" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-row" style="flex:1;min-width:280px;margin-bottom:0;">
+        <label for="send-recipients">{T('send.recipientsLabel')}</label>
+        <input type="text" id="send-recipients" name="recipients" required placeholder="ex: contact@fournisseur.com, autre@exemple.com" />
+      </div>
+      <button type="submit" class="btn btn-primary">{T('send.sendBtn')}</button>
+    </form>
+  </div>
+</PortailLayout>

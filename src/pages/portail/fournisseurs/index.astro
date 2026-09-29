@@ -46,6 +46,16 @@ for (const row of approvalRows) {
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const infoMessages: Record<string, string> = { invite_sent: T('info.invite_sent') };
+const errorMessages: Record<string, string> = {
+  invite_email_invalid: T('error.invite_email_invalid'),
+  invite_send_failed: T('error.invite_send_failed'),
+  unknown: T('error.unknown'),
+};
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
@@ -53,8 +63,26 @@ function formatDate(iso: string): string {
       {T('backLink')}
     </a>
   </div>
-  <h1>{T('title')}</h1>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:8px;">
+    <h1>{T('title')}</h1>
+    <a href="/portail/fournisseurs/licences" class="btn btn-secondary">{T('manageLicensesBtn')}</a>
+  </div>
   <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  <div class="card" style="margin-bottom: 24px;">
+    <h2>{T('invite.heading')}</h2>
+    <p class="hint" style="margin: 4px 0 14px;">{T('invite.desc')}</p>
+    <form method="POST" action="/api/portail/vendor-submissions/send-invite" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-row" style="flex:1;min-width:240px;margin-bottom:0;">
+        <label for="invite-email">{T('invite.emailLabel')}</label>
+        <input type="email" id="invite-email" name="email" required />
+      </div>
+      <button type="submit" class="btn btn-primary">{T('invite.sendBtn')}</button>
+    </form>
+  </div>
 
   <div class="card" style="padding: 0;">
     {(!submissions || submissions.length === 0) ? (

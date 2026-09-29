@@ -12,6 +12,8 @@ export const frFournisseursDetail = {
   'label.qaContact': 'Assurance qualité',
   'label.accountingContact': 'Comptabilité',
 
+  'field.vendorType': "Type d'entreprise",
+
   'section.company': 'A) Renseignements sur l\'entreprise',
   'field.companyName': "Nom de l'entreprise",
   'field.address': 'Adresse',
@@ -87,6 +89,8 @@ export const enFournisseursDetail: Partial<Record<keyof FournisseursDetailDict, 
   'label.salesContact': 'Sales',
   'label.qaContact': 'Quality assurance',
   'label.accountingContact': 'Accounting',
+
+  'field.vendorType': 'Business type',
 
   'section.company': 'A) Company information',
   'field.companyName': 'Company name',
