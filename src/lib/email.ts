@@ -327,3 +327,113 @@ export async function sendPortalInvite(
     return { status: 'error', detail: String(e) };
   }
 }
+
+// ============================================================
+// New vendor package submitted — sent individually to each of the five
+// required approvers (Jacob, Stephane, Jorge, Kyle, Meissam). Each of them
+// must personally click "Approved" in the portal; this is not a single
+// QA decision, so everyone gets their own copy of the request.
+// ============================================================
+
+export interface VendorSubmissionEmail {
+  toEmail: string;
+  toName: string;
+  companyName: string;
+  submissionUrl: string;
+}
+
+export async function sendVendorSubmissionNotice(
+  n: VendorSubmissionEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[vendor-email] RESEND_API_KEY not set; would-have-notified ${n.toEmail} about ${n.companyName}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: `${n.companyName} a soumis son dossier fournisseur — votre approbation individuelle est requise.`,
+    badge: 'Nouveau fournisseur — approbation requise',
+    greeting: `Bonjour ${n.toName.split(' ')[0] || n.toName},`,
+    intro: `<strong>${escapeHtml(n.companyName)}</strong> vient de soumettre son formulaire d'auto-évaluation fournisseur et ses documents (licence CRA, licence Santé Canada). Veuillez réviser le dossier et cliquer « Approuver » de votre côté — votre approbation est enregistrée individuellement et sert de preuve en cas de vérification par Santé Canada. Aucun échantillon ni produit ne doit être accepté avant que tous les approbateurs requis aient confirmé.`,
+    rows: [{ label: 'Fournisseur', value: n.companyName }],
+    ctaLabel: 'Réviser et approuver',
+    ctaUrl: n.submissionUrl,
+    fallbackNote: 'Consultez le dossier dans la section Fournisseurs du portail pour voir tous les documents.',
+    footerNote: 'Diffusion automatique — nouvelle demande de qualification fournisseur.',
+  });
+
+  const subject = `[Oaziz] Approbation requise - Nouveau fournisseur ${n.companyName}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from,
+      to: [n.toEmail],
+      replyTo,
+      subject,
+      html,
+    });
+    if (error) {
+      console.error('[vendor-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
+// Vendor draft saved — gives the person filling the public form a link to
+// come back and finish later. Sent once, the first time a draft is saved.
+// ============================================================
+
+export interface VendorDraftLinkEmail {
+  toEmail: string;
+  companyName: string;
+  resumeUrl: string;
+}
+
+export async function sendVendorDraftLink(
+  n: VendorDraftLinkEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[vendor-draft-email] RESEND_API_KEY not set; would-have-sent draft link to ${n.toEmail}: ${n.resumeUrl}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: 'Continuez votre formulaire de qualification fournisseur Oaziz Extracts quand vous serez prêt.',
+    badge: 'Brouillon enregistré',
+    greeting: 'Votre brouillon a été enregistré',
+    intro: `Voici votre lien personnel pour continuer et soumettre le formulaire de qualification fournisseur pour <strong>${escapeHtml(n.companyName)}</strong> — vos renseignements déjà saisis sont conservés.`,
+    ctaLabel: 'Continuer le formulaire',
+    ctaUrl: n.resumeUrl,
+    fallbackNote: 'Conservez ce lien — il vous permet de revenir compléter le dossier à tout moment avant de le soumettre.',
+    footerNote: 'Oaziz Extracts — Qualification fournisseur.',
+  });
+
+  const subject = `[Oaziz] Continuez votre dossier fournisseur - ${n.companyName}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: [n.toEmail], replyTo, subject, html });
+    if (error) {
+      console.error('[vendor-draft-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-draft-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}

@@ -1,0 +1,113 @@
+---
+export const prerender = false;
+
+import VendorFormLayout from '../../../layouts/VendorFormLayout.astro';
+import VendorFormFields from '../../../components/VendorFormFields.astro';
+import { getAdminClient } from '../../../lib/supabase';
+import { sha256Hex } from '../../../lib/tokens';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frVendorForm, enVendorForm } from '../../../i18n/vendor-form';
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frVendorForm, enVendorForm);
+
+const { token } = Astro.params;
+if (!token) return Astro.redirect('/fournisseurs');
+
+const admin = getAdminClient();
+const { data: submission } = await admin
+  .from('vendor_submissions')
+  .select('*')
+  .eq('resume_token_hash', sha256Hex(token))
+  .eq('status', 'draft')
+  .maybeSingle();
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'),
+  missing_draft: T('error.missing_draft'),
+  phone_required: T('error.phone_required'),
+  shipping_missing: T('error.shipping_missing'),
+  certify: T('error.certify'),
+  file_cra: T('error.file_cra'),
+  file_hc: T('error.file_hc'),
+  file_bank: T('error.file_bank'),
+  file_type: T('error.file_type'),
+  file_size: T('error.file_size'),
+  unknown: T('error.unknown'),
+};
+---
+<VendorFormLayout title={T('pageTitle')}>
+  {!submission ? (
+    <div class="card" style="text-align: center; padding: 48px 32px;">
+      <p>{T('error.expired_or_submitted')}</p>
+    </div>
+  ) : (
+    <>
+      <h1>{T('resumeHeading')}</h1>
+      <p style="color: var(--p-muted); margin-bottom: 24px;">{T('resumeIntro')}</p>
+
+      {info === 'draft_saved' && (
+        <div class="flash flash-success">
+          {T('draft.savedFlash')} {T('draft.resumeIntro')}
+          <div style="display:flex;gap:8px;align-items:stretch;margin-top:10px;">
+            <input type="text" id="resume-link" value={url.origin + url.pathname} readonly onclick="this.select()" style="flex:1;font-family:monospace;font-size:.82rem;padding:8px 10px;border:1px solid var(--p-border);border-radius:6px;" />
+            <button type="button" id="copy-link-btn" class="btn btn-secondary" style="font-size:.82rem;">{T('copyLink')}</button>
+          </div>
+          <p class="hint" style="margin-top:8px;">{T('draft.emailedNote')}</p>
+        </div>
+      )}
+      {errCode && (
+        <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+      )}
+
+      <VendorFormFields
+        T={T}
+        action="/api/vendor/submit"
+        values={{
+          company_name: submission.company_name ?? '', address: submission.address ?? '',
+          city: submission.city ?? '', province: submission.province ?? '', postal_code: submission.postal_code ?? '',
+          contact_person: submission.contact_person ?? '', phone: submission.phone ?? '', email: submission.email ?? '',
+          shipping_same_as_billing: submission.shipping_same_as_billing,
+          shipping_address: submission.shipping_address ?? '', shipping_city: submission.shipping_city ?? '',
+          shipping_province: submission.shipping_province ?? '', shipping_postal_code: submission.shipping_postal_code ?? '',
+          sales_contact_name: submission.sales_contact_name ?? '', sales_contact_email: submission.sales_contact_email ?? '',
+          sales_contact_phone: submission.sales_contact_phone ?? '',
+          qa_contact_name: submission.qa_contact_name ?? '', qa_contact_email: submission.qa_contact_email ?? '',
+          qa_contact_phone: submission.qa_contact_phone ?? '',
+          accounting_contact_email: submission.accounting_contact_email ?? '', accounting_contact_phone: submission.accounting_contact_phone ?? '',
+          business_number: submission.business_number ?? '', gst_hst_number: submission.gst_hst_number ?? '',
+          qst_number: submission.qst_number ?? '',
+          bank_institution_number: submission.bank_institution_number ?? '', bank_transit_number: submission.bank_transit_number ?? '',
+          bank_account_number: submission.bank_account_number ?? '', bank_address: submission.bank_address ?? '',
+          production_type: submission.production_type, cultivation_methods: submission.cultivation_methods ?? [],
+          lighting_type: submission.lighting_type ?? '', medium_type: submission.medium_type ?? '',
+          nutrient_type: submission.nutrient_type ?? '', cultivar_name: submission.cultivar_name ?? '',
+          existing_coas: submission.existing_coas, starting_material: submission.starting_material ?? [],
+          pesticides_used: submission.pesticides_used ?? '',
+          certified_by_name: submission.certified_by_name ?? '', certified_by_title: submission.certified_by_title ?? '',
+        }}
+        hasFiles={{
+          cra: !!submission.file_cra_license_path,
+          hc: !!submission.file_health_canada_license_path,
+          bank: !!submission.file_bank_void_cheque_path,
+        }}
+        hiddenFields={{ submission_id: submission.id, resume_token: token }}
+      />
+
+      <script>
+        (function () {
+          const btn = document.getElementById('copy-link-btn');
+          const input = document.getElementById('resume-link') as HTMLInputElement | null;
+          if (!btn || !input) return;
+          btn.addEventListener('click', () => {
+            input.select();
+            navigator.clipboard?.writeText(input.value).catch(() => {});
+          });
+        })();
+      </script>
+    </>
+  )}
+</VendorFormLayout>

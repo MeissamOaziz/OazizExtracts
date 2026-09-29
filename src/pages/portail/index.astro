@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import PortailLayout from '../../layouts/PortailLayout.astro';
-import { createServerClient, currentStaff } from '../../lib/supabase';
+import { createServerClient, currentStaff, getAdminClient } from '../../lib/supabase';
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frHub, enHub } from '../../i18n/portail/hub';
 import { frCommon, enCommon } from '../../i18n/portail/common';
@@ -86,6 +86,14 @@ const { count: pendingCount } = await supabase
   .select('id', { count: 'exact', head: true })
   .in('status', ['draft', 'sent', 'signing']);
 
+// vendor_submission_approvals is RLS-denied to all client roles (admin-only, same
+// pattern as signer_tokens), so this needs the admin client.
+const { count: pendingApprovalsCount } = await getAdminClient()
+  .from('vendor_submission_approvals')
+  .select('id', { count: 'exact', head: true })
+  .eq('staff_id', staff.id)
+  .is('approved_at', null);
+
 const sections = [
   {
     href: '/portail/formulaires',
@@ -98,6 +106,12 @@ const sections = [
     title: Tc('nav.calculators'),
     desc: T('section.calc.desc'),
     tag: null,
+  },
+  {
+    href: '/portail/fournisseurs',
+    title: Tc('nav.vendors'),
+    desc: T('section.vendors.desc'),
+    tag: pendingApprovalsCount ? T('section.vendors.tag').replace('{count}', String(pendingApprovalsCount)) : null,
   },
 ];
 ---

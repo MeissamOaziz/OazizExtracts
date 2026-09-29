@@ -1,0 +1,248 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frFournisseursDetail, enFournisseursDetail } from '../../../i18n/portail/fournisseurs-detail';
+import { frVendorForm, enVendorForm } from '../../../i18n/vendor-form';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFournisseursDetail, enFournisseursDetail);
+const Tv = makeT(locale, frVendorForm, enVendorForm);
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/portail/fournisseurs');
+
+const admin = getAdminClient();
+const { data: submission } = await admin
+  .from('vendor_submissions')
+  .select('*')
+  .eq('id', id)
+  .maybeSingle();
+
+if (!submission) return new Response(T('notFound'), { status: 404 });
+const isDraft = submission.status !== 'submitted';
+
+const { data: approvalRows } = await admin
+  .from('vendor_submission_approvals')
+  .select('id, staff_id, approved_at, staff:staff_id ( full_name, email )')
+  .eq('vendor_submission_id', id)
+  .order('created_at');
+
+type ApprovalRow = { id: string; staff_id: string; approved_at: string | null; staff: { full_name: string; email: string } | null };
+const approvals = (approvalRows ?? []) as unknown as ApprovalRow[];
+const fullyApproved = approvals.length > 0 && approvals.every((a) => !!a.approved_at);
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const infoMessages: Record<string, string> = { approved: T('info.approved') };
+const errorMessages: Record<string, string> = {
+  not_approver: T('error.not_approver'),
+  unknown: T('error.unknown'),
+};
+
+const productionTypeLabels: Record<string, string> = {
+  indoor: Tv('option.indoor'), outdoor: Tv('option.outdoor'),
+  greenhouse: Tv('option.greenhouse'), hybrid: Tv('option.hybrid'),
+};
+const cultivationMethodLabels: Record<string, string> = {
+  sog: Tv('option.sog'), hydroponic: Tv('option.hydroponic'), aquaponic: Tv('option.aquaponic'),
+  aeroponic: Tv('option.aeroponic'), regenerative: Tv('option.regenerative'),
+};
+const startingMaterialLabels: Record<string, string> = {
+  clone: Tv('option.clone'), seed: Tv('option.seed'), tissue_culture: Tv('option.tissueCulture'),
+};
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function joinLabels(codes: string[] | null, map: Record<string, string>): string {
+  if (!codes || codes.length === 0) return '—';
+  return codes.map((c) => map[c] ?? c).join(', ');
+}
+---
+<PortailLayout title={submission.company_name} staffName={staff.full_name} wide>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/fournisseurs" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px;">
+    <div>
+      <h1 style="margin-bottom: 4px;">{submission.company_name}</h1>
+      <p style="color: var(--p-muted);">{T('submittedOn')} {fmtDate(submission.submitted_at)}</p>
+    </div>
+    {fullyApproved && <span class="badge badge-complete">{T('fullyApprovedBanner')}</span>}
+  </div>
+
+  {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  {isDraft && (
+    <div class="card" style="margin-bottom: 20px;">{T('notYetSubmitted')}</div>
+  )}
+
+  {!isDraft && <>
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.approvals')}</h2>
+    <p class="hint" style="margin: 4px 0 14px;">{T('approvals.intro')}</p>
+    <table class="data">
+      <thead>
+        <tr><th>{T('th.approver')}</th><th>{T('th.status')}</th><th>{T('th.approvedOn')}</th><th></th></tr>
+      </thead>
+      <tbody>
+        {approvals.map((a) => (
+          <tr>
+            <td>{a.staff?.full_name ?? '—'}</td>
+            <td>
+              <span class={`badge ${a.approved_at ? 'badge-complete' : 'badge-sent'}`}>
+                {a.approved_at ? T('approvedPill') : T('pendingPill')}
+              </span>
+            </td>
+            <td>{a.approved_at ? fmtDate(a.approved_at) : '—'}</td>
+            <td style="text-align: right;">
+              {a.staff_id === staff.id && (
+                a.approved_at ? (
+                  <span style="color: var(--p-muted); font-size: .82rem;">{T('yourApprovalDone')}</span>
+                ) : (
+                  <form method="POST" action={`/api/portail/vendor-submissions/${id}/approve`} style="margin: 0;">
+                    <button type="submit" class="btn btn-primary" style="font-size: .82rem; padding: 6px 14px;">{T('approveBtn')}</button>
+                  </form>
+                )
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.contacts')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width:260px;">{T('label.salesContact')}</th><td>{submission.sales_contact_name} — {submission.sales_contact_email} — {submission.sales_contact_phone}</td></tr>
+        <tr><th>{T('label.qaContact')}</th><td>{submission.qa_contact_name} — {submission.qa_contact_email} — {submission.qa_contact_phone}</td></tr>
+        <tr><th>{T('label.accountingContact')}</th><td>{submission.accounting_contact_email || '—'} — {submission.accounting_contact_phone || '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.company')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width:260px;">{T('field.companyName')}</th><td>{submission.company_name}</td></tr>
+        <tr><th>{T('field.address')}</th><td>{submission.address}</td></tr>
+        <tr><th>{T('field.cityProvincePostal')}</th><td>{submission.city} / {submission.province} / {submission.postal_code}</td></tr>
+        <tr><th>{T('field.contactPerson')}</th><td>{submission.contact_person}</td></tr>
+        <tr><th>{T('field.phone')}</th><td>{submission.phone}</td></tr>
+        <tr><th>{T('field.email')}</th><td>{submission.email}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.shipping')}</h2>
+    {submission.shipping_same_as_billing ? (
+      <p style="margin-top: 12px; color: var(--p-muted);">{T('shipping.same')}</p>
+    ) : (
+      <table class="data" style="margin-top: 12px;">
+        <tbody>
+          <tr><th style="width:260px;">{T('field.address')}</th><td>{submission.shipping_address || '—'}</td></tr>
+          <tr><th>{T('field.cityProvincePostal')}</th><td>{submission.shipping_city} / {submission.shipping_province} / {submission.shipping_postal_code}</td></tr>
+        </tbody>
+      </table>
+    )}
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.tax')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width:260px;">{T('field.businessNumber')}</th><td>{submission.business_number || '—'}</td></tr>
+        <tr><th>{T('field.gstHst')}</th><td>{submission.gst_hst_number || '—'}</td></tr>
+        <tr><th>{T('field.qst')}</th><td>{submission.qst_number || '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.banking')}</h2>
+    <p class="hint" style="color: var(--p-danger); margin: 4px 0 12px;">{T('bankingWarning')}</p>
+    <table class="data">
+      <tbody>
+        <tr><th style="width:260px;">{T('field.bankInstitution')}</th><td>{submission.bank_institution_number || '—'}</td></tr>
+        <tr><th>{T('field.bankTransit')}</th><td>{submission.bank_transit_number || '—'}</td></tr>
+        <tr><th>{T('field.bankAccount')}</th><td>{submission.bank_account_number || '—'}</td></tr>
+        <tr><th>{T('field.bankAddress')}</th><td>{submission.bank_address || '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.documents')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr>
+          <th style="width:260px;">{T('doc.cra')}</th>
+          <td>
+            {submission.file_cra_license_path ? (
+              <a href={`/api/portail/vendor-submissions/${id}/files/cra`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
+            ) : T('notProvided')}
+          </td>
+        </tr>
+        <tr>
+          <th>{T('doc.hc')}</th>
+          <td>
+            {submission.file_health_canada_license_path ? (
+              <a href={`/api/portail/vendor-submissions/${id}/files/hc`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
+            ) : T('notProvided')}
+          </td>
+        </tr>
+        <tr>
+          <th>{T('doc.bankProof')}</th>
+          <td>
+            {submission.file_bank_void_cheque_path ? (
+              <a href={`/api/portail/vendor-submissions/${id}/files/bank`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
+            ) : T('notProvided')}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>{T('section.culture')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width:260px;">{T('field.productionType')}</th><td>{submission.production_type ? (productionTypeLabels[submission.production_type] ?? submission.production_type) : '—'}</td></tr>
+        <tr><th>{T('field.cultivationMethods')}</th><td>{joinLabels(submission.cultivation_methods, cultivationMethodLabels)}</td></tr>
+        <tr><th>{T('field.lightingType')}</th><td>{submission.lighting_type || '—'}</td></tr>
+        <tr><th>{T('field.mediumType')}</th><td>{submission.medium_type || '—'}</td></tr>
+        <tr><th>{T('field.nutrientType')}</th><td>{submission.nutrient_type || '—'}</td></tr>
+        <tr><th>{T('field.cultivarName')}</th><td>{submission.cultivar_name || '—'}</td></tr>
+        <tr><th>{T('field.existingCoas')}</th><td>{submission.existing_coas === null ? '—' : (submission.existing_coas ? Tv('option.yes') : Tv('option.no'))}</td></tr>
+        <tr><th>{T('field.startingMaterial')}</th><td>{joinLabels(submission.starting_material, startingMaterialLabels)}</td></tr>
+        <tr><th>{T('field.pesticidesUsed')}</th><td style="white-space:pre-wrap;">{submission.pesticides_used || '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>{T('section.certification')}</h2>
+    <table class="data" style="margin-top: 12px;">
+      <tbody>
+        <tr><th style="width:260px;">{T('field.certifiedBy')}</th><td>{submission.certified_by_name} — {submission.certified_by_title}</td></tr>
+        <tr><th></th><td>{submission.certified ? `✓ ${T('certifiedYes')}` : '—'}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  </>}
+</PortailLayout>

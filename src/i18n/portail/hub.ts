@@ -7,6 +7,9 @@ export const frHub = {
   'section.forms.tag': '{count} en cours',
 
   'section.calc.desc': 'Coût de production, prix de vente par palier de marge, solveur inverse.',
+
+  'section.vendors.desc': "Dossiers de qualification fournisseur et suivi des approbations individuelles.",
+  'section.vendors.tag': '{count} à approuver',
 } as const;
 
 export type HubDict = typeof frHub;
@@ -20,4 +23,7 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
   'section.forms.tag': '{count} in progress',
 
   'section.calc.desc': 'Production cost, margin-tiered selling price, reverse solver.',
+
+  'section.vendors.desc': 'Vendor qualification files and individual approval tracking.',
+  'section.vendors.tag': '{count} to approve',
 };

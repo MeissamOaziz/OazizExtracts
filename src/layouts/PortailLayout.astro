@@ -208,6 +208,7 @@ const currentPath = Astro.url.pathname + Astro.url.search;
                       ? 'active' : ''
                   }>{Tc('nav.forms')}</a>
                   <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>
+                  <a href="/portail/fournisseurs" class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('nav.vendors')}</a>
                 </nav>
               )}
               <span class="portail-user">{staffName}</span>

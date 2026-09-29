@@ -8,6 +8,7 @@ export const frCommon = {
   'nav.home': 'Accueil',
   'nav.forms': 'Formulaires R&D',
   'nav.calculators': 'Calculatrices',
+  'nav.vendors': 'Fournisseurs',
   'nav.logout': 'Déconnexion',
 
   'btn.save': 'Enregistrer',
@@ -46,6 +47,7 @@ export const enCommon: Partial<Record<keyof CommonDict, string>> = {
   'nav.home': 'Home',
   'nav.forms': 'R&D Forms',
   'nav.calculators': 'Calculators',
+  'nav.vendors': 'Vendors',
   'nav.logout': 'Log out',
 
   'btn.save': 'Save',

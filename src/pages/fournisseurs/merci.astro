@@ -1,0 +1,17 @@
+---
+export const prerender = false;
+
+import VendorFormLayout from '../../layouts/VendorFormLayout.astro';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frVendorForm, enVendorForm } from '../../i18n/vendor-form';
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frVendorForm, enVendorForm);
+---
+<VendorFormLayout title={T('thanks.title')}>
+  <div class="card" style="text-align: center; padding: 48px 32px;">
+    <h1 style="margin-bottom: 12px;">{T('thanks.heading')}</h1>
+    <p style="color: var(--p-muted); margin-bottom: 28px;">{T('thanks.body')}</p>
+    <a href="/" class="btn btn-secondary">{T('thanks.backHome')}</a>
+  </div>
+</VendorFormLayout>

@@ -1,0 +1,58 @@
+---
+export const prerender = false;
+
+import VendorFormLayout from '../../layouts/VendorFormLayout.astro';
+import VendorFormFields from '../../components/VendorFormFields.astro';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frVendorForm, enVendorForm } from '../../i18n/vendor-form';
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frVendorForm, enVendorForm);
+
+const url = new URL(Astro.request.url);
+const errCode = url.searchParams.get('error');
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'),
+  missing_draft: T('error.missing_draft'),
+  phone_required: T('error.phone_required'),
+  shipping_missing: T('error.shipping_missing'),
+  certify: T('error.certify'),
+  file_cra: T('error.file_cra'),
+  file_hc: T('error.file_hc'),
+  file_bank: T('error.file_bank'),
+  file_type: T('error.file_type'),
+  file_size: T('error.file_size'),
+  unknown: T('error.unknown'),
+};
+
+const blankValues = {
+  company_name: '', address: '', city: '', province: '', postal_code: '',
+  contact_person: '', phone: '', email: '',
+  shipping_same_as_billing: true, shipping_address: '', shipping_city: '',
+  shipping_province: '', shipping_postal_code: '',
+  sales_contact_name: '', sales_contact_email: '', sales_contact_phone: '',
+  qa_contact_name: '', qa_contact_email: '', qa_contact_phone: '',
+  accounting_contact_email: '', accounting_contact_phone: '',
+  business_number: '', gst_hst_number: '', qst_number: '',
+  bank_institution_number: '', bank_transit_number: '', bank_account_number: '', bank_address: '',
+  production_type: null, cultivation_methods: [], lighting_type: '', medium_type: '',
+  nutrient_type: '', cultivar_name: '', existing_coas: null, starting_material: [],
+  pesticides_used: '',
+  certified_by_name: '', certified_by_title: '',
+};
+---
+<VendorFormLayout title={T('pageTitle')}>
+  <h1>{T('heading')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('intro')}</p>
+
+  {errCode && (
+    <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+  )}
+
+  <VendorFormFields
+    T={T}
+    action="/api/vendor/submit"
+    values={blankValues}
+    hasFiles={{ cra: false, hc: false, bank: false }}
+  />
+</VendorFormLayout>

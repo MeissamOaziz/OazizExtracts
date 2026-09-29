@@ -1,0 +1,333 @@
+---
+// Shared form body for the public vendor qualification form — used both by
+// the blank /fournisseurs page and the /fournisseurs/brouillon/[token]
+// resume page, so the (long) field markup isn't duplicated between the two.
+import type { VendorFormDict } from '../i18n/vendor-form';
+
+interface VendorFormValues {
+  company_name: string; address: string; city: string; province: string; postal_code: string;
+  contact_person: string; phone: string; email: string;
+  shipping_same_as_billing: boolean; shipping_address: string; shipping_city: string;
+  shipping_province: string; shipping_postal_code: string;
+  sales_contact_name: string; sales_contact_email: string; sales_contact_phone: string;
+  qa_contact_name: string; qa_contact_email: string; qa_contact_phone: string;
+  accounting_contact_email: string; accounting_contact_phone: string;
+  business_number: string; gst_hst_number: string; qst_number: string;
+  bank_institution_number: string; bank_transit_number: string; bank_account_number: string; bank_address: string;
+  production_type: string | null; cultivation_methods: string[]; lighting_type: string; medium_type: string;
+  nutrient_type: string; cultivar_name: string; existing_coas: boolean | null; starting_material: string[];
+  pesticides_used: string;
+  certified_by_name: string; certified_by_title: string;
+}
+
+interface Props {
+  T: (key: keyof VendorFormDict) => string;
+  action: string;
+  values: VendorFormValues;
+  hasFiles: { cra: boolean; hc: boolean; bank: boolean };
+  hiddenFields?: Record<string, string>;
+}
+
+const { T, action, values: v, hasFiles, hiddenFields = {} } = Astro.props;
+
+const hasMethod = (code: string) => v.cultivation_methods.includes(code);
+const hasMaterial = (code: string) => v.starting_material.includes(code);
+---
+<form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form">
+  {Object.entries(hiddenFields).map(([k, val]) => <input type="hidden" name={k} value={val} />)}
+
+  <div class="section-hdr">
+    <h2>{T('section.contacts.title')}</h2>
+    <p>{T('section.contacts.desc')}</p>
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="sales_contact_name">{T('label.salesContactName')}</label>
+      <input type="text" id="sales_contact_name" name="sales_contact_name" value={v.sales_contact_name} required />
+    </div>
+    <div class="form-row">
+      <label for="sales_contact_email">{T('label.salesContactEmail')}</label>
+      <input type="email" id="sales_contact_email" name="sales_contact_email" value={v.sales_contact_email} required />
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="sales_contact_phone">{T('label.salesContactPhone')}</label>
+    <input type="tel" id="sales_contact_phone" name="sales_contact_phone" value={v.sales_contact_phone} class="contact-phone" />
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="qa_contact_name">{T('label.qaContactName')}</label>
+      <input type="text" id="qa_contact_name" name="qa_contact_name" value={v.qa_contact_name} required />
+    </div>
+    <div class="form-row">
+      <label for="qa_contact_email">{T('label.qaContactEmail')}</label>
+      <input type="email" id="qa_contact_email" name="qa_contact_email" value={v.qa_contact_email} required />
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="qa_contact_phone">{T('label.qaContactPhone')}</label>
+    <input type="tel" id="qa_contact_phone" name="qa_contact_phone" value={v.qa_contact_phone} class="contact-phone" />
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="accounting_contact_email">{T('label.accountingContactEmail')}</label>
+      <input type="email" id="accounting_contact_email" name="accounting_contact_email" value={v.accounting_contact_email} required />
+    </div>
+    <div class="form-row">
+      <label for="accounting_contact_phone">{T('label.accountingContactPhone')}</label>
+      <input type="tel" id="accounting_contact_phone" name="accounting_contact_phone" value={v.accounting_contact_phone} class="contact-phone" />
+    </div>
+  </div>
+  <div id="phone-error" class="hint" style="color: var(--p-danger); display: none;">{T('error.phone_required')}</div>
+
+  <div class="section-hdr"><h2>{T('section.company.title')}</h2></div>
+  <div class="form-row">
+    <label for="company_name">{T('label.companyName')}</label>
+    <input type="text" id="company_name" name="company_name" value={v.company_name} required />
+  </div>
+  <div class="form-row">
+    <label for="address">{T('label.address')}</label>
+    <input type="text" id="address" name="address" value={v.address} required />
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="city">{T('label.city')}</label>
+      <input type="text" id="city" name="city" value={v.city} required />
+    </div>
+    <div class="form-row">
+      <label for="province">{T('label.province')}</label>
+      <input type="text" id="province" name="province" value={v.province} required />
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="postal_code">{T('label.postalCode')}</label>
+    <input type="text" id="postal_code" name="postal_code" value={v.postal_code} required />
+  </div>
+  <div class="form-row">
+    <label for="contact_person">{T('label.contactPerson')}</label>
+    <input type="text" id="contact_person" name="contact_person" value={v.contact_person} required />
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="phone">{T('label.phone')}</label>
+      <input type="tel" id="phone" name="phone" value={v.phone} required />
+    </div>
+    <div class="form-row">
+      <label for="email">{T('label.email')}</label>
+      <input type="email" id="email" name="email" value={v.email} required />
+    </div>
+  </div>
+
+  <div class="section-hdr"><h2>{T('section.shipping.title')}</h2></div>
+  <div class="form-row check-row">
+    <input type="checkbox" id="shipping_same_as_billing" name="shipping_same_as_billing" value="1" checked={v.shipping_same_as_billing} />
+    <label for="shipping_same_as_billing">{T('label.shippingSame')}</label>
+  </div>
+  <div id="shipping-fields" style={v.shipping_same_as_billing ? 'display:none;' : ''}>
+    <div class="form-row">
+      <label for="shipping_address">{T('label.shippingAddress')}</label>
+      <input type="text" id="shipping_address" name="shipping_address" value={v.shipping_address} />
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="shipping_city">{T('label.shippingCity')}</label>
+        <input type="text" id="shipping_city" name="shipping_city" value={v.shipping_city} />
+      </div>
+      <div class="form-row">
+        <label for="shipping_province">{T('label.shippingProvince')}</label>
+        <input type="text" id="shipping_province" name="shipping_province" value={v.shipping_province} />
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="shipping_postal_code">{T('label.shippingPostalCode')}</label>
+      <input type="text" id="shipping_postal_code" name="shipping_postal_code" value={v.shipping_postal_code} />
+    </div>
+  </div>
+  <div id="shipping-error" class="hint" style="color: var(--p-danger); display: none;">{T('error.shipping_missing')}</div>
+
+  <div class="section-hdr"><h2>{T('section.tax.title')}</h2></div>
+  <div class="form-row">
+    <label for="business_number">{T('label.businessNumber')}</label>
+    <input type="text" id="business_number" name="business_number" value={v.business_number} required />
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="gst_hst_number">{T('label.gstHst')}</label>
+      <input type="text" id="gst_hst_number" name="gst_hst_number" value={v.gst_hst_number} required />
+    </div>
+    <div class="form-row">
+      <label for="qst_number">{T('label.qst')}</label>
+      <input type="text" id="qst_number" name="qst_number" value={v.qst_number} />
+    </div>
+  </div>
+
+  <div class="section-hdr">
+    <h2>{T('section.banking.title')}</h2>
+    <p>{T('section.banking.desc')}</p>
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="bank_institution_number">{T('label.bankInstitution')}</label>
+      <input type="text" id="bank_institution_number" name="bank_institution_number" value={v.bank_institution_number} required />
+    </div>
+    <div class="form-row">
+      <label for="bank_transit_number">{T('label.bankTransit')}</label>
+      <input type="text" id="bank_transit_number" name="bank_transit_number" value={v.bank_transit_number} required />
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="bank_account_number">{T('label.bankAccount')}</label>
+    <input type="text" id="bank_account_number" name="bank_account_number" value={v.bank_account_number} required />
+  </div>
+  <div class="form-row">
+    <label for="bank_address">{T('label.bankAddress')}</label>
+    <input type="text" id="bank_address" name="bank_address" value={v.bank_address} required />
+  </div>
+  <div class="form-row">
+    <label for="file_bank_proof">{T('label.bankProofFile')}</label>
+    <input type="file" id="file_bank_proof" name="file_bank_proof" accept="application/pdf,image/png,image/jpeg" required={!hasFiles.bank} />
+    <div class="hint">{hasFiles.bank ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
+  </div>
+
+  <div class="section-hdr"><h2>{T('section.licenses.title')}</h2></div>
+  <div class="form-row">
+    <label for="file_cra_license">{T('label.craLicenseFile')}</label>
+    <input type="file" id="file_cra_license" name="file_cra_license" accept="application/pdf,image/png,image/jpeg" required={!hasFiles.cra} />
+    <div class="hint">{hasFiles.cra ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
+  </div>
+  <div class="form-row">
+    <label for="file_health_canada_license">{T('label.hcLicenseFile')}</label>
+    <input type="file" id="file_health_canada_license" name="file_health_canada_license" accept="application/pdf,image/png,image/jpeg" required={!hasFiles.hc} />
+    <div class="hint">{hasFiles.hc ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
+  </div>
+
+  <div class="section-hdr"><h2>{T('section.culture.title')}</h2></div>
+  <div class="form-row">
+    <label>{T('label.productionType')}</label>
+    <div class="radio-group">
+      <label><input type="radio" name="production_type" value="indoor" checked={v.production_type === 'indoor'} /> {T('option.indoor')}</label>
+      <label><input type="radio" name="production_type" value="outdoor" checked={v.production_type === 'outdoor'} /> {T('option.outdoor')}</label>
+      <label><input type="radio" name="production_type" value="greenhouse" checked={v.production_type === 'greenhouse'} /> {T('option.greenhouse')}</label>
+      <label><input type="radio" name="production_type" value="hybrid" checked={v.production_type === 'hybrid'} /> {T('option.hybrid')}</label>
+    </div>
+  </div>
+  <div class="form-row">
+    <label>{T('label.cultivationMethod')}</label>
+    <div class="checkbox-group">
+      <label><input type="checkbox" name="cultivation_methods" value="sog" checked={hasMethod('sog')} /> {T('option.sog')}</label>
+      <label><input type="checkbox" name="cultivation_methods" value="hydroponic" checked={hasMethod('hydroponic')} /> {T('option.hydroponic')}</label>
+      <label><input type="checkbox" name="cultivation_methods" value="aquaponic" checked={hasMethod('aquaponic')} /> {T('option.aquaponic')}</label>
+      <label><input type="checkbox" name="cultivation_methods" value="aeroponic" checked={hasMethod('aeroponic')} /> {T('option.aeroponic')}</label>
+      <label><input type="checkbox" name="cultivation_methods" value="regenerative" checked={hasMethod('regenerative')} /> {T('option.regenerative')}</label>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="lighting_type">{T('label.lightingType')}</label>
+      <input type="text" id="lighting_type" name="lighting_type" value={v.lighting_type} />
+    </div>
+    <div class="form-row">
+      <label for="medium_type">{T('label.mediumType')}</label>
+      <input type="text" id="medium_type" name="medium_type" value={v.medium_type} />
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="nutrient_type">{T('label.nutrientType')}</label>
+      <input type="text" id="nutrient_type" name="nutrient_type" value={v.nutrient_type} />
+    </div>
+    <div class="form-row">
+      <label for="cultivar_name">{T('label.cultivarName')}</label>
+      <input type="text" id="cultivar_name" name="cultivar_name" value={v.cultivar_name} />
+    </div>
+  </div>
+  <div class="form-row">
+    <label>{T('label.existingCoas')}</label>
+    <div class="radio-group">
+      <label><input type="radio" name="existing_coas" value="yes" checked={v.existing_coas === true} /> {T('option.yes')}</label>
+      <label><input type="radio" name="existing_coas" value="no" checked={v.existing_coas === false} /> {T('option.no')}</label>
+    </div>
+  </div>
+  <div class="form-row">
+    <label>{T('label.startingMaterial')}</label>
+    <div class="checkbox-group">
+      <label><input type="checkbox" name="starting_material" value="clone" checked={hasMaterial('clone')} /> {T('option.clone')}</label>
+      <label><input type="checkbox" name="starting_material" value="seed" checked={hasMaterial('seed')} /> {T('option.seed')}</label>
+      <label><input type="checkbox" name="starting_material" value="tissue_culture" checked={hasMaterial('tissue_culture')} /> {T('option.tissueCulture')}</label>
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="pesticides_used">{T('label.pesticidesUsed')}</label>
+    <textarea id="pesticides_used" name="pesticides_used" rows="3">{v.pesticides_used}</textarea>
+  </div>
+
+  <div class="section-hdr"><h2>{T('section.certify.title')}</h2></div>
+  <div class="two-col">
+    <div class="form-row">
+      <label for="certified_by_name">{T('label.certifiedByName')}</label>
+      <input type="text" id="certified_by_name" name="certified_by_name" value={v.certified_by_name} required />
+    </div>
+    <div class="form-row">
+      <label for="certified_by_title">{T('label.certifiedByTitle')}</label>
+      <input type="text" id="certified_by_title" name="certified_by_title" value={v.certified_by_title} required />
+    </div>
+  </div>
+  <div class="form-row check-row">
+    <input type="checkbox" id="certified" name="certified" value="1" required />
+    <label for="certified">{T('certifyLabel')}</label>
+  </div>
+
+  <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
+    <button type="submit" name="action" value="draft" formnovalidate class="btn btn-secondary" id="btn-save-draft" style="flex: 1;">
+      {T('saveDraftBtn')}
+    </button>
+    <button type="submit" name="action" value="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;">
+      {T('submitBtn')}
+    </button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    const form = document.getElementById('vendor-form') as HTMLFormElement | null;
+    const shippingCheckbox = document.getElementById('shipping_same_as_billing') as HTMLInputElement | null;
+    const shippingFields = document.getElementById('shipping-fields');
+    const shippingError = document.getElementById('shipping-error');
+    const phoneError = document.getElementById('phone-error');
+    if (!form || !shippingCheckbox || !shippingFields) return;
+
+    shippingCheckbox.addEventListener('change', () => {
+      shippingFields.style.display = shippingCheckbox.checked ? 'none' : '';
+    });
+
+    form.addEventListener('submit', (e: SubmitEvent) => {
+      const submitter = e.submitter as HTMLButtonElement | null;
+      if (!submitter || submitter.value !== 'submit') return; // draft save skips these extra checks
+
+      let ok = true;
+
+      const phones = Array.from(form.querySelectorAll<HTMLInputElement>('.contact-phone'));
+      const anyPhone = phones.some((p) => p.value.trim().length > 0);
+      if (phoneError) phoneError.style.display = anyPhone ? 'none' : 'block';
+      if (!anyPhone) ok = false;
+
+      if (!shippingCheckbox.checked) {
+        const shipAddr = (document.getElementById('shipping_address') as HTMLInputElement)?.value.trim();
+        const shipCity = (document.getElementById('shipping_city') as HTMLInputElement)?.value.trim();
+        const shipProv = (document.getElementById('shipping_province') as HTMLInputElement)?.value.trim();
+        const shipPostal = (document.getElementById('shipping_postal_code') as HTMLInputElement)?.value.trim();
+        const shippingOk = !!(shipAddr && shipCity && shipProv && shipPostal);
+        if (shippingError) shippingError.style.display = shippingOk ? 'none' : 'block';
+        if (!shippingOk) ok = false;
+      } else if (shippingError) {
+        shippingError.style.display = 'none';
+      }
+
+      if (!ok) {
+        e.preventDefault();
+        const firstVisible = phoneError?.style.display === 'block' ? phoneError : shippingError;
+        firstVisible?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  })();
+</script>

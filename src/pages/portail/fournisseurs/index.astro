@@ -1,0 +1,99 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frFournisseursIndex, enFournisseursIndex } from '../../../i18n/portail/fournisseurs-index';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFournisseursIndex, enFournisseursIndex);
+
+// vendor_submissions / vendor_submission_approvals are RLS-denied to all
+// client roles (admin-only), same pattern as signer_tokens.
+const admin = getAdminClient();
+
+const { data: submissions } = await admin
+  .from('vendor_submissions')
+  .select('id, submitted_at, company_name, contact_person')
+  .eq('status', 'submitted')
+  .order('submitted_at', { ascending: false })
+  .limit(100);
+
+const submissionIds = (submissions ?? []).map((s) => s.id);
+type ApprovalRow = { vendor_submission_id: string; approved_at: string | null };
+let approvalRows: ApprovalRow[] = [];
+if (submissionIds.length > 0) {
+  const { data } = await admin
+    .from('vendor_submission_approvals')
+    .select('vendor_submission_id, approved_at')
+    .in('vendor_submission_id', submissionIds);
+  approvalRows = (data ?? []) as ApprovalRow[];
+}
+
+const approvalsBySubmission = new Map<string, { approved: number; total: number }>();
+for (const row of approvalRows) {
+  const cur = approvalsBySubmission.get(row.vendor_submission_id) ?? { approved: 0, total: 0 };
+  cur.total += 1;
+  if (row.approved_at) cur.approved += 1;
+  approvalsBySubmission.set(row.vendor_submission_id, cur);
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+---
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">
+      {T('backLink')}
+    </a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  <div class="card" style="padding: 0;">
+    {(!submissions || submissions.length === 0) ? (
+      <div class="empty-state">
+        <p>{T('emptyState')}</p>
+      </div>
+    ) : (
+      <table class="data">
+        <thead>
+          <tr>
+            <th>{T('th.date')}</th>
+            <th>{T('th.company')}</th>
+            <th>{T('th.contact')}</th>
+            <th>{T('th.approvals')}</th>
+            <th>{T('th.status')}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {submissions.map((s) => {
+            const a = approvalsBySubmission.get(s.id) ?? { approved: 0, total: 0 };
+            const fullyApproved = a.total > 0 && a.approved === a.total;
+            return (
+              <tr>
+                <td>{formatDate(s.submitted_at)}</td>
+                <td><a href={`/portail/fournisseurs/${s.id}`}><strong>{s.company_name}</strong></a></td>
+                <td>{s.contact_person || '—'}</td>
+                <td>{a.approved} / {a.total}</td>
+                <td>
+                  <span class={`badge ${fullyApproved ? 'badge-complete' : 'badge-sent'}`}>
+                    {fullyApproved ? T('status.approved') : T('status.pending')}
+                  </span>
+                </td>
+                <td style="text-align: right;"><a href={`/portail/fournisseurs/${s.id}`} style="font-size: .85rem;">{T('openLink')}</a></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </div>
+</PortailLayout>

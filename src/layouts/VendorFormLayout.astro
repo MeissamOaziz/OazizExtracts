@@ -1,0 +1,136 @@
+---
+// Minimal public layout for the unauthenticated vendor onboarding form.
+// Deliberately skips the main site's AgeGate/Header/BottomBanner (this is a
+// B2B intake form, not cannabis retail content) and the portal's staff nav —
+// just branding, a language switch, and the form itself.
+import { getPortailLocale } from '../lib/portail-i18n';
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+
+const locale = getPortailLocale(Astro.cookies);
+const currentPath = Astro.url.pathname + Astro.url.search;
+---
+<!DOCTYPE html>
+<html lang={locale === 'en' ? 'en' : 'fr-CA'}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — Oaziz Extracts</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style is:global>
+      :root {
+        --p-bg: #f6f7f9;
+        --p-card: #ffffff;
+        --p-border: #e2e5eb;
+        --p-text: #1a1d24;
+        --p-muted: #6b7280;
+        --p-accent: #d05826;
+        --p-accent-hover: #b64a1e;
+        --p-danger: #b91c1c;
+        --p-success: #15803d;
+        --p-shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--p-bg);
+        color: var(--p-text);
+        line-height: 1.5;
+        min-height: 100vh;
+      }
+      a { color: var(--p-accent); }
+      .v-shell { max-width: 820px; margin: 0 auto; padding: 0 24px 64px; }
+      .v-header {
+        background: var(--p-card);
+        border-bottom: 1px solid var(--p-border);
+        padding: 16px 0;
+        margin-bottom: 32px;
+      }
+      .v-header-inner {
+        max-width: 820px; margin: 0 auto; padding: 0 24px;
+        display: flex; align-items: center; justify-content: space-between; gap: 24px;
+      }
+      .v-brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1rem; color: var(--p-text); text-decoration: none; }
+      .v-brand img { height: 32px; width: auto; }
+      .v-lang-switch { display: flex; gap: 2px; font-size: .8rem; font-weight: 600; }
+      .v-lang-switch a { color: var(--p-muted); text-decoration: none; padding: 4px 8px; border-radius: 5px; }
+      .v-lang-switch a:hover { background: var(--p-bg); color: var(--p-text); }
+      .v-lang-switch a.active { color: var(--p-accent); background: rgba(208, 88, 38, .08); }
+      h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; }
+      h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+      .card { background: var(--p-card); border: 1px solid var(--p-border); border-radius: 10px; padding: 24px; box-shadow: var(--p-shadow); }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 11px 22px; border-radius: 8px; font-weight: 600; font-size: .95rem;
+        border: 1px solid transparent; cursor: pointer; text-decoration: none;
+        font-family: inherit; transition: background .15s ease, border-color .15s ease;
+      }
+      .btn-primary { background: var(--p-accent); color: #fff; }
+      .btn-primary:hover:not(:disabled) { background: var(--p-accent-hover); }
+      .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+      .btn-secondary { background: #fff; color: var(--p-text); border-color: var(--p-border); }
+      .btn-secondary:hover { background: var(--p-bg); }
+      label { display: block; font-weight: 500; font-size: .88rem; margin-bottom: 6px; color: var(--p-text); }
+      input[type="text"], input[type="email"], input[type="tel"], input[type="date"],
+      input[type="file"], select, textarea {
+        width: 100%; padding: 9px 12px; border: 1px solid var(--p-border);
+        border-radius: 6px; font-size: .95rem; background: #fff;
+        font-family: inherit; color: var(--p-text);
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: none; border-color: var(--p-accent);
+        box-shadow: 0 0 0 3px rgba(208, 88, 38, 0.15);
+      }
+      .form-row { margin-bottom: 18px; }
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+      @media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } }
+      .hint { font-size: .82rem; color: var(--p-muted); margin-top: 4px; }
+      .section-hdr { margin: 36px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--p-accent); }
+      .section-hdr p { color: var(--p-muted); font-size: .88rem; margin-top: 2px; }
+      .check-row { display: flex; align-items: flex-start; gap: 10px; }
+      .check-row input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+      .check-row label { font-weight: 400; margin-bottom: 0; }
+      .radio-group, .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 4px; }
+      .radio-group label, .checkbox-group label {
+        display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; cursor: pointer;
+      }
+      .flash { padding: 12px 16px; border-radius: 8px; font-size: .9rem; margin-bottom: 20px; }
+      .flash-error { background: #fef2f2; border: 1px solid #fecaca; color: var(--p-danger); }
+      .flash-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: var(--p-success); }
+    </style>
+  </head>
+  <body>
+    <header class="v-header">
+      <div class="v-header-inner">
+        <a href="/" class="v-brand">
+          <img src="/images/Oaziz-Logo.webp" alt="" />
+          <span>Oaziz Extracts</span>
+        </a>
+        <div class="v-lang-switch" role="group" aria-label="Language / Langue">
+          <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
+          <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
+        </div>
+      </div>
+    </header>
+    <main class="v-shell">
+      <slot />
+    </main>
+    <script>
+      document.querySelectorAll<HTMLAnchorElement>('a[data-set-locale]').forEach((link) => {
+        link.addEventListener('click', () => {
+          const loc = link.dataset.setLocale;
+          if (loc === 'fr' || loc === 'en') {
+            document.cookie = `portail_locale=${loc}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
