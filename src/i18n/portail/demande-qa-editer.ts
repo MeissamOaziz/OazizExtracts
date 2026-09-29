@@ -12,6 +12,14 @@ export const frDemandeQaEditer = {
 
   resignNotice: 'Cette demande a déjà été signée par vous en tant que vérificateur AQ. Les autres signatures déjà collectées ne seront pas touchées, mais vous devez apposer une nouvelle copie de votre propre signature (avec la date du jour) pour approuver cette correction.',
 
+  'choice.heading': 'Cette demande a déjà des signatures collectées',
+  'choice.intro': 'Voulez-vous renvoyer la demande corrigée pour signature à tous les signataires, ou enregistrer la correction sans renvoyer ?',
+  'choice.resend': 'Renvoyer pour signature à tous',
+  'choice.keep': 'Ne pas renvoyer',
+  'choice.change': '← Changer de choix',
+  confirmResend: 'Renvoyer la demande corrigée pour signature à tous ? Les anciens liens de signature cesseront de fonctionner.',
+  keepNote: "Les signatures déjà recueillies ne seront pas touchées. Le processus de signature normal continuera là où il était rendu.",
+
   'label.formDate': 'Date (JJ/MM/AAAA)',
   'label.productName': 'Nom du produit / souche',
   'label.productType': 'Type de produit',
@@ -35,8 +43,8 @@ export const frDemandeQaEditer = {
   btnClear: 'Effacer',
   statusSending: 'Enregistrement en cours…',
 
-  'submit.plain': 'Enregistrer la correction',
-  'submit.resign': 'Approuver et signer la correction',
+  'submit.save': 'Enregistrer la correction',
+  'submit.complete': 'Approuver et signer la correction',
 
   errorImageTooLarge: 'Image trop volumineuse.',
   'error.missing': 'Veuillez remplir tous les champs obligatoires.',
@@ -55,6 +63,14 @@ export const enDemandeQaEditer: Partial<Record<keyof DemandeQaEditerDict, string
   currentStatus: 'Current status:',
 
   resignNotice: 'This request has already been signed by you as QA verifier. Other signatures already collected will not be touched, but you must apply a fresh copy of your own signature (with today\'s date) to approve this correction.',
+
+  'choice.heading': 'This request already has signatures collected',
+  'choice.intro': 'Do you want to resend the corrected request for signature to everyone, or save the correction without resending?',
+  'choice.resend': 'Resend for signature to everyone',
+  'choice.keep': "Don't resend",
+  'choice.change': '← Change choice',
+  confirmResend: 'Resend the corrected request for signature to everyone? Old signature links will stop working.',
+  keepNote: 'Signatures already collected will not be touched. The normal signing process will continue where it left off.',
 
   'label.formDate': 'Date (DD/MM/YYYY)',
   'label.productName': 'Product name / strain',
@@ -79,8 +95,8 @@ export const enDemandeQaEditer: Partial<Record<keyof DemandeQaEditerDict, string
   btnClear: 'Clear',
   statusSending: 'Saving…',
 
-  'submit.plain': 'Save correction',
-  'submit.resign': 'Approve and sign the correction',
+  'submit.save': 'Save correction',
+  'submit.complete': 'Approve and sign the correction',
 
   errorImageTooLarge: 'Image too large.',
   'error.missing': 'Please fill in all required fields.',

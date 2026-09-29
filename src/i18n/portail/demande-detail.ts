@@ -19,6 +19,8 @@ export const frDemandeDetail = {
   'info.edited': 'Modifications enregistrées. La demande est repassée en brouillon — cliquez « Envoyer pour signature » pour réémettre les liens.',
   'info.signed': 'Merci, votre signature a été enregistrée.',
   'info.resent': 'Courriel finalisé renvoyé à la liste de distribution.',
+  'info.resent_after_edit': 'Modifications enregistrées. De nouveaux liens de signature ont été envoyés à tous les signataires.',
+  'info.qa_resent': 'Correction enregistrée. De nouveaux liens de signature ont été envoyés à tous les signataires.',
 
   'error.not_creator': 'Seul le créateur de la demande peut effectuer cette action.',
   'error.already_sent': 'Cette demande a déjà été envoyée.',
@@ -103,6 +105,8 @@ export const enDemandeDetail: Partial<Record<keyof DemandeDetailDict, string>> =
   'info.edited': 'Changes saved. The request is back in draft — click "Send for signature" to reissue the links.',
   'info.signed': 'Thank you, your signature has been recorded.',
   'info.resent': 'Finalized email resent to the distribution list.',
+  'info.resent_after_edit': 'Changes saved. New signature links have been sent to everyone.',
+  'info.qa_resent': 'Correction saved. New signature links have been sent to everyone.',
 
   'error.not_creator': 'Only the creator of the request can perform this action.',
   'error.already_sent': 'This request has already been sent.',

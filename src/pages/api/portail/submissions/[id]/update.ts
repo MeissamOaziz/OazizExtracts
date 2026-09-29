@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { storagePathFor } from '../../../../../lib/pdf';
+import { dispatchSignatureInvites } from '../../../../../lib/send-signatures';
 
 export const prerender = false;
 
@@ -51,6 +52,19 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
   }
 
   const admin = getAdminClient();
+
+  // Was any signature already collected on the version we're about to overwrite?
+  // If so, the corrected document must go back out to everyone for a fresh
+  // signature once we're done saving — old links are invalidated below and
+  // replaced with new ones (dispatchSignatureInvites mints fresh tokens + sends
+  // new invite emails), rather than leaving the request sitting in draft.
+  const { data: existingSignedRows } = await admin
+    .from('signers')
+    .select('id')
+    .eq('submission_id', id)
+    .eq('status', 'signed')
+    .limit(1);
+  const hadAnySignature = (existingSignedRows?.length ?? 0) > 0;
 
   // Re-lookup Jorge + Stephane in case IDs changed (they shouldn't, but keep
   // parity with the create endpoint).
@@ -120,8 +134,19 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect }) => 
     metadata: {
       previous_status: sub.status,
       participant_count: participants.length,
+      resent: hadAnySignature,
     },
   });
+
+  if (hadAnySignature) {
+    const result = await dispatchSignatureInvites(id);
+    if (!result.ok) {
+      // Corrected data is already saved as a draft at this point — the creator
+      // can still send manually from the detail page.
+      return redirect(`/portail/demande/${id}?error=${result.error}`, 303);
+    }
+    return redirect(`/portail/demande/${id}?info=resent_after_edit`, 303);
+  }
 
   return redirect(`/portail/demande/${id}?info=edited`, 303);
 };

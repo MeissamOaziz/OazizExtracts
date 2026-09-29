@@ -17,11 +17,11 @@ export const frDemandeEditer = {
 
   'warning.label': '⚠ Attention :',
   'warning.intro': 'cette demande a déjà été envoyée pour signature. Enregistrer les modifications va :',
-  'warning.item1': 'Supprimer tous les jetons de signature actuels (les liens envoyés cesseront de fonctionner)',
+  'warning.item1': 'Invalider tous les liens de signature déjà envoyés',
   'warning.item2': 'Effacer toutes les signatures déjà collectées',
   'warning.item3': "Supprimer le PDF signé s'il existait",
-  'warning.item4Before': "Remettre la demande à l'état ",
-  'warning.item4After': ' — vous devrez cliquer « Envoyer pour signature » à nouveau',
+  'warning.item4': 'Envoyer automatiquement de nouveaux liens de signature à tous les signataires (aucune action supplémentaire requise)',
+  'warning.item4NoSignatureYet': "Remettre la demande à l'état Brouillon — vous devrez cliquer « Envoyer pour signature » à nouveau",
 
   'error.missing': 'Veuillez remplir tous les champs obligatoires.',
   'error.no_participants': 'Sélectionnez au moins un participant.',
@@ -29,6 +29,7 @@ export const frDemandeEditer = {
   'error.unknown': 'Une erreur est survenue lors de la mise à jour.',
 
   confirmDialog: 'Confirmer la modification ? Toutes les signatures actuelles seront effacées.',
+  confirmDialogResend: 'Confirmer la modification ? De nouveaux liens de signature seront envoyés à tous les signataires — les anciens liens cesseront de fonctionner.',
 
   'label.formDate': 'Date (JJ/MM/AAAA)',
   'label.initiatorName': "Nom de l'initiateur",
@@ -50,6 +51,7 @@ export const frDemandeEditer = {
 
   'submit.draft': 'Enregistrer et repasser en brouillon',
   'submit.normal': 'Enregistrer les modifications',
+  'submit.resend': 'Enregistrer et renvoyer pour signature à tous',
 } as const;
 
 export type DemandeEditerDict = typeof frDemandeEditer;
@@ -63,11 +65,11 @@ export const enDemandeEditer: Partial<Record<keyof DemandeEditerDict, string>> =
 
   'warning.label': '⚠ Warning:',
   'warning.intro': 'this request has already been sent for signature. Saving the changes will:',
-  'warning.item1': 'Delete all current signature tokens (links already sent will stop working)',
+  'warning.item1': 'Invalidate all signature links already sent',
   'warning.item2': 'Clear all signatures already collected',
   'warning.item3': 'Delete the signed PDF if one existed',
-  'warning.item4Before': 'Reset the request to ',
-  'warning.item4After': ' status — you will need to click "Send for signature" again',
+  'warning.item4': 'Automatically send new signature links to everyone (no extra step needed)',
+  'warning.item4NoSignatureYet': 'Reset the request to Draft status — you will need to click "Send for signature" again',
 
   'error.missing': 'Please fill in all required fields.',
   'error.no_participants': 'Select at least one participant.',
@@ -75,6 +77,7 @@ export const enDemandeEditer: Partial<Record<keyof DemandeEditerDict, string>> =
   'error.unknown': 'An error occurred while updating.',
 
   confirmDialog: 'Confirm the change? All current signatures will be cleared.',
+  confirmDialogResend: 'Confirm the change? New signature links will be sent to everyone — old links will stop working.',
 
   'label.formDate': 'Date (DD/MM/YYYY)',
   'label.initiatorName': "Initiator's name",
@@ -96,4 +99,5 @@ export const enDemandeEditer: Partial<Record<keyof DemandeEditerDict, string>> =
 
   'submit.draft': 'Save and revert to draft',
   'submit.normal': 'Save changes',
+  'submit.resend': 'Save and resend for signature to everyone',
 };

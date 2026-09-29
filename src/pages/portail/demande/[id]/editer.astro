@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import PortailLayout from '../../../../layouts/PortailLayout.astro';
-import { createServerClient, currentStaff } from '../../../../lib/supabase';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frDemandeEditer, enDemandeEditer } from '../../../../i18n/portail/demande-editer';
 import { frCommon, enCommon } from '../../../../i18n/portail/common';
@@ -40,6 +40,14 @@ const { data: currentParticipants } = await supabase
   .select('participant_staff_id')
   .eq('submission_id', id);
 const currentPartIds = new Set((currentParticipants ?? []).map((r) => r.participant_staff_id));
+
+const { data: signedRows } = await getAdminClient()
+  .from('signers')
+  .select('id')
+  .eq('submission_id', id)
+  .eq('status', 'signed')
+  .limit(1);
+const hasAnySignature = (signedRows?.length ?? 0) > 0;
 
 const { data: allStaff } = await supabase
   .from('staff')
@@ -82,7 +90,11 @@ const isSigned = submission.status !== 'draft';
         <li>{T('warning.item1')}</li>
         <li>{T('warning.item2')}</li>
         <li>{T('warning.item3')}</li>
-        <li>{T('warning.item4Before')}<strong>{Tc('status.draft')}</strong>{T('warning.item4After')}</li>
+        {hasAnySignature ? (
+          <li>{T('warning.item4')}</li>
+        ) : (
+          <li>{T('warning.item4NoSignatureYet')}</li>
+        )}
       </ul>
     </div>
   )}
@@ -91,7 +103,7 @@ const isSigned = submission.status !== 'draft';
     <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
   )}
 
-  <form method="POST" action={`/api/portail/submissions/${id}/update`} class="card" onsubmit={isSigned ? `return confirm(${JSON.stringify(T('confirmDialog'))});` : undefined}>
+  <form method="POST" action={`/api/portail/submissions/${id}/update`} class="card" onsubmit={isSigned ? `return confirm(${JSON.stringify(hasAnySignature ? T('confirmDialogResend') : T('confirmDialog'))});` : undefined}>
     <div class="form-row">
       <label for="form_date">{T('label.formDate')}</label>
       <input type="date" name="form_date" id="form_date" value={submission.form_date} required />
@@ -188,7 +200,7 @@ const isSigned = submission.status !== 'draft';
 
     <div style="display: flex; gap: 12px; margin-top: 28px;">
       <button type="submit" class="btn btn-primary">
-        {isSigned ? T('submit.draft') : T('submit.normal')}
+        {hasAnySignature ? T('submit.resend') : isSigned ? T('submit.draft') : T('submit.normal')}
       </button>
       <a href={`/portail/demande/${id}`} class="btn btn-secondary" style="margin-left:auto;">{Tc('btn.cancel')}</a>
     </div>

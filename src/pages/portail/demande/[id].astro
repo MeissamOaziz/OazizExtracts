@@ -95,7 +95,9 @@ const infoMessages: Record<string, string> = {
   edited: T('info.edited'),
   signed: T('info.signed'),
   resent: T('info.resent'),
+  resent_after_edit: T('info.resent_after_edit'),
   qa_edited: T('info.qa_edited'),
+  qa_resent: T('info.qa_resent'),
 };
 const errorMessages: Record<string, string> = {
   not_creator: T('error.not_creator'),
@@ -140,6 +142,11 @@ function fmtDate(iso?: string | null): string {
       {hasPendingForMe && (
         <a href={`/portail/demande/${id}/signer`} class="btn btn-primary" title={T('signNowTitle')}>
           {T('signNow')}
+        </a>
+      )}
+      {isQaVerifier && (
+        <a href={`/portail/demande/${id}/qa-editer`} class="btn btn-secondary" title={T('btn.qaEdit')}>
+          {T('btn.qaEdit')}
         </a>
       )}
       {['finalized', 'complete', 'signing', 'sent'].includes(submission.status) && (
@@ -302,14 +309,6 @@ function fmtDate(iso?: string | null): string {
       </table>
     )}
   </div>
-
-  {isQaVerifier && (
-    <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-      <a href={`/portail/demande/${id}/qa-editer`} class="btn btn-secondary">
-        {T('btn.qaEdit')}
-      </a>
-    </div>
-  )}
 
   {isCreator && (
     <div style="display: flex; gap: 12px; flex-wrap: wrap;">
