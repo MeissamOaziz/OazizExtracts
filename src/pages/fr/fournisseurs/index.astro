@@ -1,0 +1,12 @@
+---
+export const prerender = false;
+
+// Vercel's build-time locale routing redirects any unprefixed path to /fr/...
+// when the visitor's browser/network is French-preferring (independent of
+// Accept-Language — observed happening unconditionally in production), so
+// this route must exist even though the page itself already handles FR/EN
+// entirely on its own via the portail_locale cookie. Thin re-export of the
+// real page — same component, no separate content to keep in sync.
+import Page from '../../fournisseurs/index.astro';
+---
+<Page />
