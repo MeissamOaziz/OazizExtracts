@@ -1,0 +1,313 @@
+---
+export const prerender = false;
+
+import VendorFormLayout from '../../../layouts/VendorFormLayout.astro';
+import { getAdminClient } from '../../../lib/supabase';
+import { sha256Hex } from '../../../lib/tokens';
+import { makeT } from '../../../lib/portail-i18n';
+import { frRhPackage, enRhPackage } from '../../../i18n/rh-employee-package';
+
+const { token } = Astro.params;
+if (!token) return Astro.redirect('/');
+
+const admin = getAdminClient();
+const { data: pkg } = await admin
+  .from('hr_employee_packages')
+  .select('id, status, language, new_employee_name, new_employee_email')
+  .eq('access_token_hash', sha256Hex(token))
+  .eq('status', 'sent')
+  .maybeSingle();
+
+const lang = pkg?.language === 'en' ? 'en' : 'fr';
+const T = makeT(lang, frRhPackage, enRhPackage);
+
+const [firstNameGuess, ...lastNameRest] = (pkg?.new_employee_name ?? '').split(' ');
+const lastNameGuess = lastNameRest.join(' ');
+
+const clientStrings = {
+  errorMissing: T('error.missing'),
+  errorAckRequired: T('error.ack_required'),
+  errorSignatureRequired: T('error.signature_required'),
+  errorImageTooLarge: T('error.imageTooLarge'),
+  errorGeneric: T('error.generic'),
+  errorNetwork: T('error.network'),
+  statusSending: T('statusSending'),
+  successTitle: T('success.title'),
+  successBody: T('success.body'),
+};
+---
+<VendorFormLayout title={T('pageTitle')} hideLangSwitch>
+  {!pkg ? (
+    <div class="card" style="text-align: center; padding: 48px 32px;">
+      <p>{T('error.expired_or_submitted')}</p>
+    </div>
+  ) : (
+    <>
+      <h1>{T('heading')}</h1>
+      <p style="color: var(--p-muted); margin-bottom: 24px;">{T('intro')}</p>
+
+      <div id="flash-top"></div>
+
+      <form id="package-form">
+        <div class="card" style="margin-bottom: 16px;">
+          <h2>{T('section.info')}</h2>
+          <div class="two-col" style="margin-top: 14px;">
+            <div class="form-row">
+              <label for="first_name">{T('label.firstName')}</label>
+              <input type="text" id="first_name" name="first_name" required value={firstNameGuess} />
+            </div>
+            <div class="form-row">
+              <label for="last_name">{T('label.lastName')}</label>
+              <input type="text" id="last_name" name="last_name" required value={lastNameGuess} />
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="address">{T('label.address')}</label>
+            <input type="text" id="address" name="address" required />
+          </div>
+          <div class="two-col">
+            <div class="form-row">
+              <label for="phone">{T('label.phone')}</label>
+              <input type="tel" id="phone" name="phone" required />
+            </div>
+            <div class="form-row">
+              <label for="dob">{T('label.dob')}</label>
+              <input type="date" id="dob" name="dob" required />
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="form-row">
+              <label for="sin">{T('label.sin')}</label>
+              <input type="text" id="sin" name="sin" required />
+            </div>
+            <div class="form-row">
+              <label for="email">{T('label.email')}</label>
+              <input type="email" id="email" name="email" required value={pkg.new_employee_email} />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 16px;">
+          <h2>{T('section.emergency')}</h2>
+          <div class="two-col" style="margin-top: 14px;">
+            <div class="form-row">
+              <label for="emergency_first_name">{T('label.emergencyFirstName')}</label>
+              <input type="text" id="emergency_first_name" name="emergency_first_name" required />
+            </div>
+            <div class="form-row">
+              <label for="emergency_last_name">{T('label.emergencyLastName')}</label>
+              <input type="text" id="emergency_last_name" name="emergency_last_name" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="emergency_phone">{T('label.emergencyPhone')}</label>
+            <input type="tel" id="emergency_phone" name="emergency_phone" required />
+          </div>
+          <div class="form-row" style="margin-bottom: 0;">
+            <label for="start_date">{T('label.startDate')}</label>
+            <input type="date" id="start_date" name="start_date" required />
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 16px;">
+          <h2>{T('section.coc')}</h2>
+          <p class="hint" style="margin: 10px 0 14px;">{T('coc.intro')}</p>
+          <a href={`/api/rh/employee-package-coc?token=${encodeURIComponent(token)}`} target="_blank" rel="noopener" class="btn btn-secondary" style="margin-bottom: 16px;">
+            {T('coc.viewLink')}
+          </a>
+          <div class="check-row">
+            <input type="checkbox" id="coc_ack" name="coc_ack" required />
+            <label for="coc_ack">{T('coc.ack')}</label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>{T('section.signature')}</h2>
+          <p class="hint" style="margin: 10px 0 14px;">{T('signature.hint')}</p>
+          <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--p-border);">
+            <button type="button" class="sig-tab active" role="tab" data-method="draw">{T('tabDraw')}</button>
+            <button type="button" class="sig-tab" role="tab" data-method="type">{T('tabType')}</button>
+            <button type="button" class="sig-tab" role="tab" data-method="upload">{T('tabUpload')}</button>
+          </div>
+          <div class="sig-panel" data-panel="draw"><p class="hint" style="margin-bottom: 10px;">{T('drawHint')}</p></div>
+          <div class="sig-panel" data-panel="type" style="display: none;">
+            <p class="hint" style="margin-bottom: 10px;">{T('typeHint')}</p>
+            <input type="text" id="type-input" style="margin-bottom: 12px;" autocomplete="name" />
+          </div>
+          <div class="sig-panel" data-panel="upload" style="display: none;">
+            <p class="hint" style="margin-bottom: 10px;">{T('uploadHint')}</p>
+            <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
+          </div>
+          <div id="pad-wrap" style="border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none;">
+            <canvas id="sig-pad" width="640" height="200" style="display: block; width: 100%; height: 200px; cursor: crosshair;"></canvas>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="btn-clear" class="btn btn-secondary">{T('btnClear')}</button>
+            <button type="button" id="btn-submit" class="btn btn-primary" disabled>{T('btnSubmit')}</button>
+            <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
+          </div>
+          <div id="flash" style="margin-top: 16px;"></div>
+        </div>
+      </form>
+    </>
+  )}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet" />
+
+  <style is:global>
+    .sig-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-family: inherit; font-size: .9rem; font-weight: 500; color: var(--p-muted); cursor: pointer; margin-bottom: -1px; }
+    .sig-tab:hover { color: var(--p-text); }
+    .sig-tab.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  </style>
+
+  <script is:inline define:vars={{ packageId: pkg?.id ?? '', accessToken: token, strings: clientStrings }}>
+    (function () {
+      const form = document.getElementById('package-form');
+      if (!form) return;
+      const canvas = document.getElementById('sig-pad');
+      const ctx2d = canvas.getContext('2d');
+      const btnClear = document.getElementById('btn-clear');
+      const btnSubmit = document.getElementById('btn-submit');
+      const statusEl = document.getElementById('pad-status');
+      const flashEl = document.getElementById('flash');
+      const typeInput = document.getElementById('type-input');
+      const uploadInput = document.getElementById('upload-input');
+      const tabs = Array.from(document.querySelectorAll('.sig-tab'));
+      const panels = Array.from(document.querySelectorAll('.sig-panel'));
+
+      let padW = 0, padH = 0, method = 'draw', hasSignature = false;
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        padW = rect.width; padH = rect.height;
+        canvas.width = padW * dpr; canvas.height = padH * dpr;
+        ctx2d.setTransform(1, 0, 0, 1, 0, 0); ctx2d.scale(dpr, dpr);
+        ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+        ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+      }
+      resizeCanvas();
+
+      function clearCanvas() {
+        ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+        ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+        const dpr = window.devicePixelRatio || 1; ctx2d.scale(dpr, dpr);
+        ctx2d.fillStyle = '#fff'; ctx2d.fillRect(0, 0, padW, padH);
+        ctx2d.lineWidth = 2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+        hasSignature = false; btnSubmit.disabled = true; flashEl.innerHTML = '';
+      }
+
+      let drawing = false, last = null;
+      function pointFrom(evt) { const r = canvas.getBoundingClientRect(); return { x: evt.clientX - r.left, y: evt.clientY - r.top }; }
+      canvas.addEventListener('pointerdown', (e) => { if (method !== 'draw') return; e.preventDefault(); drawing = true; last = pointFrom(e); });
+      canvas.addEventListener('pointermove', (e) => {
+        if (!drawing || method !== 'draw') return; e.preventDefault();
+        const p = pointFrom(e); ctx2d.beginPath(); ctx2d.moveTo(last.x, last.y); ctx2d.lineTo(p.x, p.y); ctx2d.stroke();
+        last = p; hasSignature = true; btnSubmit.disabled = false;
+      });
+      const stopDraw = () => { drawing = false; last = null; };
+      canvas.addEventListener('pointerup', stopDraw); canvas.addEventListener('pointercancel', stopDraw); canvas.addEventListener('pointerleave', stopDraw);
+
+      function renderTypedSignature(text) {
+        clearCanvas();
+        if (!text.trim()) return;
+        ctx2d.fillStyle = '#111'; ctx2d.textBaseline = 'middle';
+        let fontSize = 72; const maxW = padW - 40;
+        do { ctx2d.font = `600 ${fontSize}px 'Dancing Script', 'Segoe Script', cursive`;
+             var m = ctx2d.measureText(text); if (m.width <= maxW) break; fontSize -= 4;
+        } while (fontSize > 24);
+        ctx2d.fillText(text, (padW - m.width) / 2, padH / 2);
+        hasSignature = true; btnSubmit.disabled = false;
+      }
+      typeInput.addEventListener('input', (e) => renderTypedSignature(e.target.value));
+
+      uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) { flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorImageTooLarge + '</div>'; return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            clearCanvas();
+            const r = Math.min(padW / img.width, padH / img.height) * 0.92;
+            const w = img.width * r, h = img.height * r;
+            ctx2d.drawImage(img, (padW - w) / 2, (padH - h) / 2, w, h);
+            hasSignature = true; btnSubmit.disabled = false;
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      tabs.forEach((tab) => tab.addEventListener('click', () => {
+        method = tab.getAttribute('data-method');
+        tabs.forEach((t) => t.classList.toggle('active', t === tab));
+        panels.forEach((p) => p.style.display = p.getAttribute('data-panel') === method ? '' : 'none');
+        canvas.style.cursor = method === 'draw' ? 'crosshair' : 'default';
+        clearCanvas();
+        if (method === 'type' && typeInput.value.trim()) renderTypedSignature(typeInput.value);
+      }));
+
+      btnClear.addEventListener('click', () => { clearCanvas(); if (typeInput) typeInput.value = ''; if (uploadInput) uploadInput.value = ''; });
+
+      function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+      btnSubmit.addEventListener('click', async () => {
+        const required = ['first_name', 'last_name', 'address', 'phone', 'dob', 'sin', 'email', 'emergency_first_name', 'emergency_last_name', 'emergency_phone', 'start_date'];
+        for (const id of required) {
+          if (!val(id)) {
+            flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorMissing + '</div>';
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+        }
+        const ackEl = document.getElementById('coc_ack');
+        if (!ackEl.checked) {
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorAckRequired + '</div>';
+          ackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        if (!hasSignature) {
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorSignatureRequired + '</div>';
+          return;
+        }
+
+        btnSubmit.disabled = true;
+        statusEl.textContent = strings.statusSending;
+        const dataUrl = canvas.toDataURL('image/png');
+
+        try {
+          const res = await fetch('/api/rh/employee-package-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: accessToken,
+              first_name: val('first_name'), last_name: val('last_name'),
+              address: val('address'), phone: val('phone'), dob: val('dob'),
+              sin: val('sin'), email: val('email'),
+              emergency_first_name: val('emergency_first_name'), emergency_last_name: val('emergency_last_name'),
+              emergency_phone: val('emergency_phone'), start_date: val('start_date'),
+              signature: dataUrl,
+            }),
+          });
+          const body = await res.json();
+          if (!res.ok || body.error) {
+            statusEl.textContent = '';
+            flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorGeneric + '</div>';
+            btnSubmit.disabled = false;
+            return;
+          }
+          document.body.innerHTML = '<main class="v-shell"><div class="card" style="text-align:center;padding:48px 32px;"><h1 style="margin-bottom:10px;">' + strings.successTitle + '</h1><p style="color:var(--p-muted);">' + strings.successBody + '</p></div></main>';
+          window.scrollTo(0, 0);
+        } catch (e) {
+          statusEl.textContent = '';
+          flashEl.innerHTML = '<div class="flash flash-error">' + strings.errorNetwork + '</div>';
+          btnSubmit.disabled = false;
+        }
+      });
+    })();
+  </script>
+</VendorFormLayout>

@@ -7,8 +7,12 @@ import { getPortailLocale } from '../lib/portail-i18n';
 
 interface Props {
   title: string;
+  /** Hide the FR/EN switcher for pages whose language is fixed server-side
+   * (e.g. a new-employee package sent in one specific language) rather than
+   * chosen by the visitor. */
+  hideLangSwitch?: boolean;
 }
-const { title } = Astro.props;
+const { title, hideLangSwitch = false } = Astro.props;
 
 const locale = getPortailLocale(Astro.cookies);
 const currentPath = Astro.url.pathname + Astro.url.search;
@@ -113,10 +117,12 @@ const currentPath = Astro.url.pathname + Astro.url.search;
           <img src="/images/Oaziz-Logo.webp" alt="" />
           <span>Oaziz Extracts</span>
         </a>
-        <div class="v-lang-switch" role="group" aria-label="Language / Langue">
-          <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
-          <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
-        </div>
+        {!hideLangSwitch && (
+          <div class="v-lang-switch" role="group" aria-label="Language / Langue">
+            <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
+            <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
+          </div>
+        )}
       </div>
     </header>
     <main class="v-shell">

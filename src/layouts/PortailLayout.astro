@@ -134,6 +134,13 @@ const currentPath = Astro.url.pathname + Astro.url.search;
       @media (max-width: 520px) {
         .two-col, .four-col { grid-template-columns: 1fr 1fr; }
       }
+      .radio-group, .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 4px; }
+      .radio-group label, .checkbox-group label {
+        display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; cursor: pointer;
+      }
+      .check-row { display: flex; align-items: flex-start; gap: 10px; }
+      .check-row input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+      .check-row label { font-weight: 400; margin-bottom: 0; }
       label.sublabel { font-weight: 400; color: var(--p-muted); font-size: .8rem; }
       details summary {
         cursor: pointer;
@@ -209,6 +216,7 @@ const currentPath = Astro.url.pathname + Astro.url.search;
                   }>{Tc('nav.forms')}</a>
                   <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>
                   <a href="/portail/fournisseurs" class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('nav.vendors')}</a>
+                  <a href="/portail/rh" class={Astro.url.pathname.startsWith('/portail/rh') ? 'active' : ''}>{Tc('nav.hr')}</a>
                 </nav>
               )}
               <span class="portail-user">{staffName}</span>

@@ -94,6 +94,14 @@ const { count: pendingApprovalsCount } = await getAdminClient()
   .eq('staff_id', staff.id)
   .is('approved_at', null);
 
+// hr_employee_packages is RLS-denied to all client roles (admin-only, same
+// pattern as the others), so this needs the admin client.
+const { count: pendingWitnessCount } = await getAdminClient()
+  .from('hr_employee_packages')
+  .select('id', { count: 'exact', head: true })
+  .eq('witness_staff_id', staff.id)
+  .eq('status', 'awaiting_witness');
+
 const sections = [
   {
     href: '/portail/formulaires',
@@ -112,6 +120,12 @@ const sections = [
     title: Tc('nav.vendors'),
     desc: T('section.vendors.desc'),
     tag: pendingApprovalsCount ? T('section.vendors.tag').replace('{count}', String(pendingApprovalsCount)) : null,
+  },
+  {
+    href: '/portail/rh',
+    title: Tc('nav.hr'),
+    desc: T('section.hr.desc'),
+    tag: pendingWitnessCount ? T('section.hr.tag').replace('{count}', String(pendingWitnessCount)) : null,
   },
 ];
 ---

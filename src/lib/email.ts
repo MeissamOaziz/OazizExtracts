@@ -706,3 +706,206 @@ export async function sendLicenseExpiryReminder(
     return { status: 'error', detail: String(e) };
   }
 }
+
+// ============================================================
+// HR — generated document sent on request (Attestation / Incident Report /
+// Evaluation) to whichever comma-separated recipients the staff member
+// typed in. Internal, French-first like the rest of the R&D portal emails.
+// ============================================================
+
+export interface HrDocumentEmail {
+  toEmails: string[];
+  kindLabel: string;
+  subjectLine: string;
+  fileName: string;
+  pdfBytes: Uint8Array;
+}
+
+export async function sendHrDocumentEmail(
+  n: HrDocumentEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[hr-document-email] RESEND_API_KEY not set; would-have-sent ${n.kindLabel} to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: `${n.kindLabel} — document généré depuis le portail RH d'Oaziz.`,
+    badge: 'Ressources humaines',
+    greeting: n.kindLabel,
+    intro: `Veuillez trouver ci-joint le document <strong>${escapeHtml(n.kindLabel)}</strong> généré depuis le portail RH.`,
+    ctaLabel: 'Ouvrir le portail',
+    ctaUrl: (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '') + '/portail/rh',
+    footerNote: 'Document envoyé depuis la section Ressources humaines du portail Oaziz.',
+  });
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: n.toEmails, replyTo, subject: n.subjectLine, html,
+      attachments: [{ filename: n.fileName, content: Buffer.from(n.pdfBytes) }],
+    });
+    if (error) {
+      console.error('[hr-document-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[hr-document-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
+// New Employee Package — bilingual invite to the new hire (link to fill the
+// Employee Information Form + sign the Code of Conduct), the internal
+// witness countersign request, and the final completion notice to Jorge,
+// Meissam, Stephane + the new employee.
+// ============================================================
+
+export interface EmployeePackageInviteEmail {
+  toEmail: string;
+  employeeName: string;
+  language: 'fr' | 'en';
+  packageUrl: string;
+  attachments: Array<{ filename: string; content: Buffer }>;
+}
+
+export async function sendEmployeePackageInvite(
+  n: EmployeePackageInviteEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[hr-package-invite] RESEND_API_KEY not set; would-have-sent to ${n.toEmail}: ${n.packageUrl}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const isFr = n.language === 'fr';
+
+  const html = renderVendorEmailShell({
+    preheaderFr: 'Bienvenue chez Oaziz Extracts — veuillez compléter votre dossier d\'employé.',
+    preheaderEn: 'Welcome to Oaziz Extracts — please complete your employee file.',
+    headingFr: `Bienvenue chez Oaziz Extracts, ${n.employeeName.split(' ')[0] || n.employeeName} !`,
+    headingEn: `Welcome to Oaziz Extracts, ${n.employeeName.split(' ')[0] || n.employeeName}!`,
+    introFr: "Pour compléter votre dossier d'employé, veuillez remplir le formulaire de renseignements et signer électroniquement la politique de conduite ci-dessous. Vous trouverez également en pièce jointe vos formulaires fiscaux (TD1 et TP-1015.3) à compléter et remettre séparément.",
+    introEn: "To complete your employee file, please fill in the information form and electronically sign the conduct policy below. You'll also find your tax forms (TD1 and TP-1015.3) attached — please complete and return those separately.",
+    ctaLabelFr: 'Compléter mon dossier',
+    ctaLabelEn: 'Complete my file',
+    ctaUrl: n.packageUrl,
+    footerNote: isFr ? 'Oaziz Extracts Inc. — Ressources humaines.' : 'Oaziz Extracts Inc. — Human Resources.',
+  });
+
+  const subject = isFr
+    ? `Oaziz Extracts — Bienvenue, ${n.employeeName} ! Dossier d'employé à compléter`
+    : `Oaziz Extracts — Welcome, ${n.employeeName}! Please complete your employee file`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: [n.toEmail], replyTo, subject, html, attachments: n.attachments,
+    });
+    if (error) {
+      console.error('[hr-package-invite] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[hr-package-invite] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export interface WitnessCountersignEmail {
+  toEmail: string; toName: string; employeeName: string; portalUrl: string;
+}
+
+export async function sendWitnessCountersignRequest(
+  n: WitnessCountersignEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[hr-witness-email] RESEND_API_KEY not set; would-have-notified ${n.toEmail}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: `${n.employeeName} a signé son dossier d'employé — votre contresignature est requise.`,
+    badge: 'Contresignature requise',
+    greeting: `Bonjour ${n.toName.split(' ')[0] || n.toName},`,
+    intro: `<strong>${escapeHtml(n.employeeName)}</strong> vient de remplir et signer son dossier de nouvel employé (code de conduite). Veuillez réviser et apposer votre signature de témoin/gérant pour compléter le dossier.`,
+    ctaLabel: 'Réviser et signer',
+    ctaUrl: n.portalUrl,
+    footerNote: 'Portail RH Oaziz — contresignature de nouvel employé.',
+  });
+
+  const subject = `[Oaziz RH] Contresignature requise - ${n.employeeName}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: [n.toEmail], replyTo, subject, html });
+    if (error) {
+      console.error('[hr-witness-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[hr-witness-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export interface EmployeePackageCompletedEmail {
+  toEmails: string[];
+  employeeName: string;
+  portalUrl: string;
+  attachments: Array<{ filename: string; content: Buffer }>;
+}
+
+export async function sendEmployeePackageCompleted(
+  n: EmployeePackageCompletedEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[hr-package-completed] RESEND_API_KEY not set; would-have-notified ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+
+  const html = renderEmailShell({
+    preheader: `Le dossier de nouvel employé pour ${n.employeeName} est complété et signé.`,
+    badge: 'Dossier complété',
+    greeting: 'Dossier de nouvel employé complété',
+    intro: `Le dossier d'employé pour <strong>${escapeHtml(n.employeeName)}</strong> a été rempli et signé par toutes les parties. Les documents signés sont joints à ce courriel et archivés dans le portail.`,
+    ctaLabel: 'Ouvrir dans le portail',
+    ctaUrl: n.portalUrl,
+    footerNote: 'Portail RH Oaziz — dossier de nouvel employé.',
+  });
+
+  const subject = `[Oaziz RH] Dossier complété - ${n.employeeName}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: n.toEmails, replyTo, subject, html, attachments: n.attachments,
+    });
+    if (error) {
+      console.error('[hr-package-completed] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[hr-package-completed] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}

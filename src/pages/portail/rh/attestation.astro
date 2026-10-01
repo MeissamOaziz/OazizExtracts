@@ -1,0 +1,66 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frRhAttestation, enRhAttestation } from '../../../i18n/portail/rh-attestation';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frRhAttestation, enRhAttestation);
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const docId = url.searchParams.get('id');
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'),
+  unknown: T('error.unknown'),
+};
+const today = new Date().toISOString().slice(0, 10);
+---
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/rh" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info === 'generated' && (
+    <div class="flash flash-success">
+      {T('info.generated')} {docId && <a href={`/api/portail/rh/documents/${docId}/file`}>{T('downloadBtn')}</a>}
+    </div>
+  )}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  <form method="POST" action="/api/portail/rh/generate" class="card">
+    <input type="hidden" name="kind" value="attestation" />
+    <input type="hidden" name="language" value="fr" />
+
+    <div class="form-row">
+      <label for="employee_name">{T('label.employeeName')}</label>
+      <input type="text" id="employee_name" name="employee_name" required />
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="start_date">{T('label.startDate')}</label>
+        <input type="date" id="start_date" name="start_date" required />
+      </div>
+      <div class="form-row">
+        <label for="issue_date">{T('label.issueDate')}</label>
+        <input type="date" id="issue_date" name="issue_date" value={today} />
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="recipients">{T('label.recipients')}</label>
+      <input type="text" id="recipients" name="recipients" placeholder="ex: employe@exemple.com, rh@oaziz.ca" />
+      <div class="hint">{T('hint.recipients')}</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">{T('generateBtn')}</button>
+  </form>
+</PortailLayout>

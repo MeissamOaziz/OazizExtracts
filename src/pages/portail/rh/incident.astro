@@ -1,0 +1,137 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frRhIncident, enRhIncident } from '../../../i18n/portail/rh-incident';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frRhIncident, enRhIncident);
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const docId = url.searchParams.get('id');
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'),
+  unknown: T('error.unknown'),
+};
+---
+<PortailLayout title={T('title')} staffName={staff.full_name}>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/rh" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info === 'generated' && (
+    <div class="flash flash-success">
+      {T('info.generated')} {docId && <a href={`/api/portail/rh/documents/${docId}/file`}>{T('downloadBtn')}</a>}
+    </div>
+  )}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  <form method="POST" action="/api/portail/rh/generate" class="card">
+    <input type="hidden" name="kind" value="incident_report" />
+
+    <div class="form-row">
+      <label for="language">{T('label.documentLanguage')}</label>
+      <select id="language" name="language">
+        <option value="fr" selected={locale !== 'en'}>{T('lang.fr')}</option>
+        <option value="en" selected={locale === 'en'}>{T('lang.en')}</option>
+      </select>
+    </div>
+
+    <div class="section-hdr" style="margin: 24px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--p-accent);">
+      <h2>{T('section.employeeInfo')}</h2>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="employee_name">{T('label.employeeName')}</label>
+        <input type="text" id="employee_name" name="employee_name" required />
+      </div>
+      <div class="form-row">
+        <label for="job_title">{T('label.jobTitle')}</label>
+        <input type="text" id="job_title" name="job_title" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="incident_date">{T('label.incidentDate')}</label>
+        <input type="date" id="incident_date" name="incident_date" required />
+      </div>
+      <div class="form-row">
+        <label for="incident_time">{T('label.incidentTime')}</label>
+        <input type="time" id="incident_time" name="incident_time" />
+      </div>
+    </div>
+
+    <div class="section-hdr" style="margin: 24px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--p-accent);">
+      <h2>{T('section.incidentDetails')}</h2>
+    </div>
+    <div class="form-row">
+      <label for="incident_location">{T('label.incidentLocation')}</label>
+      <input type="text" id="incident_location" name="incident_location" />
+    </div>
+    <div class="form-row">
+      <label for="incident_description">{T('label.incidentDescription')}</label>
+      <textarea id="incident_description" name="incident_description" rows="4" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;"></textarea>
+    </div>
+
+    <div class="section-hdr" style="margin: 24px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--p-accent);">
+      <h2>{T('section.injuryDetails')}</h2>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="injury_type">{T('label.injuryType')}</label>
+        <input type="text" id="injury_type" name="injury_type" />
+      </div>
+      <div class="form-row">
+        <label for="body_part">{T('label.bodyPart')}</label>
+        <input type="text" id="body_part" name="body_part" />
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="treatment_provided">{T('label.treatmentProvided')}</label>
+      <textarea id="treatment_provided" name="treatment_provided" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;"></textarea>
+    </div>
+
+    <div class="section-hdr" style="margin: 24px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--p-accent);">
+      <h2>{T('section.witnesses')}</h2>
+      <p class="hint" style="margin-top: 4px;">{T('hint.signatures')}</p>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="witness_name">{T('label.witnessName')}</label>
+        <input type="text" id="witness_name" name="witness_name" />
+      </div>
+      <div class="form-row">
+        <label for="witness_signature">{T('label.witnessSignature')}</label>
+        <input type="text" id="witness_signature" name="witness_signature" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="employee_signature">{T('label.employeeSignature')}</label>
+        <input type="text" id="employee_signature" name="employee_signature" />
+      </div>
+      <div class="form-row">
+        <label for="supervisor_signature">{T('label.supervisorSignature')}</label>
+        <input type="text" id="supervisor_signature" name="supervisor_signature" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="recipients">{T('label.recipients')}</label>
+      <input type="text" id="recipients" name="recipients" placeholder="ex: rh@oaziz.ca" />
+      <div class="hint">{T('hint.recipients')}</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">{T('generateBtn')}</button>
+  </form>
+</PortailLayout>

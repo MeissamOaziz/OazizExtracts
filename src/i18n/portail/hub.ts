@@ -10,6 +10,9 @@ export const frHub = {
 
   'section.vendors.desc': "Dossiers de qualification fournisseur et suivi des approbations individuelles.",
   'section.vendors.tag': '{count} à approuver',
+
+  'section.hr.desc': "Attestations, rapports d'incident, évaluations et dossiers de nouveaux employés.",
+  'section.hr.tag': '{count} en attente',
 } as const;
 
 export type HubDict = typeof frHub;
@@ -26,4 +29,7 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
 
   'section.vendors.desc': 'Vendor qualification files and individual approval tracking.',
   'section.vendors.tag': '{count} to approve',
+
+  'section.hr.desc': 'Work attestations, incident reports, evaluations and new employee files.',
+  'section.hr.tag': '{count} pending',
 };

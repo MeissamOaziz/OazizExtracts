@@ -1,0 +1,267 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frRhEvaluation, enRhEvaluation } from '../../../i18n/portail/rh-evaluation';
+import { COMPETENCIES, OUTCOME_OPTIONS } from '../../../lib/hr-pdf';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frRhEvaluation, enRhEvaluation);
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const docId = url.searchParams.get('id');
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'),
+  unknown: T('error.unknown'),
+};
+
+const sectionStyle = 'margin: 24px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--p-accent);';
+const textareaStyle = 'width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;';
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/rh" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info === 'generated' && (
+    <div class="flash flash-success">
+      {T('info.generated')} {docId && <a href={`/api/portail/rh/documents/${docId}/file`}>{T('downloadBtn')}</a>}
+    </div>
+  )}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  <form method="POST" action="/api/portail/rh/generate" class="card" style="max-width: 900px;">
+    <input type="hidden" name="kind" value="evaluation" />
+    <input type="hidden" name="language" value="en" />
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.info')}</h2></div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="employee_name">{T('label.employeeName')}</label>
+        <input type="text" id="employee_name" name="employee_name" required />
+      </div>
+      <div class="form-row">
+        <label for="hire_date">{T('label.hireDate')}</label>
+        <input type="date" id="hire_date" name="hire_date" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="job_title">{T('label.jobTitle')}</label>
+        <input type="text" id="job_title" name="job_title" />
+      </div>
+      <div class="form-row">
+        <label for="company_location">{T('label.companyLocation')}</label>
+        <input type="text" id="company_location" name="company_location" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="review_date">{T('label.reviewDate')}</label>
+        <input type="date" id="review_date" name="review_date" required />
+      </div>
+      <div class="form-row">
+        <label for="period_covered">{T('label.periodCovered')}</label>
+        <input type="text" id="period_covered" name="period_covered" />
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="reviewers">{T('label.reviewers')}</label>
+      <input type="text" id="reviewers" name="reviewers" />
+    </div>
+    <div class="form-row">
+      <label>{T('label.evaluationType')}</label>
+      <div class="radio-group">
+        <label><input type="radio" name="evaluation_type" value="3month" /> {T('type.3month')}</label>
+        <label><input type="radio" name="evaluation_type" value="6month" /> {T('type.6month')}</label>
+        <label><input type="radio" name="evaluation_type" value="annual" /> {T('type.annual')}</label>
+        <label><input type="radio" name="evaluation_type" value="followup" /> {T('type.followup')}</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="followup_previous_date">{T('label.followupPreviousDate')}</label>
+      <input type="date" id="followup_previous_date" name="followup_previous_date" />
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.competencies')}</h2></div>
+    <p class="hint" style="margin-bottom: 14px;">{T('hint.competencies')}</p>
+    {COMPETENCIES.map((comp) => (
+      <div class="card" style="margin-bottom: 12px; background: #fafbfc;">
+        <strong style="font-size: .92rem;">{comp.label}</strong>
+        <p class="hint" style="margin: 4px 0 10px;">{comp.desc}</p>
+        <div class="form-row">
+          <label for={`comp_${comp.id}_rating`}>{T('label.rating')}</label>
+          <select id={`comp_${comp.id}_rating`} name={`comp_${comp.id}_rating`}>
+            <option value="">—</option>
+            <option value="1">{T('rating.1')}</option>
+            <option value="2">{T('rating.2')}</option>
+            <option value="3">{T('rating.3')}</option>
+            <option value="4">{T('rating.4')}</option>
+            <option value="N/A">{T('rating.na')}</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-bottom: 0;">
+          <label for={`comp_${comp.id}_comments`}>{T('label.comments')}</label>
+          <textarea id={`comp_${comp.id}_comments`} name={`comp_${comp.id}_comments`} rows="2" style={textareaStyle}></textarea>
+        </div>
+      </div>
+    ))}
+    <div class="two-col">
+      <div class="form-row">
+        <label for="overall_rating">{T('label.overallRating')}</label>
+        <select id="overall_rating" name="overall_rating">
+          <option value="">—</option>
+          <option value="1">{T('rating.1')}</option>
+          <option value="2">{T('rating.2')}</option>
+          <option value="3">{T('rating.3')}</option>
+          <option value="4">{T('rating.4')}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="overall_comments">{T('label.overallComments')}</label>
+        <input type="text" id="overall_comments" name="overall_comments" />
+      </div>
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.previousGoals')}</h2></div>
+    <p class="hint" style="margin-bottom: 14px;">{T('hint.previousGoals')}</p>
+    {[1, 2, 3, 4].map((i) => (
+      <div class="two-col" style="margin-bottom: 10px;">
+        <div class="form-row">
+          <label for={`prevgoal_${i}_goal`}>{T('label.goal')} #{i}</label>
+          <input type="text" id={`prevgoal_${i}_goal`} name={`prevgoal_${i}_goal`} />
+        </div>
+        <div class="form-row">
+          <label for={`prevgoal_${i}_status`}>{T('label.status')}</label>
+          <select id={`prevgoal_${i}_status`} name={`prevgoal_${i}_status`}>
+            <option value="">—</option>
+            <option value={T('status.met')}>{T('status.met')}</option>
+            <option value={T('status.partly')}>{T('status.partly')}</option>
+            <option value={T('status.not_met')}>{T('status.not_met')}</option>
+          </select>
+        </div>
+      </div>
+    ))}
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.strengths')}</h2></div>
+    <div class="form-row">
+      <textarea name="key_strengths" rows="3" style={textareaStyle}></textarea>
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.improvement')}</h2></div>
+    <p class="hint" style="margin-bottom: 10px;">{T('hint.improvement')}</p>
+    <div class="form-row">
+      <textarea name="areas_for_improvement" rows="4" style={textareaStyle}></textarea>
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.roleExpectations')}</h2></div>
+    <div class="form-row">
+      <textarea name="role_expectations" rows="3" style={textareaStyle}></textarea>
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.actionPlan')}</h2></div>
+    {[1, 2, 3, 4].map((i) => (
+      <div class="card" style="margin-bottom: 10px; background: #fafbfc;">
+        <strong style="font-size: .85rem; color: var(--p-muted);">#{i}</strong>
+        <div class="form-row">
+          <label for={`action_${i}_goal`}>{T('label.actionGoal')}</label>
+          <input type="text" id={`action_${i}_goal`} name={`action_${i}_goal`} />
+        </div>
+        <div class="two-col">
+          <div class="form-row">
+            <label for={`action_${i}_measure`}>{T('label.measure')}</label>
+            <input type="text" id={`action_${i}_measure`} name={`action_${i}_measure`} />
+          </div>
+          <div class="form-row">
+            <label for={`action_${i}_support`}>{T('label.support')}</label>
+            <input type="text" id={`action_${i}_support`} name={`action_${i}_support`} />
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom: 0;">
+          <label for={`action_${i}_due`}>{T('label.due')}</label>
+          <input type="date" id={`action_${i}_due`} name={`action_${i}_due`} />
+        </div>
+      </div>
+    ))}
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.employeeComments')}</h2></div>
+    <p class="hint" style="margin-bottom: 10px;">{T('hint.employeeComments')}</p>
+    <div class="form-row">
+      <textarea name="employee_comments" rows="3" style={textareaStyle}></textarea>
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.outcome')}</h2></div>
+    <div class="form-row">
+      <div class="checkbox-group" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+        {OUTCOME_OPTIONS.map((o) => (
+          <label><input type="checkbox" name="outcomes" value={o.id} /> {T(`outcome.${o.id}` as keyof typeof frRhEvaluation)}</label>
+        ))}
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="interim_checkins">{T('label.interimCheckins')}</label>
+        <input type="text" id="interim_checkins" name="interim_checkins" />
+      </div>
+      <div class="form-row">
+        <label for="next_evaluation_date">{T('label.nextEvaluationDate')}</label>
+        <input type="date" id="next_evaluation_date" name="next_evaluation_date" />
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="next_evaluation_focus">{T('label.nextEvaluationFocus')}</label>
+      <input type="text" id="next_evaluation_focus" name="next_evaluation_focus" />
+    </div>
+
+    <div class="section-hdr" style={sectionStyle}><h2>{T('section.signatures')}</h2></div>
+    <p class="hint" style="margin-bottom: 14px;">{T('hint.signatures')}</p>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="employee_sig_name">{T('label.employee')} — {T('label.name')}</label>
+        <input type="text" id="employee_sig_name" name="employee_sig_name" />
+      </div>
+      <div class="form-row">
+        <label for="employee_sig_date">{T('label.date')}</label>
+        <input type="date" id="employee_sig_date" name="employee_sig_date" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="reviewer_sig_name">{T('label.reviewer')} — {T('label.name')}</label>
+        <input type="text" id="reviewer_sig_name" name="reviewer_sig_name" />
+      </div>
+      <div class="form-row">
+        <label for="reviewer_sig_date">{T('label.date')}</label>
+        <input type="date" id="reviewer_sig_date" name="reviewer_sig_date" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="form-row">
+        <label for="second_reviewer_sig_name">{T('label.secondReviewer')} — {T('label.name')}</label>
+        <input type="text" id="second_reviewer_sig_name" name="second_reviewer_sig_name" />
+      </div>
+      <div class="form-row">
+        <label for="second_reviewer_sig_date">{T('label.date')}</label>
+        <input type="date" id="second_reviewer_sig_date" name="second_reviewer_sig_date" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="recipients">{T('label.recipients')}</label>
+      <input type="text" id="recipients" name="recipients" placeholder="ex: rh@oaziz.ca" />
+      <div class="hint">{T('hint.recipients')}</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">{T('generateBtn')}</button>
+  </form>
+</PortailLayout>
