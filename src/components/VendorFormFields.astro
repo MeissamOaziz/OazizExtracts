@@ -20,6 +20,7 @@ interface VendorFormValues {
   nutrient_type: string; cultivar_name: string; starting_material: string[];
   pesticides_used: string;
   certified_by_name: string; certified_by_title: string;
+  file_cra_license_expiry: string; file_health_canada_license_expiry: string;
 }
 
 interface Props {
@@ -218,9 +219,17 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <div class="hint">{hasFiles.cra ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
   </div>
   <div class="form-row">
+    <label for="file_cra_license_expiry">{T('label.craLicenseExpiry')}</label>
+    <input type="date" id="file_cra_license_expiry" name="file_cra_license_expiry" value={v.file_cra_license_expiry} required />
+  </div>
+  <div class="form-row">
     <label for="file_health_canada_license">{T('label.hcLicenseFile')}</label>
     <input type="file" id="file_health_canada_license" name="file_health_canada_license" accept="application/pdf,image/png,image/jpeg" required={!hasFiles.hc} />
     <div class="hint">{hasFiles.hc ? T('hint.fileAlreadyUploaded') : T('hint.fileUpload')}</div>
+  </div>
+  <div class="form-row">
+    <label for="file_health_canada_license_expiry">{T('label.hcLicenseExpiry')}</label>
+    <input type="date" id="file_health_canada_license_expiry" name="file_health_canada_license_expiry" value={v.file_health_canada_license_expiry} required />
   </div>
 
   <div id="culture-section" style={v.vendor_type === 'cannabis_grower' ? '' : 'display:none;'}>

@@ -90,6 +90,8 @@ const errorMessages: Record<string, string> = {
           starting_material: submission.starting_material ?? [],
           pesticides_used: submission.pesticides_used ?? '',
           certified_by_name: submission.certified_by_name ?? '', certified_by_title: submission.certified_by_title ?? '',
+          file_cra_license_expiry: submission.file_cra_license_expiry ?? '',
+          file_health_canada_license_expiry: submission.file_health_canada_license_expiry ?? '',
         }}
         hasFiles={{
           cra: !!submission.file_cra_license_path,

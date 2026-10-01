@@ -20,6 +20,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const action = get('action') === 'draft' ? 'draft' : 'submit';
   const existingSubmissionId = getOrNull('submission_id');
   const resumeToken = getOrNull('resume_token');
+  const inviteToken = getOrNull('invite_token');
 
   const admin = getAdminClient();
 
@@ -92,6 +93,10 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const certified_by_name = get('certified_by_name');
   const certified_by_title = get('certified_by_title');
 
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const file_cra_license_expiry = DATE_RE.test(get('file_cra_license_expiry')) ? get('file_cra_license_expiry') : null;
+  const file_health_canada_license_expiry = DATE_RE.test(get('file_health_canada_license_expiry')) ? get('file_health_canada_license_expiry') : null;
+
   const fields = {
     vendor_type,
     company_name, address, city, province, postal_code, contact_person, phone, email,
@@ -105,7 +110,20 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     production_type, cultivation_methods, lighting_type, medium_type, nutrient_type,
     cultivar_name, starting_material, pesticides_used,
     certified, certified_by_name, certified_by_title,
+    file_cra_license_expiry, file_health_canada_license_expiry,
   };
+
+  // If a license's expiry date actually changed (vendor renewed and told us
+  // the new date), reset that license's reminder flag so a new cycle can
+  // fire for it. New rows start with the flag unset (column default null).
+  if (existing) {
+    if (file_cra_license_expiry && file_cra_license_expiry !== existing.file_cra_license_expiry) {
+      (fields as Record<string, unknown>).file_cra_license_reminder_sent_at = null;
+    }
+    if (file_health_canada_license_expiry && file_health_canada_license_expiry !== existing.file_health_canada_license_expiry) {
+      (fields as Record<string, unknown>).file_health_canada_license_reminder_sent_at = null;
+    }
+  }
 
   // ---------------- DRAFT SAVE ----------------
   // Minimal validation: just enough to identify who to send the resume link to.
@@ -132,6 +150,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/fournisseurs?error=unknown', 303);
     }
     await uploadAnyProvidedFiles(admin, inserted.id, form);
+    await linkInviteIfAny(admin, inviteToken, inserted.id);
 
     const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
     const resumeUrl = `${siteUrl}/fournisseurs/brouillon/${raw}`;
@@ -149,7 +168,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     !accounting_contact_email ||
     !business_number || !gst_hst_number ||
     !bank_institution_number || !bank_transit_number || !bank_account_number || !bank_address ||
-    !certified_by_name || !certified_by_title
+    !certified_by_name || !certified_by_title ||
+    !file_cra_license_expiry || !file_health_canada_license_expiry
   ) {
     return redirect(backTo(existingSubmissionId, resumeToken, 'missing'), 303);
   }
@@ -220,6 +240,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/fournisseurs?error=unknown', 303);
     }
     submissionId = inserted.id as string;
+    await linkInviteIfAny(admin, inviteToken, submissionId);
   }
 
   try {
@@ -258,6 +279,21 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   return redirect('/fournisseurs/merci', 303);
 };
+
+// Best-effort: links this brand-new submission back to the invite that
+// brought the vendor here (if any), so staff can see on the dashboard that
+// the invite was acted on instead of it sitting as "not started" forever.
+async function linkInviteIfAny(
+  admin: ReturnType<typeof getAdminClient>,
+  inviteToken: string | null,
+  submissionId: string,
+): Promise<void> {
+  if (!inviteToken) return;
+  await admin
+    .from('vendor_invites')
+    .update({ vendor_submission_id: submissionId })
+    .eq('invite_token_hash', sha256Hex(inviteToken));
+}
 
 async function uploadAnyProvidedFiles(
   admin: ReturnType<typeof getAdminClient>,

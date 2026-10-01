@@ -71,6 +71,20 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
   if (!codes || codes.length === 0) return '—';
   return codes.map((c) => map[c] ?? c).join(', ');
 }
+function fmtPlainDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+function expiryBadge(dateStr: string | null): { text: string; className: string } | null {
+  if (!dateStr) return null;
+  const days = Math.round((new Date(`${dateStr}T00:00:00Z`).getTime() - Date.now()) / 86_400_000);
+  const formatted = fmtPlainDate(dateStr);
+  if (days < 0) return { text: T('doc.expired').replace('{date}', formatted), className: 'badge-cancelled' };
+  if (days <= 60) return { text: T('doc.expirySoon').replace('{date}', formatted), className: 'badge-signing' };
+  return { text: T('doc.expiry').replace('{date}', formatted), className: 'badge-draft' };
+}
+const craExpiry = expiryBadge(submission.file_cra_license_expiry);
+const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
 ---
 <PortailLayout title={submission.company_name} staffName={staff.full_name} wide>
   <div style="margin-bottom: 20px;">
@@ -198,18 +212,20 @@ function joinLabels(codes: string[] | null, map: Record<string, string>): string
       <tbody>
         <tr>
           <th style="width:260px;">{T('doc.cra')}</th>
-          <td>
+          <td style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             {submission.file_cra_license_path ? (
               <a href={`/api/portail/vendor-submissions/${id}/files/cra`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
             ) : T('notProvided')}
+            {craExpiry && <span class={`badge ${craExpiry.className}`}>{craExpiry.text}</span>}
           </td>
         </tr>
         <tr>
           <th>{T('doc.hc')}</th>
-          <td>
+          <td style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             {submission.file_health_canada_license_path ? (
               <a href={`/api/portail/vendor-submissions/${id}/files/hc`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
             ) : T('notProvided')}
+            {hcExpiry && <span class={`badge ${hcExpiry.className}`}>{hcExpiry.text}</span>}
           </td>
         </tr>
         <tr>

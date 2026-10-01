@@ -43,14 +43,49 @@ for (const row of approvalRows) {
   approvalsBySubmission.set(row.vendor_submission_id, cur);
 }
 
+// Invitation tracking: every invite sent, and — once the vendor has acted on
+// it — the status of whatever submission got linked back to it.
+const { data: invites } = await admin
+  .from('vendor_invites')
+  .select('id, email, sent_at, last_reminder_sent_at, vendor_submission_id')
+  .order('sent_at', { ascending: false })
+  .limit(100);
+
+const linkedSubmissionIds = (invites ?? []).map((i) => i.vendor_submission_id).filter((v): v is string => !!v);
+const linkedStatusById = new Map<string, string>();
+if (linkedSubmissionIds.length > 0) {
+  const { data: linked } = await admin
+    .from('vendor_submissions')
+    .select('id, status')
+    .in('id', linkedSubmissionIds);
+  for (const row of linked ?? []) linkedStatusById.set(row.id, row.status);
+}
+
+type InviteStatus = 'not_started' | 'in_progress' | 'submitted' | 'completed';
+function inviteStatus(vendorSubmissionId: string | null): InviteStatus {
+  if (!vendorSubmissionId) return 'not_started';
+  const status = linkedStatusById.get(vendorSubmissionId);
+  if (status === 'draft') return 'in_progress';
+  if (status !== 'submitted') return 'not_started';
+  const a = approvalsBySubmission.get(vendorSubmissionId) ?? { approved: 0, total: 0 };
+  return a.total > 0 && a.approved === a.total ? 'completed' : 'submitted';
+}
+const inviteStatusBadge: Record<InviteStatus, string> = {
+  not_started: 'badge-draft', in_progress: 'badge-signing', submitted: 'badge-sent', completed: 'badge-complete',
+};
+
 function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+function formatDateTime(iso: string | null): string {
+  if (!iso) return T('invites.never');
   return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
 const errCode = url.searchParams.get('error');
-const infoMessages: Record<string, string> = { invite_sent: T('info.invite_sent') };
+const infoMessages: Record<string, string> = { invite_sent: T('info.invite_sent'), reminder_sent: T('info.reminder_sent') };
 const errorMessages: Record<string, string> = {
   invite_email_invalid: T('error.invite_email_invalid'),
   invite_send_failed: T('error.invite_send_failed'),
@@ -82,6 +117,51 @@ const errorMessages: Record<string, string> = {
       </div>
       <button type="submit" class="btn btn-primary">{T('invite.sendBtn')}</button>
     </form>
+  </div>
+
+  <div class="card" style="margin-bottom: 24px; padding: 0;">
+    <div style="padding: 20px 20px 0;">
+      <h2>{T('invites.heading')}</h2>
+      <p class="hint" style="margin: 4px 0 0;">{T('invites.hint')}</p>
+    </div>
+    {(!invites || invites.length === 0) ? (
+      <div class="empty-state">
+        <p>{T('invites.empty')}</p>
+      </div>
+    ) : (
+      <table class="data" style="margin-top: 14px;">
+        <thead>
+          <tr>
+            <th>{T('invites.th.sentAt')}</th>
+            <th>{T('invites.th.email')}</th>
+            <th>{T('invites.th.status')}</th>
+            <th>{T('invites.th.lastReminder')}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {invites.map((inv) => {
+            const status = inviteStatus(inv.vendor_submission_id);
+            return (
+              <tr>
+                <td>{formatDate(inv.sent_at)}</td>
+                <td>{inv.email}</td>
+                <td><span class={`badge ${inviteStatusBadge[status]}`}>{T(`invites.status.${status}` as keyof typeof frFournisseursIndex)}</span></td>
+                <td>{formatDateTime(inv.last_reminder_sent_at)}</td>
+                <td style="text-align: right;">
+                  {(status === 'not_started' || status === 'in_progress') && (
+                    <form method="POST" action="/api/portail/vendor-submissions/remind" style="display:inline;">
+                      <input type="hidden" name="invite_id" value={inv.id} />
+                      <button type="submit" class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('invites.remindBtn')}</button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
   </div>
 
   <div class="card" style="padding: 0;">

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { downloadCompanyLicenseBytes } from '../../../../lib/company-license-storage';
 import { sendVendorInviteEmail } from '../../../../lib/email';
+import { mintToken } from '../../../../lib/tokens';
 
 export const prerender = false;
 
@@ -38,11 +39,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     }
   }
 
+  const { raw, hash } = mintToken();
   const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
   const result = await sendVendorInviteEmail({
     toEmail: email,
-    formUrl: `${siteUrl}/fournisseurs`,
+    formUrl: `${siteUrl}/fournisseurs?invite=${raw}`,
     attachments,
+  });
+
+  await admin.from('vendor_invites').insert({
+    email, invite_token_hash: hash, sent_by_staff_id: staff.id,
   });
 
   await admin.from('audit_log').insert({

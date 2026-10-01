@@ -662,10 +662,23 @@ export async function sendCompanyLicensesEmail(
   }
 }
 
+// Shared "expires in N days" / "expired N days ago" phrasing (French) for
+// every license-expiry email — always computed from today vs. the actual
+// expiry date, never a hardcoded lead time, so the copy stays correct
+// regardless of exactly when the cron job's lead-time threshold fired.
+function expiryPhraseFr(daysUntilExpiry: number): string {
+  if (daysUntilExpiry > 1) return `expire dans ${daysUntilExpiry} jours`;
+  if (daysUntilExpiry === 1) return 'expire demain';
+  if (daysUntilExpiry === 0) return "expire aujourd'hui";
+  const overdue = Math.abs(daysUntilExpiry);
+  return overdue === 1 ? 'a expiré il y a 1 jour' : `a expiré il y a ${overdue} jours`;
+}
+
 export interface LicenseExpiryReminderEmail {
   toEmails: string[];
   kindLabel: string;
   expiryDate: string;
+  daysUntilExpiry: number;
 }
 
 export async function sendLicenseExpiryReminder(
@@ -680,18 +693,19 @@ export async function sendLicenseExpiryReminder(
   const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
   const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
   const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
+  const phrase = expiryPhraseFr(n.daysUntilExpiry);
 
   const html = renderEmailShell({
-    preheader: `La licence ${n.kindLabel} d'Oaziz Extracts expire le ${n.expiryDate} — pensez à entamer le renouvellement.`,
+    preheader: `La licence ${n.kindLabel} d'Oaziz Extracts ${phrase} (${n.expiryDate}) — pensez à entamer le renouvellement.`,
     badge: 'Rappel — expiration de licence',
-    greeting: `La licence ${n.kindLabel} expire dans 6 mois`,
-    intro: `La licence <strong>${escapeHtml(n.kindLabel)}</strong> d'Oaziz Extracts Inc. expire le <strong>${escapeHtml(n.expiryDate)}</strong>. Ceci est un rappel automatique envoyé six mois avant l'échéance afin de laisser le temps d'entamer le renouvellement.`,
+    greeting: `La licence ${n.kindLabel} ${phrase}`,
+    intro: `La licence <strong>${escapeHtml(n.kindLabel)}</strong> d'Oaziz Extracts Inc. <strong>${phrase}</strong> (échéance le ${escapeHtml(n.expiryDate)}). Ceci est un rappel automatique — pensez à entamer le renouvellement si ce n'est pas déjà fait.`,
     ctaLabel: 'Gérer les licences',
     ctaUrl: `${siteUrl}/portail/fournisseurs/licences`,
     footerNote: 'Rappel automatique du portail Oaziz.',
   });
 
-  const subject = `[Oaziz] Rappel — la licence ${n.kindLabel} expire le ${n.expiryDate}`;
+  const subject = `[Oaziz] Rappel — la licence ${n.kindLabel} ${phrase}`;
 
   try {
     const resend = new Resend(apiKey);
@@ -906,6 +920,122 @@ export async function sendEmployeePackageCompleted(
     return { status: 'sent', detail: data?.id };
   } catch (e) {
     console.error('[hr-package-completed] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
+// Vendor-uploaded license expired — fired on the day a vendor's CRA or
+// Health Canada license (dates captured on the qualification form) reaches
+// its expiry date. One copy to the internal vendor-approval team, one
+// bilingual copy to the vendor themselves asking for a renewed copy.
+// ============================================================
+
+function expiryPhraseEn(daysUntilExpiry: number): string {
+  if (daysUntilExpiry > 1) return `expires in ${daysUntilExpiry} days`;
+  if (daysUntilExpiry === 1) return 'expires tomorrow';
+  if (daysUntilExpiry === 0) return 'expires today';
+  const overdue = Math.abs(daysUntilExpiry);
+  return overdue === 1 ? 'expired 1 day ago' : `expired ${overdue} days ago`;
+}
+
+export interface VendorLicenseExpiredInternalEmail {
+  toEmails: string[];
+  companyName: string;
+  kindLabel: string;
+  expiryDate: string;
+  daysUntilExpiry: number;
+  submissionUrl: string;
+}
+
+export async function sendVendorLicenseExpiredNoticeInternal(
+  n: VendorLicenseExpiredInternalEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[vendor-license-expired-internal] RESEND_API_KEY not set; would-have-notified ${n.toEmails.join(', ')} about ${n.companyName}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const phrase = expiryPhraseFr(n.daysUntilExpiry);
+
+  const html = renderEmailShell({
+    preheader: `La licence ${n.kindLabel} de ${n.companyName} ${phrase} — un courriel a été envoyé au fournisseur pour en demander une copie à jour.`,
+    badge: 'Licence fournisseur expirée',
+    greeting: `${n.companyName} — licence ${n.kindLabel}`,
+    intro: `La licence <strong>${escapeHtml(n.kindLabel)}</strong> au dossier de <strong>${escapeHtml(n.companyName)}</strong> ${phrase} (échéance le ${escapeHtml(n.expiryDate)}). Le fournisseur a été contacté automatiquement pour nous fournir une copie à jour.`,
+    ctaLabel: 'Voir le dossier fournisseur',
+    ctaUrl: n.submissionUrl,
+    footerNote: 'Rappel automatique du portail Oaziz — qualification fournisseur.',
+  });
+
+  const subject = `[Oaziz] Licence ${n.kindLabel} ${phrase} - ${n.companyName}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: n.toEmails, replyTo, subject, html });
+    if (error) {
+      console.error('[vendor-license-expired-internal] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-license-expired-internal] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export interface VendorLicenseExpiredVendorEmail {
+  toEmail: string;
+  companyName: string;
+  kindLabel: string;
+  expiryDate: string;
+  daysUntilExpiry: number;
+}
+
+export async function sendVendorLicenseExpiredNoticeVendor(
+  n: VendorLicenseExpiredVendorEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[vendor-license-expired-vendor] RESEND_API_KEY not set; would-have-notified ${n.toEmail}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const phraseFr = expiryPhraseFr(n.daysUntilExpiry);
+  const phraseEn = expiryPhraseEn(n.daysUntilExpiry);
+  const subjectBody = `Renouvellement de licence requis - ${n.kindLabel}`;
+  const mailtoUrl = `mailto:info@oaziz.ca?subject=${encodeURIComponent(subjectBody + ' - ' + n.companyName)}`;
+
+  const html = renderVendorEmailShell({
+    preheaderFr: `Votre licence ${n.kindLabel} ${phraseFr} — veuillez nous faire parvenir une copie à jour.`,
+    preheaderEn: `Your ${n.kindLabel} license ${phraseEn} — please send us an updated copy.`,
+    headingFr: `Votre licence ${n.kindLabel} ${phraseFr}`,
+    headingEn: `Your ${n.kindLabel} license ${phraseEn}`,
+    introFr: `Selon nos dossiers, la licence <strong>${escapeHtml(n.kindLabel)}</strong> que vous nous avez fournie pour <strong>${escapeHtml(n.companyName)}</strong> ${phraseFr} (échéance le ${escapeHtml(n.expiryDate)}). Merci de nous faire parvenir une copie à jour dès que possible afin que nous puissions maintenir votre dossier de qualification à jour.`,
+    introEn: `According to our records, the <strong>${escapeHtml(n.kindLabel)}</strong> license you provided for <strong>${escapeHtml(n.companyName)}</strong> ${phraseEn} (expiry date: ${escapeHtml(n.expiryDate)}). Please send us an updated copy as soon as possible so we can keep your qualification file current.`,
+    ctaLabelFr: 'Répondre par courriel',
+    ctaLabelEn: 'Reply by email',
+    ctaUrl: mailtoUrl,
+    footerNote: 'Oaziz Extracts Inc. — Qualification fournisseur / Vendor Qualification.',
+  });
+
+  const subject = `Oaziz Extracts — ${subjectBody}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: [n.toEmail], replyTo, subject, html });
+    if (error) {
+      console.error('[vendor-license-expired-vendor] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-license-expired-vendor] unexpected error:', e);
     return { status: 'error', detail: String(e) };
   }
 }

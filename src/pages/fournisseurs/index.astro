@@ -11,6 +11,7 @@ const T = makeT(locale, frVendorForm, enVendorForm);
 
 const url = new URL(Astro.request.url);
 const errCode = url.searchParams.get('error');
+const inviteToken = url.searchParams.get('invite') ?? '';
 const errorMessages: Record<string, string> = {
   missing: T('error.missing'),
   missing_draft: T('error.missing_draft'),
@@ -41,6 +42,7 @@ const blankValues = {
   nutrient_type: '', cultivar_name: '', starting_material: [],
   pesticides_used: '',
   certified_by_name: '', certified_by_title: '',
+  file_cra_license_expiry: '', file_health_canada_license_expiry: '',
 };
 ---
 <VendorFormLayout title={T('pageTitle')}>
@@ -56,5 +58,6 @@ const blankValues = {
     action="/api/vendor/submit"
     values={blankValues}
     hasFiles={{ cra: false, hc: false, bank: false }}
+    hiddenFields={inviteToken ? { invite_token: inviteToken } : {}}
   />
 </VendorFormLayout>

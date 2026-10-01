@@ -81,7 +81,9 @@ export const frVendorForm = {
 
   'section.licenses.title': 'Licences',
   'label.craLicenseFile': "Copie de votre licence de l'Agence du revenu du Canada (CRA)",
+  'label.craLicenseExpiry': 'Date d\'expiration de la licence CRA',
   'label.hcLicenseFile': 'Copie de votre licence Santé Canada',
+  'label.hcLicenseExpiry': 'Date d\'expiration de la licence Santé Canada',
 
   'section.culture.title': 'B) Renseignements sur la culture',
   'label.productionType': 'Type de production',
@@ -209,7 +211,9 @@ export const enVendorForm: Partial<Record<keyof VendorFormDict, string>> = {
 
   'section.licenses.title': 'Licenses',
   'label.craLicenseFile': 'Copy of your Canada Revenue Agency (CRA) license',
+  'label.craLicenseExpiry': 'CRA license expiry date',
   'label.hcLicenseFile': 'Copy of your Health Canada license',
+  'label.hcLicenseExpiry': 'Health Canada license expiry date',
 
   'section.culture.title': 'B) Culture information',
   'label.productionType': 'Type of production',
