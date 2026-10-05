@@ -1,0 +1,459 @@
+---
+// The order intake form, shared by /commandes/nouvelle and /commandes/[id]/editer.
+// One definition so a field added for entry is automatically editable too.
+
+import QuickAdd from './QuickAdd.astro';
+import { comboRows } from '../../lib/ops-quick';
+import {
+  PRIORITIES, UOMS, REFILL_PURPOSES, CURRENCIES, PROVINCES, PAYMENT_TERMS_PRESETS,
+  bi, requiredFieldsFor, type OrderSource,
+} from '../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../i18n/portail/atelier-commandes';
+
+interface Props {
+  mode: 'create' | 'edit';
+  source: OrderSource;
+  action: string;
+  /** Existing order row, in edit mode. */
+  order?: Record<string, any> | null;
+  lines?: Record<string, any>[];
+  spec?: Record<string, any> | null;
+  attachments?: Record<string, any>[];
+  customers: any[];
+  products: any[];
+  materials: any[];
+  /** Field keys the server rejected, to highlight. */
+  badFields?: string[];
+  cancelHref: string;
+}
+
+const {
+  mode, source, action, order = null, lines = [], spec = null, attachments = [],
+  customers, products, materials, badFields = [], cancelHref,
+} = Astro.props;
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+
+const required = requiredFieldsFor(source);
+const req = (k: string) => required.includes(k);
+const bad = (k: string) => badFields.includes(k);
+const matLabel = (m: any) => (locale === 'en' ? m.name_en : m.name_fr);
+
+const v = (k: string, fallback = '') => order?.[k] ?? fallback;
+const sv = (k: string, fallback = '') => spec?.[k] ?? fallback;
+const today = new Date().toISOString().slice(0, 10);
+
+// The customer combobox shows a name but submits an id.
+const customerName = order?.customer_id
+  ? (customers.find((c) => c.id === order.customer_id)?.name ?? '')
+  : '';
+
+const isEdit = mode === 'edit';
+
+// Both comboboxes start from the same shape the quick-add API returns.
+const comboSeeds = {
+  product: comboRows('product', products, locale),
+  customer: comboRows('customer', customers, locale),
+};
+---
+<form method="POST" action={action} enctype="multipart/form-data" id="orderForm">
+  <input type="hidden" name="source" value={source} />
+
+  <!-- ------------------------------------------------------------ header -->
+  <div class="card">
+    <h2 class="sec">{T('form.header')}</h2>
+    <div class="grid">
+      {source === 'customer_po' && (
+        <div class={bad('customer_id') ? 'field combo err' : 'field combo'} data-combo="customer">
+          <label for="customer_name">{T('f.customer')} {req('customer_id') && <em>*</em>}</label>
+          <input class="combo-input" type="text" id="customer_name" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-autocomplete="list"
+                 placeholder={T('combo.hint')} value={customerName} required={req('customer_id')} />
+          <input class="combo-id" type="hidden" name="customer_id" value={v('customer_id')} />
+          <p class="hint" id="customerHint" hidden></p>
+        </div>
+      )}
+
+      {source === 'customer_po' && (
+        <div class={bad('customer_po_ref') ? 'field err' : 'field'}>
+          <label for="customer_po_ref">{T('f.customer_po_ref')} {req('customer_po_ref') && <em>*</em>}</label>
+          <input type="text" id="customer_po_ref" name="customer_po_ref"
+                 value={v('customer_po_ref')} required={req('customer_po_ref')} />
+        </div>
+      )}
+
+      <div class="field">
+        <label for="order_date">{T('f.order_date')}</label>
+        <input type="date" id="order_date" name="order_date" value={v('order_date', today)} />
+      </div>
+
+      <div class={bad('requested_delivery_date') ? 'field err' : 'field'}>
+        <label for="requested_delivery_date">{T('f.requested_delivery_date')} {req('requested_delivery_date') && <em>*</em>}</label>
+        <input type="date" id="requested_delivery_date" name="requested_delivery_date"
+               value={v('requested_delivery_date')} required={req('requested_delivery_date')} />
+      </div>
+
+      <div class="field">
+        <label for="priority">{T('f.priority')}</label>
+        <select id="priority" name="priority">
+          {Object.keys(PRIORITIES).map((p) => (
+            <option value={p} selected={v('priority', 'normal') === p}>{bi(PRIORITIES, p, locale)}</option>
+          ))}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="excise_province">{T('f.excise_province')}</label>
+        <select id="excise_province" name="excise_province">
+          <option value="">—</option>
+          {PROVINCES.map((p) => <option value={p} selected={v('excise_province') === p}>{p}</option>)}
+        </select>
+      </div>
+
+      {source === 'customer_po' && (
+        <>
+          <div class="field">
+            <label for="currency">{T('f.currency')}</label>
+            <select id="currency" name="currency">
+              {CURRENCIES.map((c) => <option value={c} selected={v('currency', 'CAD') === c}>{c}</option>)}
+            </select>
+          </div>
+          <div class={bad('payment_terms') ? 'field err' : 'field'}>
+            <label for="payment_terms">{T('f.payment_terms')} {req('payment_terms') && <em>*</em>}</label>
+            <input type="text" id="payment_terms" name="payment_terms" list="termsList"
+                   value={v('payment_terms')} required={req('payment_terms')} />
+            <datalist id="termsList">
+              {PAYMENT_TERMS_PRESETS.map((t) => <option value={t}></option>)}
+            </datalist>
+          </div>
+          <div class={bad('ship_to_text') ? 'field field-wide err' : 'field field-wide'}>
+            <label for="ship_to_text">{T('f.ship_to')} {req('ship_to_text') && <em>*</em>}</label>
+            <textarea id="ship_to_text" name="ship_to_text" rows="2"
+                      required={req('ship_to_text')}>{v('ship_to_text')}</textarea>
+          </div>
+        </>
+      )}
+
+      <div class="field field-wide">
+        <label for="notes">{T('f.notes')}</label>
+        <textarea id="notes" name="notes" rows="2">{v('notes')}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- -------------------------------------------------- refill spec block -->
+  {source === 'internal_refill' && (
+    <div class="card" style="margin-top:16px;">
+      <h2 class="sec">{T('form.spec')}</h2>
+      <div class="grid">
+        <div class="field">
+          <label>{T('f.thc_range')}</label>
+          <div class="pair">
+            <input type="number" name="thc_min_pct" step="0.1" min="0" max="100"
+                   placeholder={T('f.min')} value={sv('thc_min_pct')} />
+            <input type="number" name="thc_max_pct" step="0.1" min="0" max="100"
+                   placeholder={T('f.max')} value={sv('thc_max_pct')} />
+          </div>
+        </div>
+        <div class="field">
+          <label>{T('f.cbd_range')}</label>
+          <div class="pair">
+            <input type="number" name="cbd_min_pct" step="0.1" min="0" max="100"
+                   placeholder={T('f.min')} value={sv('cbd_min_pct')} />
+            <input type="number" name="cbd_max_pct" step="0.1" min="0" max="100"
+                   placeholder={T('f.max')} value={sv('cbd_max_pct')} />
+          </div>
+        </div>
+        <div class={bad('purpose') ? 'field err' : 'field'}>
+          <label for="purpose">{T('f.purpose')} {req('purpose') && <em>*</em>}</label>
+          <select id="purpose" name="purpose" required={req('purpose')}>
+            <option value="">—</option>
+            {Object.keys(REFILL_PURPOSES).map((p) => (
+              <option value={p} selected={sv('purpose') === p}>{bi(REFILL_PURPOSES, p, locale)}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label for="source_material_id">{T('f.source_material')}</label>
+          <select id="source_material_id" name="source_material_id">
+            <option value="">—</option>
+            {materials.map((m) => (
+              <option value={m.id} selected={sv('source_material_id') === m.id}>{m.code} — {matLabel(m)}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label for="source_lot_ref">{T('f.source_lot')}</label>
+          <input type="text" id="source_lot_ref" name="source_lot_ref" value={sv('source_lot_ref')} />
+        </div>
+        <div class="field field-wide">
+          <label for="special_requests">{T('f.special_requests')}</label>
+          <textarea id="special_requests" name="special_requests" rows="2">{sv('special_requests')}</textarea>
+        </div>
+      </div>
+    </div>
+  )}
+
+  <!-- ------------------------------------------------------------- lines -->
+  <div class="card" style="margin-top:16px;">
+    <h2 class="sec">{T('form.lines')}</h2>
+    <p class="hint" style="margin-top:-4px; margin-bottom:14px;">{T('form.lines.hint')}</p>
+
+    <div id="lineRows">
+      {lines.map((l) => (
+        <div class="line">
+          <div class="line-grid">
+            <input type="hidden" name="line_id" value={l.id} />
+            <div class="field grow combo" data-combo="product">
+              <label>{T('f.product')} <em>*</em></label>
+              <input class="combo-input" type="text" name="line_product_name" autocomplete="off"
+                     role="combobox" aria-expanded="false" aria-autocomplete="list"
+                     value={l.product_name ?? ''} />
+              <input class="combo-id" type="hidden" name="line_product_id" value={l.product_id ?? ''} />
+            </div>
+            <div class="field">
+              <label>{T('f.lot_ref')}</label>
+              <input type="text" name="line_lot_ref" value={l.lot_ref ?? ''} />
+            </div>
+            <div class="field narrow">
+              <label>{T('f.qty')} <em>*</em></label>
+              <input type="number" name="line_qty" step="0.001" min="0" value={l.qty ?? ''} />
+            </div>
+            <div class="field narrow">
+              <label>{T('f.uom')}</label>
+              <select name="line_uom">
+                {Object.keys(UOMS).map((u) => (
+                  <option value={u} selected={l.uom === u}>{bi(UOMS, u, locale)}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field narrow">
+              <label>{T('f.sku_size')}</label>
+              <input type="number" name="line_sku_size_g" step="0.001" min="0" value={l.sku_size_g ?? ''} />
+            </div>
+            <div class="field narrow">
+              <label>{T('f.unit_price')}</label>
+              <input type="number" name="line_unit_price" step="0.0001" min="0" value={l.unit_price ?? ''} />
+            </div>
+            <div class="field">
+              <label>{T('f.cultivar')}</label>
+              <input type="text" name="line_cultivar" value={l.cultivar ?? ''} />
+            </div>
+            <div class="field narrow">
+              <label>{T('f.excise_province')}</label>
+              <select name="line_excise_province">
+                <option value="">—</option>
+                {PROVINCES.map((p) => (
+                  <option value={p} selected={l.excise_province === p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            <button type="button" class="line-remove" title={T('form.removeLine')}>&times;</button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <template id="lineTemplate">
+      <div class="line">
+        <div class="line-grid">
+          <input type="hidden" name="line_id" value="" />
+          <div class="field grow combo" data-combo="product">
+            <label>{T('f.product')} <em>*</em></label>
+            <input class="combo-input" type="text" name="line_product_name" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-autocomplete="list" />
+            <input class="combo-id" type="hidden" name="line_product_id" value="" />
+          </div>
+          <div class="field">
+            <label>{T('f.lot_ref')}</label>
+            <input type="text" name="line_lot_ref" />
+          </div>
+          <div class="field narrow">
+            <label>{T('f.qty')} <em>*</em></label>
+            <input type="number" name="line_qty" step="0.001" min="0" />
+          </div>
+          <div class="field narrow">
+            <label>{T('f.uom')}</label>
+            <select name="line_uom">
+              {Object.keys(UOMS).map((u) => <option value={u}>{bi(UOMS, u, locale)}</option>)}
+            </select>
+          </div>
+          <div class="field narrow">
+            <label>{T('f.sku_size')}</label>
+            <input type="number" name="line_sku_size_g" step="0.001" min="0" />
+          </div>
+          <div class="field narrow">
+            <label>{T('f.unit_price')}</label>
+            <input type="number" name="line_unit_price" step="0.0001" min="0" />
+          </div>
+          <div class="field">
+            <label>{T('f.cultivar')}</label>
+            <input type="text" name="line_cultivar" />
+          </div>
+          <div class="field narrow">
+            <label>{T('f.excise_province')}</label>
+            <select name="line_excise_province">
+              <option value="">—</option>
+              {PROVINCES.map((p) => <option value={p}>{p}</option>)}
+            </select>
+          </div>
+          <button type="button" class="line-remove" title={T('form.removeLine')}>&times;</button>
+        </div>
+      </div>
+    </template>
+
+    <button type="button" id="addLine" class="btn btn-secondary" style="margin-top:6px;">
+      + {T('form.addLine')}
+    </button>
+  </div>
+
+  <!-- -------------------------------------------------------- attachments -->
+  <div class="card" style="margin-top:16px;">
+    <h2 class="sec">{T('form.attachment')}</h2>
+
+    {isEdit && attachments.length > 0 && (
+      <ul class="att-list">
+        {attachments.map((a) => (
+          <li>
+            <a href={`/api/portail/atelier/attachments/${a.id}`}>{a.filename}</a>
+            <span class="sub">{a.kind.toUpperCase()} · {Math.round((a.size_bytes ?? 0) / 1024)} ko</span>
+            <button type="submit" class="att-del" formnovalidate
+                    formaction={`/api/portail/atelier/commandes/${order?.id}/attachment-delete`}
+                    name="attachment_id" value={a.id}
+                    title={T('att.remove')}>&times;</button>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <div class="field">
+      <label for="po_file">{isEdit ? T('att.add') : T('f.po_file')}</label>
+      <input type="file" id="po_file" name="po_file"
+             accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.doc,.docx" />
+      <p class="hint">{T('f.po_file.hint')}</p>
+    </div>
+  </div>
+
+  <QuickAdd kinds={['product', 'customer']} seeds={comboSeeds} materials={materials} />
+
+  <div style="display:flex; gap:10px; margin-top:18px; align-items:center;">
+    <button type="submit" class="btn btn-primary">{isEdit ? T('form.saveChanges') : T('form.submit')}</button>
+    <a href={cancelHref} class="btn btn-secondary" style="text-decoration:none;">{T('btn.cancel')}</a>
+  </div>
+</form>
+
+<style is:global>
+  #orderForm h2.sec { font-size: .95rem; margin: 0 0 14px; }
+  #orderForm .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  #orderForm .field-wide { grid-column: 1 / -1; }
+  #orderForm .field em { color: var(--p-accent); font-style: normal; }
+  #orderForm .field.err input, #orderForm .field.err select, #orderForm .field.err textarea {
+    border-color: var(--p-danger);
+  }
+  #orderForm .pair { display: flex; gap: 8px; }
+  #orderForm .pair input { min-width: 0; }
+
+  #orderForm .line { border-top: 1px solid var(--p-border); padding-top: 12px; margin-top: 12px; }
+  #orderForm .line:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+  #orderForm .line-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  #orderForm .line-grid .field { flex: 1 1 130px; min-width: 0; }
+  #orderForm .line-grid .field.grow { flex: 3 1 220px; }
+  #orderForm .line-grid .field.narrow { flex: 0 1 92px; }
+  #orderForm .line-grid label { font-size: .78rem; margin-bottom: 3px; }
+  #orderForm .line-remove {
+    background: none; border: 1px solid var(--p-border); color: var(--p-muted);
+    width: 32px; height: 34px; border-radius: 6px; cursor: pointer; font-size: 1.1rem; line-height: 1;
+  }
+  #orderForm .line-remove:hover { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+
+  #orderForm .att-list { list-style: none; margin: 0 0 14px; padding: 0; }
+  #orderForm .att-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid var(--p-border);
+  }
+  #orderForm .att-list li:last-child { border-bottom: 0; }
+  #orderForm .att-list a { font-size: .88rem; word-break: break-all; }
+  #orderForm .att-list .sub { color: var(--p-muted); font-size: .76rem; margin-left: auto; white-space: nowrap; }
+  #orderForm .att-del {
+    background: none; border: 1px solid var(--p-border); color: var(--p-muted);
+    width: 26px; height: 26px; border-radius: 5px; cursor: pointer; line-height: 1; flex: none;
+  }
+  #orderForm .att-del:hover { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+</style>
+
+<script>
+  const strings = JSON.parse(document.getElementById('quick-i18n')?.textContent || '{}');
+  const tpl = document.getElementById('lineTemplate') as HTMLTemplateElement | null;
+  const rows = document.getElementById('lineRows');
+  const addBtn = document.getElementById('addLine');
+
+  function wire(line: HTMLElement) {
+    line.querySelector('.line-remove')?.addEventListener('click', () => {
+      if ((rows?.children.length ?? 0) > 1) {
+        line.remove();
+      } else {
+        line.querySelectorAll('input, select').forEach((el) => {
+          (el as HTMLInputElement | HTMLSelectElement).value = '';
+        });
+      }
+    });
+  }
+
+  function addLine() {
+    if (!tpl || !rows) return;
+    const node = tpl.content.cloneNode(true) as DocumentFragment;
+    const line = node.querySelector('.line') as HTMLElement;
+    rows.appendChild(node);
+    wire(line);
+  }
+
+  // Server-rendered rows (edit mode) need the same remove behaviour.
+  rows?.querySelectorAll<HTMLElement>('.line').forEach(wire);
+  addBtn?.addEventListener('click', addLine);
+  if ((rows?.children.length ?? 0) === 0) addLine();
+
+  // Picking a product carries its size across, without overwriting a typed value.
+  document.addEventListener('combo:pick', (e) => {
+    const combo = e.target as HTMLElement;
+    const row = (e as CustomEvent).detail;
+
+    if (combo.dataset.combo === 'product') {
+      const size = combo.closest('.line')?.querySelector<HTMLInputElement>('input[name="line_sku_size_g"]');
+      if (size && !size.value && row.sku_size_g) size.value = String(row.sku_size_g);
+      return;
+    }
+
+    if (combo.dataset.combo === 'customer') {
+      const prov = document.getElementById('excise_province') as HTMLSelectElement | null;
+      const terms = document.getElementById('payment_terms') as HTMLInputElement | null;
+      const hint = document.getElementById('customerHint');
+      if (prov && !prov.value && row.default_excise_province) prov.value = row.default_excise_province;
+      if (terms && !terms.value && row.payment_terms) terms.value = row.payment_terms;
+      if (hint) {
+        hint.textContent = row.requires_case_gtin
+          ? 'Distributeur provincial — le GTIN de caisse et les unités par caisse seront exigés au run d’emballage.'
+          : '';
+        hint.hidden = !row.requires_case_gtin;
+      }
+    }
+  });
+
+  // A customer typed but never picked from the list has no id behind it.
+  document.getElementById('orderForm')?.addEventListener('submit', (e) => {
+    const submitter = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (submitter?.hasAttribute('formnovalidate')) return;   // attachment delete
+
+    const customerCombo = document.querySelector<HTMLElement>('.combo[data-combo="customer"]');
+    if (!customerCombo) return;
+    const input = customerCombo.querySelector<HTMLInputElement>('.combo-input');
+    const id = customerCombo.querySelector<HTMLInputElement>('.combo-id');
+    if (input?.required && input.value.trim() && !id?.value) {
+      e.preventDefault();
+      input.setCustomValidity(strings.pickOne);
+      input.reportValidity();
+      setTimeout(() => input.setCustomValidity(''), 2500);
+    }
+  });
+</script>

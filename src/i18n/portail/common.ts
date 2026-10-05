@@ -7,6 +7,7 @@
 export const frCommon = {
   'nav.home': 'Accueil',
   'nav.forms': 'Formulaires R&D',
+  'nav.atelier': 'Atelier',
   'nav.calculators': 'Calculatrices',
   'nav.vendors': 'VQ & licences Oaziz',
   'nav.admin': 'Administration',
@@ -48,6 +49,7 @@ export type CommonDict = typeof frCommon;
 export const enCommon: Partial<Record<keyof CommonDict, string>> = {
   'nav.home': 'Home',
   'nav.forms': 'R&D Forms',
+  'nav.atelier': 'Atelier',
   'nav.calculators': 'Calculators',
   'nav.vendors': 'VQ & Oaziz Licenses',
   'nav.admin': 'Administration',

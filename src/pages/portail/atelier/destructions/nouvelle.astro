@@ -1,0 +1,83 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frDestructions, enDestructions } from '../../../../i18n/portail/atelier-destructions';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDestructions, enDestructions);
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const flash = error ? T(`flash.error.${error}` as keyof typeof frDestructions) : null;
+
+const METHODS = [
+  'incineration', 'chemical_denaturing', 'composting',
+  'shredding_and_landfill', 'third_party', 'other',
+];
+const today = new Date().toISOString().slice(0, 10);
+---
+<PortailLayout title={T('new.title')} staffName={staff.full_name}>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/destructions" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('detail.back')}
+    </a>
+  </p>
+
+  <h1 style="margin-bottom: 6px;">{T('new.title')}</h1>
+  <p style="color: var(--p-muted); font-size: .92rem; margin-bottom: 20px; max-width: 70ch;">
+    {T('new.subtitle')}
+  </p>
+
+  {flash && <div class="flash flash-error" style="margin-bottom:16px;">{flash}</div>}
+
+  <form method="POST" action="/api/portail/atelier/destructions">
+    <div class="card">
+      <div class="grid">
+        <div class="field">
+          <label for="method">{T('f.method')} <em>*</em></label>
+          <select id="method" name="method" required>
+            {METHODS.map((m) => (
+              <option value={m}>{T(`method.${m}` as keyof typeof frDestructions)}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label for="planned_for">{T('f.plannedFor')}</label>
+          <input type="date" id="planned_for" name="planned_for" value={today} />
+        </div>
+        <div class="field wide">
+          <label for="reason">{T('f.reason')} <em>*</em></label>
+          <input type="text" id="reason" name="reason" required />
+          <p class="hint">{T('f.reason.hint')}</p>
+        </div>
+        <div class="field wide">
+          <label for="method_detail">{T('f.methodDetail')}</label>
+          <input type="text" id="method_detail" name="method_detail" />
+        </div>
+        <div class="field wide">
+          <label for="notes">{T('f.notes')}</label>
+          <textarea id="notes" name="notes" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:18px;">
+      <button type="submit" class="btn btn-primary">{T('new.submit')}</button>
+      <a href="/portail/atelier/destructions" class="btn btn-secondary" style="text-decoration:none;">Annuler</a>
+    </div>
+  </form>
+</PortailLayout>
+
+<style>
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field.wide { grid-column: 1 / -1; }
+  .field em { color: var(--p-accent); font-style: normal; }
+</style>

@@ -218,6 +218,7 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
                         ? 'active' : ''
                     }>{Tc('nav.forms')}</a>
                   )}
+                  {perms.has('atelier') && <a href="/portail/atelier" class={Astro.url.pathname.startsWith('/portail/atelier') ? 'active' : ''}>{Tc('nav.atelier')}</a>}
                   {perms.has('calculators') && <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>}
                   {can(perms, 'vq', 'licenses') && <a href={vqHref(perms)} class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('nav.vendors')}</a>}
                   {can(perms, 'hr', 'hr_employees', 'hr_evaluations') && <a href="/portail/rh" class={Astro.url.pathname.startsWith('/portail/rh') ? 'active' : ''}>{Tc('nav.hr')}</a>}

@@ -1,0 +1,265 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import {
+  currentOpsStaff, findRefTable, tableLabel, tableDesc, fieldLabel, optionLabel, canManage,
+  type FieldSpec,
+} from '../../../../lib/ops';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frAtelier, enAtelier } from '../../../../i18n/portail/atelier';
+
+// Authenticate before resolving the slug, so an anonymous caller can't probe
+// which reference tables exist by watching for 404 vs. redirect.
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const slug = String(Astro.params.table ?? '');
+const spec = findRefTable(slug);
+if (!spec) return new Response('Not found', { status: 404 });
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frAtelier, enAtelier);
+const manage = canManage(staff.ops_role);
+
+const url = new URL(Astro.request.url);
+const editId = url.searchParams.get('edit');
+const isNew = url.searchParams.get('new') === '1';
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+
+const { data: rowsData } = await supabase
+  .from(spec.table)
+  .select('*')
+  .order(spec.orderBy, { ascending: spec.ascending ?? true });
+const rows: Record<string, any>[] = rowsData ?? [];
+
+// Foreign-key option lists, one query per referenced table.
+const fkTables = [...new Set(spec.fields.filter((f) => f.type === 'fk' && f.fkTable).map((f) => f.fkTable!))];
+const fkOptions: Record<string, { id: string; label: string }[]> = {};
+for (const t of fkTables) {
+  const labelCol = spec.fields.find((f) => f.fkTable === t)?.fkLabel ?? 'name';
+  const { data } = await supabase.from(t).select(`id, ${labelCol}`).order(labelCol);
+  fkOptions[t] = (data ?? []).map((r: any) => ({ id: r.id, label: String(r[labelCol] ?? r.id) }));
+}
+
+const editing = editId ? rows.find((r) => r.id === editId) ?? null : null;
+const showForm = manage && (isNew || !!editing);
+
+const listFields = spec.fields.filter((f) => f.inList);
+const action = `/api/portail/atelier/ref/${spec.slug}`;
+
+function fkLabelFor(f: FieldSpec, value: unknown): string {
+  if (!value || !f.fkTable) return '—';
+  return fkOptions[f.fkTable]?.find((o) => o.id === value)?.label ?? '—';
+}
+
+function displayCell(f: FieldSpec, row: Record<string, any>): string {
+  const v = row[f.key];
+  if (f.type === 'boolean') return v ? T('yes') : T('no');
+  if (f.type === 'fk') return fkLabelFor(f, v);
+  if (f.type === 'select') {
+    const opt = f.options?.find((o) => o.value === v);
+    return opt ? optionLabel(opt, locale) : (v ?? '—');
+  }
+  if (v === null || v === undefined || v === '') return '—';
+  return String(v);
+}
+
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frAtelier)
+  : error
+    ? T(`flash.error.${error}` as keyof typeof frAtelier)
+    : null;
+---
+<PortailLayout title={`${tableLabel(spec, locale)} — ${T('title')}`} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/parametres" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('btn.back')}
+    </a>
+  </p>
+
+  <div class="head-row">
+    <div>
+      <h1 style="margin-bottom: 6px;">{tableLabel(spec, locale)}</h1>
+      <p style="color: var(--p-muted); font-size: .9rem; margin: 0; max-width: 70ch;">{tableDesc(spec, locale)}</p>
+    </div>
+    {manage && spec.allowCreate && !showForm && (
+      <a href={`?new=1`} class="btn btn-primary" style="text-decoration:none; white-space:nowrap;">
+        {T('btn.new')}
+      </a>
+    )}
+  </div>
+
+  {flash && (
+    <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-top:16px;">{flash}</div>
+  )}
+
+  {!manage && (
+    <div class="flash" style="margin-top:16px; background: var(--p-bg); border:1px solid var(--p-border); color: var(--p-muted);">
+      {T('readonly.notice')}
+    </div>
+  )}
+
+  {showForm && (
+    <form method="POST" action={action} class="card" style="margin-top: 18px;">
+      <h2 style="font-size: 1rem; margin-bottom: 14px;">{editing ? T('form.edit') : T('form.new')}</h2>
+      <input type="hidden" name="_action" value={editing ? 'update' : 'create'} />
+      {editing && <input type="hidden" name="_id" value={editing.id} />}
+
+      <div class="field-grid">
+        {spec.fields.map((f) => {
+          const current = editing ? editing[f.key] : null;
+          return (
+            <div class={f.type === 'textarea' ? 'field field-wide' : 'field'}>
+              <label for={`f_${f.key}`}>
+                {fieldLabel(f, locale)}
+                {f.required && <span style="color: var(--p-accent);"> *</span>}
+              </label>
+
+              {f.type === 'boolean' ? (
+                <label class="check">
+                  <input type="checkbox" id={`f_${f.key}`} name={f.key} checked={!!current} />
+                  <span>{fieldLabel(f, locale)}</span>
+                </label>
+              ) : f.type === 'textarea' ? (
+                <textarea id={`f_${f.key}`} name={f.key} rows="3">{current ?? ''}</textarea>
+              ) : f.type === 'select' ? (
+                <select id={`f_${f.key}`} name={f.key} required={f.required}>
+                  {!f.required && <option value="">{T('form.none')}</option>}
+                  {f.options?.map((o) => (
+                    <option value={o.value} selected={current === o.value}>{optionLabel(o, locale)}</option>
+                  ))}
+                </select>
+              ) : f.type === 'fk' ? (
+                <select id={`f_${f.key}`} name={f.key} required={f.required}>
+                  <option value="">{T('form.none')}</option>
+                  {(fkOptions[f.fkTable!] ?? []).map((o) => (
+                    <option value={o.id} selected={current === o.id}>{o.label}</option>
+                  ))}
+                </select>
+              ) : f.type === 'colour' ? (
+                <input type="color" id={`f_${f.key}`} name={f.key} value={current ?? '#6b7280'}
+                       style="height: 38px; padding: 3px;" required={f.required} />
+              ) : f.type === 'number' ? (
+                <input type="number" id={`f_${f.key}`} name={f.key} value={current ?? ''}
+                       step={f.step ?? '1'} required={f.required} />
+              ) : (
+                <input type="text" id={`f_${f.key}`} name={f.key} value={current ?? ''} required={f.required} />
+              )}
+
+              {(locale === 'en' ? f.hintEn : f.hintFr) && (
+                <p class="hint">{locale === 'en' ? f.hintEn : f.hintFr}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:18px; align-items:center;">
+        <button type="submit" class="btn btn-primary">{T('btn.save')}</button>
+        <a href={`/portail/atelier/parametres/${spec.slug}`} class="btn btn-secondary" style="text-decoration:none;">
+          {T('btn.cancel')}
+        </a>
+      </div>
+    </form>
+  )}
+
+  {editing && manage && spec.allowDelete && (
+    <form method="POST" action={action} style="margin-top: 12px;"
+          onsubmit="return confirm(this.dataset.confirm)"
+          data-confirm={locale === 'en' ? 'Delete this entry permanently?' : 'Supprimer définitivement cette entrée ?'}>
+      <input type="hidden" name="_action" value="delete" />
+      <input type="hidden" name="_id" value={editing.id} />
+      <button type="submit" class="btn btn-danger">{T('btn.delete')}</button>
+    </form>
+  )}
+
+  <div class="list-head">
+    <span class="count">{T('list.count').replace('{n}', String(rows.length))}</span>
+    {spec.searchFields && rows.length > 0 && (
+      <input type="search" id="rowSearch" placeholder={T('list.search')} autocomplete="off" />
+    )}
+  </div>
+
+  {rows.length === 0 ? (
+    <div class="card empty-state">{T('list.empty')}</div>
+  ) : (
+    <div class="table-wrap">
+      <table class="data" id="refTable">
+        <thead>
+          <tr>
+            {listFields.map((f) => <th>{fieldLabel(f, locale)}</th>)}
+            {manage && <th style="width:1%"></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr data-search={
+              (spec.searchFields ?? []).map((k) => String(row[k] ?? '')).join(' ').toLowerCase()
+            }>
+              {listFields.map((f) => (
+                <td>
+                  {f.type === 'colour'
+                    ? <span class="swatch"><i style={`background:${row[f.key]}`}></i>{row[f.key]}</span>
+                    : displayCell(f, row)}
+                </td>
+              ))}
+              {manage && (
+                <td style="text-align:right; white-space:nowrap;">
+                  <a href={`?edit=${row.id}`} class="row-edit">{T('btn.edit')}</a>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="no-results hint" hidden>{T('list.searchNone')}</p>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .field-wide { grid-column: 1 / -1; }
+  .check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+  .check input { width: auto; }
+  .check span { font-size: .9rem; color: var(--p-muted); }
+  .list-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin: 28px 0 10px; flex-wrap: wrap;
+  }
+  .list-head .count { font-size: .82rem; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+  .list-head input[type="search"] { width: auto; min-width: 220px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-card); }
+  .table-wrap table.data { margin: 0; }
+  .row-edit { color: var(--p-accent); font-size: .85rem; text-decoration: none; font-weight: 500; }
+  .row-edit:hover { text-decoration: underline; }
+  .swatch { display: inline-flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+  .swatch i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; border: 1px solid var(--p-border); }
+  .no-results { padding: 18px; margin: 0; text-align: center; }
+</style>
+
+<script>
+  // Client-side row filter. Purely additive — the table is complete without it.
+  const search = document.getElementById('rowSearch') as HTMLInputElement | null;
+  if (search) {
+    const rows = Array.from(
+      document.querySelectorAll<HTMLTableRowElement>('#refTable tbody tr'),
+    );
+    const none = document.querySelector<HTMLElement>('.no-results');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of rows) {
+        const hit = !q || (row.dataset.search || '').includes(q);
+        row.hidden = !hit;
+        if (hit) shown++;
+      }
+      if (none) none.hidden = shown !== 0;
+    });
+  }
+</script>

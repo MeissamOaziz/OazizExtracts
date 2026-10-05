@@ -1,0 +1,606 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { formatQty, formatDate, formatDateTime, formatMoney } from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frLots, enLots } from '../../../../i18n/portail/atelier-lots';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const id = String(Astro.params.id ?? '');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frLots, enLots);
+
+const { data: lot } = await supabase
+  .from('v_ops_lot_ledger').select('*').eq('id', id).maybeSingle();
+if (!lot) return new Response('Not found', { status: 404 });
+
+const [movRes, upRes, downRes, salesRes, attRes, potRes, aliasRes, sampRes, rndRes] = await Promise.all([
+  supabase.from('ops_lot_movements')
+    .select('*, actor:staff ( full_name )')
+    .eq('lot_id', id).order('occurred_at', { ascending: false }).limit(200),
+  supabase.rpc('ops_lot_ancestors', { p_lot: id }),
+  supabase.rpc('ops_lot_descendants', { p_lot: id }),
+  supabase.from('v_ops_lot_sales').select('*').eq('lot_id', id),
+  supabase.from('ops_lot_attachments').select('*').eq('lot_id', id).order('uploaded_at'),
+  supabase.from('ops_lot_potency').select('*').eq('lot_id', id).order('recorded_at', { ascending: false }),
+  supabase.from('ops_lot_aliases').select('*').eq('lot_id', id).order('recorded_at'),
+  supabase.from('ops_lab_samples')
+    .select('*, requester:staff ( full_name )')
+    .eq('lot_id', id).order('created_at', { ascending: false }),
+  supabase.from('submissions')
+    .select('id, product_name, form_date')
+    .order('created_at', { ascending: false }).limit(50),
+]);
+
+const movements = movRes.data ?? [];
+const ancestors = upRes.data ?? [];
+const descendants = downRes.data ?? [];
+const sales = salesRes.data ?? [];
+const attachments = attRes.data ?? [];
+const potencies = potRes.data ?? [];
+const aliases = aliasRes.data ?? [];
+const samples = sampRes.data ?? [];
+const rndForms = rndRes.data ?? [];
+
+// Only QA may move a batch across the release gate.
+const canRelease = staff.ops_role === 'qa' || staff.ops_role === 'admin';
+const SAMPLE_PURPOSES = ['release_testing', 'retest', 'stability', 'rnd', 'other'];
+const hasCoaFile = attachments.some((a: any) => a.kind === 'coa');
+
+// Resolve the related lots and the edges that connect them, so each side of the
+// genealogy can show how many grams actually moved.
+const relatedIds = [...new Set([...ancestors, ...descendants].map((r: any) => r.lot_id))];
+const [relRes, flowRes] = await Promise.all([
+  relatedIds.length
+    ? supabase.from('v_ops_lot_ledger').select('id, lot_code, material_code, cultivar').in('id', relatedIds)
+    : Promise.resolve({ data: [] as any[] }),
+  supabase.from('v_ops_lot_flow')
+    .select('*')
+    .or(`parent_lot_id.eq.${id},child_lot_id.eq.${id}`),
+]);
+const related = relRes.data ?? [];
+const flows = flowRes.data ?? [];
+
+const relOf = (lid: string) => related.find((r: any) => r.id === lid);
+const directParent = (lid: string) => flows.find((f: any) => f.parent_lot_id === lid && f.child_lot_id === id);
+const directChild = (lid: string) => flows.find((f: any) => f.child_lot_id === lid && f.parent_lot_id === id);
+
+const url = new URL(Astro.request.url);
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frLots)
+  : error ? T(`flash.error.${error}` as keyof typeof frLots) : null;
+
+const drift = Number(lot.computed_on_hand_g) - Number(lot.recorded_on_hand_g);
+const materialName = locale === 'en' ? lot.material_en : lot.material_fr;
+---
+<PortailLayout title={lot.lot_code} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/lots" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('list.title')}
+    </a>
+  </p>
+
+  {flash && <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-bottom:16px;">{flash}</div>}
+
+  <div class="head">
+    <div>
+      <h1 class="mono" style="margin-bottom: 4px;">{lot.lot_code}</h1>
+      <p class="submeta">
+        <span>{lot.material_code} · {materialName}</span>
+        {lot.cultivar && <><span>·</span><span>{lot.cultivar}</span></>}
+        {lot.supplier_name && <><span>·</span><span>{lot.supplier_name}</span></>}
+      </p>
+    </div>
+    <div class="head-side">
+      <span class={
+        lot.release_status === 'released' ? 'pill tone-good'
+        : lot.release_status === 'conditional' ? 'pill tone-cond'
+        : 'pill tone-warn'
+      }>
+        {lot.release_status === 'released' ? T('lot.word')
+          : lot.release_status === 'conditional' ? T('cond.badge')
+          : T('batch.badge')}
+      </span>
+      <span class="pill">{T(`state.${lot.state}` as keyof typeof frLots)}</span>
+      <span class="pill">{T(`origin.${lot.origin}` as keyof typeof frLots)}</span>
+    </div>
+  </div>
+
+  {lot.release_status === 'conditional' && (
+    <div class="cond-banner">
+      <div>
+        <strong>&#9888; {T('cond.word')}</strong>
+        <span>{T('cond.banner')}</span>
+      </div>
+      <p class="cond-meta">
+        {T('cond.by')
+          .replace('{name}', lot.conditional_by ?? '—')
+          .replace('{date}', formatDateTime(lot.conditional_at))}
+        {lot.pending_sample_count > 0 && (
+          <> &nbsp;·&nbsp; {T('cond.pending').replace('{n}', String(lot.pending_sample_count))}</>
+        )}
+      </p>
+      {lot.conditional_reason && (
+        <p class="cond-meta"><span class="k">{T('cond.reason')}</span> {lot.conditional_reason}</p>
+      )}
+    </div>
+  )}
+
+  {lot.release_status === 'batch' && (
+    <div class="batch-banner">
+      <strong>{T('batch.word')}</strong>
+      <span>{T('batch.notSellable')}</span>
+    </div>
+  )}
+
+  {Math.abs(drift) > 0.001 && (
+    <div class="flash flash-error" style="margin-bottom:16px;">
+      {T('detail.mismatch').replace('{n}', formatQty(drift))}
+    </div>
+  )}
+
+  <!-- ------------------------------------------------------- balances -->
+  <div class="balances">
+    <div class="bal"><span>{T('col.received')}</span><strong>{formatQty(lot.received_g)}</strong></div>
+    <div class="bal"><span>{T('col.produced')}</span><strong>{formatQty(lot.produced_g)}</strong></div>
+    <div class="bal"><span>{T('col.consumed')}</span><strong>{formatQty(lot.consumed_g)}</strong></div>
+    <div class="bal"><span>{T('dir.shipped')}</span><strong>{formatQty(lot.shipped_g)}</strong></div>
+    <div class="bal"><span>{T('col.sampled')}</span><strong>{formatQty(lot.sampled_g)}</strong></div>
+    <div class="bal on-hand"><span>{T('detail.onHand')}</span><strong>{formatQty(lot.computed_on_hand_g)} g</strong></div>
+  </div>
+
+  <div class="cols">
+    <div class="main">
+      <!-- ---------------------------------------------------- genealogy -->
+      <div class="card">
+        <h2 class="sec">{T('detail.genealogy')}</h2>
+
+        <h3>{T('detail.madeFrom')}</h3>
+        {ancestors.length === 0 ? (
+          <p class="hint">{T('detail.noParents')}</p>
+        ) : (
+          <ul class="tree">
+            {ancestors.sort((a: any, b: any) => a.depth - b.depth).map((a: any) => {
+              const r = relOf(a.lot_id);
+              const edge = directParent(a.lot_id);
+              return (
+                <li style={`--indent:${(a.depth - 1) * 16}px`}>
+                  <a href={`/portail/atelier/lots/${a.lot_id}`} class="mono">{r?.lot_code ?? '—'}</a>
+                  <span class="sub">{r?.material_code}{r?.cultivar ? ` · ${r.cultivar}` : ''}</span>
+                  {edge?.qty_in_g != null && <span class="grams">{formatQty(edge.qty_in_g)} g</span>}
+                  <span class="depth">{T('detail.depth').replace('{n}', String(a.depth))}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <h3>{T('detail.wentInto')}</h3>
+        {descendants.length === 0 ? (
+          <p class="hint">{T('detail.noChildren')}</p>
+        ) : (
+          <ul class="tree">
+            {descendants.sort((a: any, b: any) => a.depth - b.depth).map((d: any) => {
+              const r = relOf(d.lot_id);
+              const edge = directChild(d.lot_id);
+              return (
+                <li style={`--indent:${(d.depth - 1) * 16}px`}>
+                  <a href={`/portail/atelier/lots/${d.lot_id}`} class="mono">{r?.lot_code ?? '—'}</a>
+                  <span class="sub">{r?.material_code}{r?.cultivar ? ` · ${r.cultivar}` : ''}</span>
+                  {edge?.qty_out_g != null && <span class="grams">{formatQty(edge.qty_out_g)} g</span>}
+                  {edge?.process_code && (
+                    <span class="sub">{T('detail.viaStage').replace('{process}', edge.process_code)}</span>
+                  )}
+                  <span class="depth">{T('detail.depth').replace('{n}', String(d.depth))}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <!-- ------------------------------------------------------ samples -->
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('samples.title')}</h2>
+        <p class="hint" style="margin-top:-6px;">{T('samples.hint')}</p>
+
+        {samples.length > 0 && (
+          <div class="tbl-wrap" style="margin-bottom:0;">
+            <table class="data mini">
+              <tbody>
+                {samples.map((sp: any) => (
+                  <tr class={sp.status === 'cancelled' ? 'cancelled' : ''}>
+                    <td class="mono">{sp.sample_no}</td>
+                    <td>{T(`purpose.${sp.purpose}` as keyof typeof frLots)}</td>
+                    <td class="mono num">{formatQty(sp.qty_g)} g</td>
+                    <td class="sub">{sp.lab_name ?? '—'}</td>
+                    <td class="sub">{T(`sstatus.${sp.status}` as keyof typeof frLots)}</td>
+                    <td class="sub" style="white-space:nowrap;">
+                      {sp.sent_at ? formatDate(sp.sent_at) : formatDate(sp.created_at)}
+                    </td>
+                    <td style="text-align:right;">
+                      {sp.status !== 'cancelled' && (
+                        <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/sample`}
+                              style="margin:0;" onsubmit="return confirm(this.dataset.confirm)"
+                              data-confirm={T('samples.cancelConfirm')}>
+                          <input type="hidden" name="_action" value="cancel" />
+                          <input type="hidden" name="sample_id" value={sp.id} />
+                          <button type="submit" class="linkbtn">{T('samples.cancelBtn')}</button>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <details class="addsample" open={samples.length === 0}>
+          <summary>+ {T('samples.add')}</summary>
+          <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/sample`} class="sgrid">
+            <div class="field narrow">
+              <label for="sqty">{T('samples.qty')} <em>*</em></label>
+              <input type="number" id="sqty" name="qty_g" step="0.001" min="0.001"
+                     max={lot.computed_on_hand_g} required />
+            </div>
+            <div class="field">
+              <label for="spurpose">{T('samples.purpose')}</label>
+              <select id="spurpose" name="purpose">
+                {SAMPLE_PURPOSES.map((v) => (
+                  <option value={v}>{T(`purpose.${v}` as keyof typeof frLots)}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field">
+              <label for="slab">{T('samples.lab')}</label>
+              <input type="text" id="slab" name="lab_name" list="labList" />
+              <datalist id="labList">
+                <option value="High North"></option>
+                <option value="PPB Analytical"></option>
+              </datalist>
+            </div>
+            <div class="field">
+              <label for="ssent">{T('samples.sentAt')}</label>
+              <input type="date" id="ssent" name="sent_at" />
+            </div>
+            <div class="field">
+              <label for="sback">{T('samples.expected')}</label>
+              <input type="date" id="sback" name="expected_back" />
+            </div>
+            <div class="field wide">
+              <label for="srnd">{T('samples.rnd')}</label>
+              <select id="srnd" name="rnd_submission_id">
+                <option value="">—</option>
+                {rndForms.map((f: any) => (
+                  <option value={f.id}>{f.product_name} · {formatDate(f.form_date)}</option>
+                ))}
+              </select>
+              <p class="hint">{T('samples.rnd.hint')}</p>
+            </div>
+            <div class="field wide">
+              <label for="snotes">{T('samples.notes')}</label>
+              <input type="text" id="snotes" name="notes" />
+            </div>
+            <div class="field wide">
+              <button type="submit" class="btn btn-primary">{T('samples.submit')}</button>
+            </div>
+          </form>
+        </details>
+      </div>
+
+      <!-- ---------------------------------------------------- movements -->
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.movements')}</h2>
+        {movements.length === 0 ? (
+          <p class="hint">{T('detail.noMovements')}</p>
+        ) : (
+          <div class="tbl-wrap">
+            <table class="data mini">
+              <tbody>
+                {movements.map((m: any) => (
+                  <tr>
+                    <td class={`dir ${m.direction}`}>{T(`dir.${m.direction}` as keyof typeof frLots)}</td>
+                    <td class="mono num">
+                      {Number(m.qty_g) > 0 && m.direction !== 'consumed' && m.direction !== 'shipped' ? '+' : ''}
+                      {formatQty(m.qty_g)} g
+                    </td>
+                    <td class="sub">{m.note ?? ''}</td>
+                    <td class="sub" style="white-space:nowrap;">
+                      {m.actor?.full_name ?? m.actor_email ?? '—'} · {formatDateTime(m.occurred_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <!-- -------------------------------------------------------- sales -->
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.sales')}</h2>
+        {sales.length === 0 ? (
+          <p class="hint">{T('detail.noSales')}</p>
+        ) : (
+          <div class="tbl-wrap">
+            <table class="data mini">
+              <tbody>
+                {sales.map((s: any) => (
+                  <tr>
+                    <td>
+                      <a href={`/portail/atelier/commandes/${s.order_id}`}>
+                        {s.customer_po_ref ?? s.order_no}
+                      </a>
+                      <span class="sub block">{s.customer_name ?? '—'}</span>
+                    </td>
+                    <td>{s.product_name}</td>
+                    <td class="mono num">{formatQty(s.qty_sold)} {s.uom}</td>
+                    <td class="mono num">{formatMoney(s.unit_price, s.currency)}</td>
+                    <td class="sub" style="white-space:nowrap;">{formatDate(s.date_ordered)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------- sidebar -->
+    <aside class="side">
+      <div class="card">
+        <h2 class="sec">{T('detail.potency')}</h2>
+        {potencies.length === 0 ? <p class="hint">—</p> : (
+          <ul class="plain">
+            {potencies.map((p: any) => (
+              <li>
+                <strong class="mono">
+                  {p.thc_pct !== null ? `THC ${formatQty(p.thc_pct)}%` : ''}
+                  {p.cbd_pct !== null ? `  CBD ${formatQty(p.cbd_pct)}%` : ''}
+                </strong>
+                <span class="sub block">
+                  {T(`src.${p.source}` as keyof typeof frLots)}
+                  {p.coa_ref ? ` · ${p.coa_ref}` : ''}
+                  {p.tested_at ? ` · ${formatDate(p.tested_at)}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.external')}</h2>
+        {aliases.length === 0 ? <p class="hint">—</p> : (
+          <ul class="plain">
+            {aliases.map((a: any) => (
+              <li><span class="sub">{a.system}</span> <strong class="mono">{a.external_ref}</strong></li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.attachments')}</h2>
+        {attachments.length === 0 ? <p class="hint">{T('detail.noAttachments')}</p> : (
+          <ul class="plain">
+            {attachments.map((a: any) => (
+              <li>
+                <a href={`/api/portail/atelier/lot-files/${a.id}`}>{a.filename}</a>
+                <span class="sub block">{a.kind.toUpperCase()} · {Math.round((a.size_bytes ?? 0) / 1024)} ko</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {lot.release_status !== 'released' && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('cond.title')}</h2>
+          {!canRelease ? (
+            <p class="hint">{T('release.onlyQa')}</p>
+          ) : lot.release_status === 'conditional' ? (
+            <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/conditional`}
+                  onsubmit="return confirm(this.dataset.confirm)" data-confirm={T('cond.revokeConfirm')}>
+              <input type="hidden" name="_action" value="revoke" />
+              <div class="field">
+                <label for="cond_revoke">{T('cond.revokeReason')}</label>
+                <input type="text" id="cond_revoke" name="reason" required />
+              </div>
+              <button type="submit" class="btn btn-danger" style="margin-top:8px;">
+                {T('cond.revoke')}
+              </button>
+            </form>
+          ) : (
+            <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/conditional`}
+                  onsubmit="return confirm(this.dataset.confirm)" data-confirm={T('cond.confirm')}>
+              <p class="hint" style="margin-top:-4px;">{T('cond.hint')}</p>
+              {lot.sample_count === 0 && <p class="hint warnhint">{T('cond.needSample')}</p>}
+              <div class="field" style="margin-top:10px;">
+                <label for="cond_reason">{T('cond.reasonLabel')}</label>
+                <textarea id="cond_reason" name="reason" rows="2" required
+                          placeholder={T('cond.reasonPlaceholder')}></textarea>
+              </div>
+              <label class="ackbox">
+                <input type="checkbox" name="customer_ack" required />
+                <span>{T('cond.ack')}</span>
+              </label>
+              <button type="submit" class="btn btn-secondary" style="margin-top:10px;"
+                      disabled={lot.sample_count === 0}>
+                {T('cond.submit')}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('release.title')}</h2>
+        {lot.is_released ? (
+          <>
+            <p class="rel-ok">
+              &#10003; {T('release.by')
+                .replace('{name}', lot.released_by ?? '—')
+                .replace('{date}', formatDateTime(lot.released_at))}
+            </p>
+            {lot.coa_ref && <p class="sub">CoA {lot.coa_ref}</p>}
+            {canRelease && (
+              <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/release`}
+                    style="margin-top:12px;" onsubmit="return confirm(this.dataset.confirm)"
+                    data-confirm={T('release.withdrawConfirm')}>
+                <input type="hidden" name="_action" value="withdraw" />
+                <div class="field">
+                  <label for="wreason">{T('release.withdrawReason')}</label>
+                  <input type="text" id="wreason" name="reason" required />
+                </div>
+                <button type="submit" class="btn btn-danger" style="margin-top:8px;">
+                  {T('release.withdraw')}
+                </button>
+              </form>
+            )}
+          </>
+        ) : canRelease ? (
+          <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/release`}
+                onsubmit="return confirm(this.dataset.confirm)" data-confirm={T('release.confirm')}>
+            {!hasCoaFile && <p class="hint warnhint">{T('release.needCoa')}</p>}
+            <div class="field">
+              <label for="coa_ref">{T('release.coaRef')}</label>
+              <input type="text" id="coa_ref" name="coa_ref" value={lot.coa_ref ?? ''} />
+            </div>
+            <div class="field" style="margin-top:10px;">
+              <label for="final_qty_g">{T('release.finalQty')}</label>
+              <input type="number" id="final_qty_g" name="final_qty_g" step="0.001" min="0"
+                     placeholder={String(lot.computed_on_hand_g)} />
+              <p class="hint">{T('release.finalQty.hint')}</p>
+            </div>
+            <div class="field" style="margin-top:10px;">
+              <label for="rnotes">{T('release.notes')}</label>
+              <input type="text" id="rnotes" name="notes" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:12px;">
+              {T('release.submit')}
+            </button>
+          </form>
+        ) : (
+          <p class="hint">{T('release.onlyQa')}</p>
+        )}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('adjust.title')}</h2>
+        <form method="POST" action={`/api/portail/atelier/lots/${lot.id}/adjust`}>
+          <div class="field">
+            <label for="delta_g">{T('adjust.qty')}</label>
+            <input type="number" id="delta_g" name="delta_g" step="0.001" required />
+            <p class="hint">{T('adjust.qty.hint')}</p>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label for="reason">{T('adjust.reason')}</label>
+            <textarea id="reason" name="reason" rows="2" required
+                      placeholder={T('adjust.reasonPlaceholder')}></textarea>
+          </div>
+          <button type="submit" class="btn btn-secondary" style="margin-top:10px;">{T('adjust.submit')}</button>
+          <p class="hint" style="margin-top:8px;">{T('adjust.note')}</p>
+        </form>
+      </div>
+    </aside>
+  </div>
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .submeta { display: flex; gap: 7px; flex-wrap: wrap; color: var(--p-muted); font-size: .88rem; margin: 0; }
+  .head-side { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mono { font-variant-numeric: tabular-nums; }
+
+  .balances { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px;
+              background: var(--p-border); border: 1px solid var(--p-border); border-radius: 8px;
+              overflow: hidden; margin-bottom: 18px; }
+  .bal { background: var(--p-card); padding: 12px 14px; }
+  .bal span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--p-muted); margin-bottom: 3px; }
+  .bal strong { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+  .bal.on-hand { background: var(--p-bg); }
+  .bal.on-hand strong { color: var(--p-accent); }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  h2.sec { font-size: .95rem; margin: 0 0 12px; }
+  .card h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .4px;
+             color: var(--p-muted); margin: 16px 0 7px; }
+  .card h3:first-of-type { margin-top: 0; }
+
+  ul.tree { list-style: none; margin: 0; padding: 0; }
+  ul.tree li { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+               padding: 6px 0 6px calc(var(--indent)); border-bottom: 1px solid var(--p-border); font-size: .88rem; }
+  ul.tree li:last-child { border-bottom: 0; }
+  ul.tree .grams { font-variant-numeric: tabular-nums; font-weight: 600; }
+  ul.tree .depth { margin-left: auto; font-size: .72rem; color: var(--p-muted); white-space: nowrap; }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 6px 0; border-bottom: 1px solid var(--p-border); font-size: .88rem; }
+  ul.plain li:last-child { border-bottom: 0; }
+
+  .tbl-wrap { overflow-x: auto; margin: 0 -21px -19px; }
+  .tbl-wrap table.mini { margin: 0; font-size: .85rem; }
+  .tbl-wrap th:first-child, .tbl-wrap td:first-child { padding-left: 21px; }
+  .tbl-wrap th:last-child, .tbl-wrap td:last-child { padding-right: 21px; }
+  td.num { text-align: right; white-space: nowrap; }
+  .dir { font-size: .68rem; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; width: 1%; white-space: nowrap; }
+  .dir.received, .dir.produced { color: var(--p-success); }
+  .dir.consumed, .dir.shipped { color: var(--p-muted); }
+  .dir.adjustment { color: var(--p-warn); }
+  .dir.destroyed, .dir.loss { color: var(--p-danger); }
+  .sub { color: var(--p-muted); font-size: .78rem; }
+  .sub.block { display: block; }
+
+  .pill { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+          text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+          border: 1px solid var(--p-border); color: var(--p-muted); white-space: nowrap; }
+  .pill.tone-good { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .pill.tone-warn { color: var(--p-warn); border-color: #fde68a; background: #fffbeb; }
+
+  .batch-banner { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+                  background: #fffbeb; border: 1px solid #fde68a; border-left: 3px solid var(--p-warn);
+                  border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  .batch-banner strong { color: var(--p-warn); }
+  .batch-banner span { font-size: .88rem; color: var(--p-text); }
+
+  .pill.tone-cond { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .cond-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 3px solid #1d4ed8;
+                 border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  .cond-banner strong { color: #1d4ed8; margin-right: 8px; }
+  .cond-banner span { font-size: .88rem; }
+  .cond-meta { margin: 6px 0 0; font-size: .82rem; color: var(--p-muted); }
+  .cond-meta .k { text-transform: uppercase; letter-spacing: .4px; font-size: .72rem; margin-right: 5px; }
+  .ackbox { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-weight: 400; }
+  .ackbox input { width: auto; margin-top: 3px; }
+  .ackbox span { font-size: .84rem; color: var(--p-text); }
+
+  .rel-ok { color: var(--p-success); font-size: .9rem; margin: 0 0 4px; }
+  .warnhint { color: var(--p-warn); }
+
+  .addsample { margin-top: 14px; }
+  .addsample summary { cursor: pointer; font-size: .85rem; font-weight: 500; color: var(--p-accent); }
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin-top: 14px; }
+  .sgrid .wide { grid-column: 1 / -1; }
+  .sgrid .narrow { max-width: 150px; }
+  .sgrid label { font-size: .78rem; margin-bottom: 3px; }
+  .sgrid em { color: var(--p-accent); font-style: normal; }
+
+  tr.cancelled td { opacity: .5; text-decoration: line-through; }
+  tr.cancelled td:last-child { text-decoration: none; }
+  .linkbtn { background: none; border: 0; color: var(--p-muted); cursor: pointer;
+             font-size: .78rem; padding: 0; text-decoration: underline; font-family: inherit; }
+  .linkbtn:hover { color: var(--p-danger); }
+</style>

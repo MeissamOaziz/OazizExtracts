@@ -1,0 +1,581 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import QuickAdd from '../../../../components/portail/QuickAdd.astro';
+import Combo from '../../../../components/portail/Combo.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { comboRows } from '../../../../lib/ops-quick';
+import { formatDate, formatQty } from '../../../../lib/ops-orders';
+import {
+  STAGE_STATUSES, LOSS_REASONS, biStage, stageTone, chainDates, lastActiveEnd,
+  dayCount, sumQty, massBalance, actualYieldPct,
+} from '../../../../lib/ops-stages';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction } from '../../../../i18n/portail/atelier-production';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const woId = String(Astro.params.woId ?? '');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+
+const { data: wo } = await supabase
+  .from('ops_work_orders')
+  .select(`
+    *,
+    order:ops_orders (
+      id, order_no, customer_po_ref, source, on_hold, requested_delivery_date,
+      customer:ops_customers ( name ),
+      lines:ops_order_lines ( product_name, qty, uom, lot_ref )
+    )
+  `)
+  .eq('id', woId)
+  .maybeSingle();
+
+if (!wo) return new Response('Not found', { status: 404 });
+
+const [stagesRes, procRes, roomRes, staffRes, matRes, lotRes, depRes, confRes] = await Promise.all([
+  supabase.from('v_ops_stages').select('*').eq('work_order_id', woId).order('seq'),
+  supabase.from('ops_process_types')
+    .select('id, code, name_fr, name_en, room_id, default_duration_days, default_yield_pct, is_formulation, output_material_id')
+    .eq('is_active', true).order('sort_order'),
+  supabase.from('ops_rooms').select('id, code, name_fr, name_en, colour').eq('is_active', true).order('sort_order'),
+  supabase.from('staff').select('id, full_name').eq('is_active', true).order('full_name'),
+  supabase.from('ops_materials').select('id, code, name_fr, name_en').eq('is_active', true).order('code'),
+  supabase.from('v_ops_lot_ledger')
+    .select('id, lot_code, material_code, computed_on_hand_g, cultivar')
+    .gt('computed_on_hand_g', 0).order('lot_code').limit(400),
+  supabase.from('ops_stage_deps').select('stage_id, depends_on_stage_id'),
+  supabase.from('v_ops_room_conflicts').select('stage_id, room_code'),
+]);
+
+const stages = stagesRes.data ?? [];
+const processes = procRes.data ?? [];
+const rooms = roomRes.data ?? [];
+const people = staffRes.data ?? [];
+const materials = matRes.data ?? [];
+const lots = lotRes.data ?? [];
+const stageIds = new Set(stages.map((s: any) => s.id));
+const deps = (depRes.data ?? []).filter((d: any) => stageIds.has(d.stage_id));
+const conflicts = (confRes.data ?? []).filter((c: any) => stageIds.has(c.stage_id));
+
+// Execution rows for every stage in one round trip each.
+const [inRes, outRes, lossRes] = await Promise.all([
+  supabase.from('ops_stage_inputs').select('*').in('stage_id', [...stageIds]),
+  supabase.from('ops_stage_outputs').select('*').in('stage_id', [...stageIds]),
+  supabase.from('ops_stage_losses').select('*').in('stage_id', [...stageIds]),
+]);
+const inputsBy = groupBy(inRes.data ?? [], 'stage_id');
+const outputsBy = groupBy(outRes.data ?? [], 'stage_id');
+const lossesBy = groupBy(lossRes.data ?? [], 'stage_id');
+
+function groupBy(rows: any[], key: string): Record<string, any[]> {
+  const out: Record<string, any[]> = {};
+  for (const r of rows) (out[r[key]] ??= []).push(r);
+  return out;
+}
+
+const nameOf = (id: string | null) => people.find((p: any) => p.id === id)?.full_name ?? null;
+const comboSeeds = {
+  process: comboRows('process', processes, locale),
+  room: comboRows('room', rooms, locale),
+  material: comboRows('material', materials, locale),
+};
+
+const procLabel = (p: any) => (locale === 'en' ? p.name_en : p.name_fr);
+const matLabel = (m: any) => (locale === 'en' ? m.name_en : m.name_fr);
+const stageLabel = (s: any) => (locale === 'en' ? s.label_en : s.label_fr);
+const depsOf = (id: string) => deps.filter((d: any) => d.stage_id === id);
+const conflictOf = (id: string) => conflicts.find((c: any) => c.stage_id === id);
+
+// Defaults for the "add stage" form: the day after the last active stage ends.
+const chained = chainDates(lastActiveEnd(stages as any), processes[0]?.default_duration_days);
+
+const url = new URL(Astro.request.url);
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frProduction)
+  : error ? T(`flash.error.${error}` as keyof typeof frProduction) : null;
+
+const order = wo.order as any;
+const title = order?.customer_po_ref ?? order?.order_no ?? wo.wo_no;
+const orderHref = `/portail/atelier/commandes/${order?.id}`;
+---
+<PortailLayout title={`${T('title')} — ${wo.wo_no}`} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href={orderHref} style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; {title}</a>
+  </p>
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 4px;">{T('title')}</h1>
+      <p class="submeta">
+        <span class="mono">{wo.wo_no}</span><span>·</span>
+        <span>{title}</span>
+        {order?.customer?.name && <><span>·</span><span>{order.customer.name}</span></>}
+      </p>
+    </div>
+    <div class="dates">
+      <div><span class="k">{T('wo.promised')}</span><strong>{formatDate(wo.promised_date)}</strong></div>
+      <div>
+        <span class="k">{T('wo.projected')}</span>
+        <strong class={wo.at_risk ? 'late' : ''}>{formatDate(wo.projected_completion)}</strong>
+      </div>
+      {wo.projected_completion && (
+        <span class={wo.at_risk ? 'pill tone-stop' : 'pill tone-good'}>
+          {wo.at_risk ? T('wo.atRisk') : T('wo.onTrack')}
+        </span>
+      )}
+    </div>
+  </div>
+
+  {flash && <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-bottom:16px;">{flash}</div>}
+
+  {order?.on_hold && (
+    <div class="flash flash-error" style="margin-bottom:16px;">&#9940; {T('stage.blockedWhy')}</div>
+  )}
+
+  {stages.length === 0 && <div class="card empty-state">{T('wo.noStages')}</div>}
+
+  <!-- ============================================================ stages -->
+  {stages.map((s: any, idx: number) => {
+    const ins = inputsBy[s.id] ?? [];
+    const outs = outputsBy[s.id] ?? [];
+    const losses = lossesBy[s.id] ?? [];
+    const parts = { inputs: sumQty(ins), outputs: sumQty(outs), losses: sumQty(losses) };
+    const bal = massBalance(parts);
+    const yieldPct = actualYieldPct(parts);
+    const conflict = conflictOf(s.id);
+    const isDone = s.status === 'done';
+    const days = dayCount(s.planned_start, s.planned_end);
+    return (
+      <section class="card stage" id={`stage-${s.id}`}
+               style={`border-left: 3px solid ${s.room_colour ?? 'var(--p-border)'}`}>
+        <header class="stage-head">
+          <div class="stage-id">
+            <span class="seq">{s.seq}</span>
+            <div>
+              <h2>{stageLabel(s)}</h2>
+              <p class="meta">
+                {s.room_code && <span class="room" style={`--c:${s.room_colour}`}>{s.room_code}</span>}
+                {days && <span>{T('stage.days').replace('{n}', String(days))}</span>}
+                {s.assignee_staff_id && <span>{nameOf(s.assignee_staff_id)}</span>}
+              </p>
+            </div>
+          </div>
+          <div class="stage-tags">
+            <span class={`pill tone-${stageTone(s.status, s.is_blocked)}`}>
+              {biStage(STAGE_STATUSES, s.status, locale)}
+            </span>
+            {s.is_blocked && !isDone && <span class="pill tone-stop">{T('stage.blocked')}</span>}
+            {conflict && (
+              <span class="pill tone-warn" title={T('stage.conflict').replace('{room}', conflict.room_code)}>
+                &#9888; {conflict.room_code}
+              </span>
+            )}
+          </div>
+        </header>
+
+        <!-- ---------------------------------------------------- planning -->
+        <form method="POST" action={`/api/portail/atelier/stages/${s.id}`} class="plan-form">
+          <div class="plan-grid">
+            <div class="field">
+              <label>{T('stage.start')}</label>
+              <input type="date" name="planned_start" value={s.planned_start ?? ''} />
+            </div>
+            <div class="field">
+              <label>{T('stage.end')}</label>
+              <input type="date" name="planned_end" value={s.planned_end ?? ''} />
+            </div>
+            <Combo kind="room" name="room_id" label={T('stage.room')}
+                   value={s.room_id} placeholder={T('combo.hint')}
+                   valueLabel={s.room_id
+                     ? (comboSeeds.room.find((r) => r.id === s.room_id)?.label ?? '')
+                     : ''} />
+            <div class="field">
+              <label>{T('stage.assignee')}</label>
+              <select name="assignee_staff_id">
+                <option value="">—</option>
+                {people.map((p: any) => (
+                  <option value={p.id} selected={s.assignee_staff_id === p.id}>{p.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field">
+              <label>{T('stage.status')}</label>
+              <select name="status">
+                {Object.keys(STAGE_STATUSES).map((k) => (
+                  <option value={k} selected={s.status === k}>{biStage(STAGE_STATUSES, k, locale)}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field narrow">
+              <label>{T('stage.yield')}</label>
+              <input type="number" name="expected_yield_pct" step="0.01" min="0"
+                     value={s.expected_yield_pct ?? ''} />
+            </div>
+            <div class="field">
+              <label>{T('stage.actualStart')}</label>
+              <input type="date" name="actual_start" value={s.actual_start ?? ''} />
+            </div>
+            <div class="field">
+              <label>{T('stage.actualEnd')}</label>
+              <input type="date" name="actual_end" value={s.actual_end ?? ''} />
+            </div>
+            <div class="field wide">
+              <label>{T('stage.notes')}</label>
+              <input type="text" name="notes" value={s.notes ?? ''} />
+            </div>
+          </div>
+          <div class="plan-actions">
+            <button type="submit" class="btn btn-primary btn-sm">{T('stage.save')}</button>
+            <button type="submit" class="btn btn-secondary btn-sm" name="_action" value="rechain"
+                    formnovalidate title={T('stage.rechainHint')}>{T('stage.rechain')}</button>
+            <button type="submit" class="btn btn-danger btn-sm" name="_action" value="delete" formnovalidate
+                    onclick="return confirm(this.dataset.confirm)"
+                    data-confirm={T('stage.deleteConfirm')}>{T('stage.delete')}</button>
+          </div>
+        </form>
+
+        <!-- ------------------------------------------------ dependencies -->
+        <div class="deps">
+          <span class="k">{T('stage.dependsOn')}</span>
+          {depsOf(s.id).length === 0 && <span class="none">{T('stage.noDeps')}</span>}
+          {depsOf(s.id).map((d: any) => {
+            const p = stages.find((x: any) => x.id === d.depends_on_stage_id);
+            return (
+              <form method="POST" action={`/api/portail/atelier/stages/${s.id}`} class="dep-chip">
+                <input type="hidden" name="_action" value="remove_dep" />
+                <input type="hidden" name="depends_on_stage_id" value={d.depends_on_stage_id} />
+                <span>{p ? `${p.seq}. ${stageLabel(p)}` : '—'}</span>
+                <button type="submit" title={T('exec.remove')}>&times;</button>
+              </form>
+            );
+          })}
+          {stages.length > 1 && (
+            <form method="POST" action={`/api/portail/atelier/stages/${s.id}`} class="dep-add">
+              <input type="hidden" name="_action" value="add_dep" />
+              <select name="depends_on_stage_id" required>
+                <option value="">{T('stage.addDep')}</option>
+                {stages
+                  .filter((o: any) => o.id !== s.id && !depsOf(s.id).some((d: any) => d.depends_on_stage_id === o.id))
+                  .map((o: any) => <option value={o.id}>{o.seq}. {stageLabel(o)}</option>)}
+              </select>
+              <button type="submit" class="btn btn-secondary btn-sm">+</button>
+            </form>
+          )}
+        </div>
+
+        <!-- ---------------------------------------------------- execution -->
+        <details class="exec" open={!isDone && (ins.length > 0 || outs.length > 0)}>
+          <summary>
+            {T('exec.title')}
+            <span class="bal">
+              {parts.inputs > 0 && (
+                <>
+                  <span>{T('exec.balance')}: </span>
+                  <strong class={bal === 0 ? 'ok' : 'off'}>
+                    {bal === 0 ? T('exec.balanceOk') : T('exec.balanceOff').replace('{n}', formatQty(bal))}
+                  </strong>
+                  {yieldPct !== null && (
+                    <span class="yield">{T('exec.actualYield')} {formatQty(yieldPct)}%</span>
+                  )}
+                </>
+              )}
+              {isDone && <span class="done">{T('exec.doneOn').replace('{date}', formatDate(s.actual_end))}</span>}
+            </span>
+          </summary>
+
+          {isDone ? (
+            <div class="exec-readonly">
+              <table class="data mini">
+                <tbody>
+                  {ins.map((r: any) => (
+                    <tr><td class="dir in">IN</td>
+                      <td class="mono">{lots.find((l: any) => l.id === r.lot_id)?.lot_code ?? r.lot_ref ?? '—'}</td>
+                      <td class="mono num">{formatQty(r.actual_qty_g)} g</td></tr>
+                  ))}
+                  {outs.map((r: any) => (
+                    <tr><td class="dir out">OUT</td>
+                      <td class="mono">{r.lot_ref ?? '—'}</td>
+                      <td class="mono num">{formatQty(r.actual_qty_g)} g</td></tr>
+                  ))}
+                  {losses.map((r: any) => (
+                    <tr><td class="dir loss">LOSS</td>
+                      <td>{biStage(LOSS_REASONS, r.reason, locale)}</td>
+                      <td class="mono num">{formatQty(r.qty_g)} g</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <form method="POST" action={`/api/portail/atelier/stages/${s.id}/execution`} class="exec-form">
+              {s.is_formulation && <p class="hint form-hint">{T('exec.formulationHint')}</p>}
+
+              <h3>{T('exec.inputs')}</h3>
+              <div class="rows" data-rows="in">
+                {(ins.length ? ins : [{}]).map((r: any) => (
+                  <div class="row">
+                    <select name="in_lot_id" class="grow">
+                      <option value="">{T('exec.lot')} —</option>
+                      {lots.map((l: any) => (
+                        <option value={l.id} selected={r.lot_id === l.id}>
+                          {l.lot_code} · {formatQty(l.computed_on_hand_g)} g
+                        </option>
+                      ))}
+                    </select>
+                    <input type="number" name="in_qty_g" step="0.001" min="0"
+                           placeholder={T('exec.qty')} value={r.actual_qty_g ?? ''} />
+                    <button type="button" class="row-del" title={T('exec.remove')}>&times;</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm add-row" data-target="in">
+                + {T('exec.addInput')}
+              </button>
+
+              <h3>{T('exec.outputs')}</h3>
+              <div class="rows" data-rows="out">
+                {(outs.length ? outs : [{}]).map((r: any) => (
+                  <div class="row">
+                    <Combo kind="material" name="out_material_id" class="grow"
+                           value={r.material_id} placeholder={T('exec.material')}
+                           valueLabel={r.material_id
+                             ? (comboSeeds.material.find((m) => m.id === r.material_id)?.label ?? '')
+                             : ''} />
+                    <input type="hidden" name="out_lot_id" value={r.lot_id ?? ''} />
+                    <input type="hidden" name="out_new" value="1" />
+                    <input type="text" name="out_cultivar" placeholder={T('exec.cultivar')} />
+                    <input type="number" name="out_qty_g" step="0.001" min="0"
+                           placeholder={T('exec.qty')} value={r.actual_qty_g ?? ''} />
+                    <button type="button" class="row-del" title={T('exec.remove')}>&times;</button>
+                  </div>
+                ))}
+              </div>
+              <p class="hint">{T('exec.newLotHint')}</p>
+              <button type="button" class="btn btn-secondary btn-sm add-row" data-target="out">
+                + {T('exec.addOutput')}
+              </button>
+
+              <h3>{T('exec.losses')}</h3>
+              <div class="rows" data-rows="loss">
+                {(losses.length ? losses : [{}]).map((r: any) => (
+                  <div class="row">
+                    <select name="loss_reason" class="grow">
+                      {Object.keys(LOSS_REASONS).map((k) => (
+                        <option value={k} selected={r.reason === k}>{biStage(LOSS_REASONS, k, locale)}</option>
+                      ))}
+                    </select>
+                    <input type="text" name="loss_note" placeholder={T('exec.note')} value={r.note ?? ''} />
+                    <input type="number" name="loss_qty_g" step="0.001" min="0"
+                           placeholder={T('exec.qty')} value={r.qty_g ?? ''} />
+                    <button type="button" class="row-del" title={T('exec.remove')}>&times;</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm add-row" data-target="loss">
+                + {T('exec.addLoss')}
+              </button>
+
+              <div class="exec-actions">
+                <input type="date" name="actual_end" value={s.actual_end ?? ''} title={T('stage.actualEnd')} />
+                <button type="submit" class="btn btn-secondary">{T('exec.saveActuals')}</button>
+                <button type="submit" class="btn btn-primary" name="_complete" value="1"
+                        onclick="return confirm(this.dataset.confirm)"
+                        data-confirm={T('exec.completeConfirm')}>{T('exec.complete')}</button>
+              </div>
+            </form>
+          )}
+        </details>
+      </section>
+    );
+  })}
+
+  <!-- ======================================================== add stage -->
+  <section class="card add-stage">
+    <h2 class="sec">{T('stage.addTitle')}</h2>
+    <form method="POST" action="/api/portail/atelier/stages" class="plan-grid">
+      <input type="hidden" name="work_order_id" value={woId} />
+      <Combo kind="process" name="process_type_id" id="np" label={T('stage.process')}
+             required wide placeholder={T('combo.hint')} />
+      <div class="field">
+        <label for="ns">{T('stage.start')}</label>
+        <input type="date" id="ns" name="planned_start" value={chained.start} />
+      </div>
+      <div class="field">
+        <label for="ne">{T('stage.end')}</label>
+        <input type="date" id="ne" name="planned_end" value={chained.end} />
+      </div>
+      <div class="field">
+        <label for="na">{T('stage.assignee')}</label>
+        <select id="na" name="assignee_staff_id">
+          <option value="">—</option>
+          {people.map((p: any) => <option value={p.id}>{p.full_name}</option>)}
+        </select>
+      </div>
+      <div class="field wide check">
+        <label>
+          <input type="checkbox" name="link_previous" checked={stages.length > 0} disabled={stages.length === 0} />
+          <span>{T('stage.linkPrevious')}</span>
+        </label>
+      </div>
+      <div class="field wide">
+        <button type="submit" class="btn btn-primary">+ {T('stage.add')}</button>
+      </div>
+    </form>
+  </section>
+  <QuickAdd kinds={['process', 'room', 'material']} seeds={comboSeeds}
+            materials={materials} rooms={rooms} />
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .submeta { display: flex; gap: 7px; flex-wrap: wrap; color: var(--p-muted); font-size: .88rem; margin: 0; }
+  .dates { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .dates .k { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--p-muted); }
+  .dates strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+  .dates strong.late { color: var(--p-danger); }
+  .mono { font-variant-numeric: tabular-nums; }
+
+  .stage { margin-bottom: 14px; }
+  .stage-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stage-id { display: flex; gap: 12px; align-items: flex-start; }
+  .seq {
+    background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 6px;
+    width: 26px; height: 26px; display: grid; place-items: center;
+    font-size: .8rem; font-weight: 600; color: var(--p-muted); flex: none;
+  }
+  .stage h2 { margin: 0; font-size: 1rem; }
+  .stage .meta { display: flex; gap: 9px; margin: 3px 0 0; font-size: .8rem; color: var(--p-muted); flex-wrap: wrap; }
+  .room {
+    color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+    background: color-mix(in srgb, var(--c) 10%, transparent);
+    border-radius: 4px; padding: 0 6px; font-weight: 600; font-size: .72rem;
+  }
+  .stage-tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+
+  .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .plan-grid .wide { grid-column: 1 / -1; }
+  .plan-grid label { font-size: .75rem; margin-bottom: 3px; }
+  .plan-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-sm { padding: 5px 10px; font-size: .82rem; }
+  .check label { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+  .check input { width: auto; }
+  .check span { font-size: .85rem; color: var(--p-muted); }
+
+  .deps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px;
+          padding-top: 12px; border-top: 1px solid var(--p-border); }
+  .deps .k { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--p-muted); }
+  .deps .none { font-size: .82rem; color: var(--p-muted); }
+  .dep-chip { display: inline-flex; align-items: center; gap: 6px; margin: 0;
+              background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 5px;
+              padding: 3px 4px 3px 9px; font-size: .82rem; }
+  .dep-chip button { background: none; border: 0; color: var(--p-muted); cursor: pointer; font-size: .95rem; line-height: 1; padding: 0 3px; }
+  .dep-chip button:hover { color: var(--p-danger); }
+  .dep-add { display: inline-flex; gap: 6px; margin: 0; }
+  .dep-add select { width: auto; font-size: .82rem; padding: 4px 8px; }
+
+  .exec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--p-border); }
+  .exec summary { cursor: pointer; font-size: .85rem; font-weight: 500; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .exec .bal { font-size: .8rem; color: var(--p-muted); font-weight: 400; display: flex; gap: 10px; flex-wrap: wrap; }
+  .exec .bal .ok { color: var(--p-success); }
+  .exec .bal .off { color: var(--p-warn); }
+  .exec .bal .done { color: var(--p-success); }
+  .exec h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .4px;
+             color: var(--p-muted); margin: 16px 0 7px; }
+  .exec-form .form-hint { margin: 10px 0 0; }
+  .rows { display: flex; flex-direction: column; gap: 7px; }
+  .row { display: flex; gap: 7px; align-items: center; }
+  .row .grow { flex: 2 1 200px; min-width: 0; }
+  .row input[type="number"] { flex: 0 1 120px; }
+  .row input[type="text"] { flex: 1 1 130px; min-width: 0; }
+  .row-del { background: none; border: 1px solid var(--p-border); color: var(--p-muted);
+             width: 30px; height: 32px; border-radius: 5px; cursor: pointer; flex: none; line-height: 1; }
+  .row-del:hover { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+  .add-row { margin-top: 8px; }
+  .exec-actions { display: flex; gap: 8px; margin-top: 18px; align-items: center; flex-wrap: wrap; }
+  .exec-actions input[type="date"] { width: auto; }
+
+  .exec-readonly table.mini { font-size: .84rem; margin: 10px 0 0; }
+  .exec-readonly td { padding: 5px 10px; }
+  .dir { font-size: .68rem; font-weight: 700; letter-spacing: .5px; width: 1%; }
+  .dir.in { color: var(--p-muted); }
+  .dir.out { color: var(--p-success); }
+  .dir.loss { color: var(--p-warn); }
+  td.num { text-align: right; }
+
+  .add-stage { border-style: dashed; }
+  .add-stage h2.sec { font-size: .95rem; margin: 0 0 14px; }
+
+  .pill { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+          text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+          border: 1px solid var(--p-border); color: var(--p-muted); white-space: nowrap; }
+  .pill.tone-active { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .pill.tone-good   { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .pill.tone-stop   { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+  .pill.tone-warn   { color: var(--p-warn); border-color: #fde68a; background: #fffbeb; }
+  .pill.tone-muted  { color: var(--p-muted); background: var(--p-bg); }
+</style>
+
+<script>
+  // Adding a repeating row clones the last one and clears its values.
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.add-row') as HTMLElement | null;
+    if (btn) {
+      const kind = btn.dataset.target;
+      const wrap = btn.closest('.exec-form')?.querySelector<HTMLElement>(`.rows[data-rows="${kind}"]`);
+      const last = wrap?.lastElementChild as HTMLElement | undefined;
+      if (!wrap || !last) return;
+      const clone = last.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('input').forEach((i) => {
+        const el = i as HTMLInputElement;
+        if (el.type === 'hidden') { el.value = el.name === 'out_new' ? '1' : ''; }
+        else el.value = '';
+      });
+      clone.querySelectorAll('select').forEach((sel) => { (sel as HTMLSelectElement).selectedIndex = 0; });
+      wrap.appendChild(clone);
+      return;
+    }
+
+    const del = (e.target as HTMLElement).closest('.row-del') as HTMLElement | null;
+    if (del) {
+      const row = del.closest('.row') as HTMLElement | null;
+      const wrap = row?.parentElement;
+      if (!row || !wrap) return;
+      if (wrap.children.length > 1) row.remove();
+      else row.querySelectorAll('input').forEach((i) => {
+        const el = i as HTMLInputElement;
+        if (el.type !== 'hidden') el.value = '';
+      });
+    }
+  });
+
+  // Choosing a process on the add form re-derives the end date from its duration,
+  // which now arrives on the picked combobox row rather than on a <select> option.
+  const start = document.getElementById('ns') as HTMLInputElement | null;
+  const end = document.getElementById('ne') as HTMLInputElement | null;
+  let procDays = 1;
+
+  function reflow() {
+    if (!start || !end || !start.value) return;
+    const days = Math.max(1, Math.ceil(procDays));
+    const [y, m, d] = start.value.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + days - 1);
+    end.value = dt.toISOString().slice(0, 10);
+  }
+
+  document.addEventListener('combo:pick', (e) => {
+    const combo = e.target as HTMLElement;
+    if (combo.dataset.combo !== 'process') return;
+    if (!combo.contains(document.getElementById('np'))) return;
+    procDays = Number((e as CustomEvent).detail?.default_duration_days ?? 1) || 1;
+    reflow();
+  });
+  start?.addEventListener('change', reflow);
+</script>

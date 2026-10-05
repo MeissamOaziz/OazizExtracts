@@ -8,6 +8,9 @@ export const frHub = {
 
   'section.calc.desc': 'Coût de production, prix de vente par palier de marge, solveur inverse.',
 
+  'section.atelier.desc':
+    'Commandes, planification de la production par étapes, runs d’emballage et expéditions.',
+
   'section.vendors.desc': "Qualification des fournisseurs, approbations individuelles et licences d'Oaziz.",
   'section.vendors.tag': '{count} à approuver',
 
@@ -30,6 +33,9 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
   'section.forms.tag': '{count} in progress',
 
   'section.calc.desc': 'Production cost, margin-tiered selling price, reverse solver.',
+
+  'section.atelier.desc':
+    'Orders, stage-by-stage production planning, packaging runs and shipments.',
 
   'section.vendors.desc': "Vendor qualification, individual approvals and Oaziz's own licenses.",
   'section.vendors.tag': '{count} to approve',

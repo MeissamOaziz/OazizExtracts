@@ -1,0 +1,128 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { formatDate, formatQty } from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frEmballage, enEmballage } from '../../../../i18n/portail/atelier-emballage';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frEmballage, enEmballage);
+
+const url = new URL(Astro.request.url);
+const filter = url.searchParams.get('statut') ?? 'all';
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+
+let query = supabase.from('v_ops_packaging_runs').select('*').order('run_no', { ascending: false });
+if (filter !== 'all') query = query.eq('status', filter);
+const { data: runs } = await query;
+
+const FILTERS = ['all', 'draft', 'done', 'cancelled'];
+const flashOk = ok ? T(`flash.ok.${ok}` as keyof typeof frEmballage) : null;
+const flashError = error ? T(`flash.error.${error}` as keyof typeof frEmballage) : null;
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; Atelier
+    </a>
+  </p>
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 6px;">{T('list.title')}</h1>
+      <p style="color: var(--p-muted); font-size: .92rem; max-width: 70ch;">{T('subtitle')}</p>
+    </div>
+    <a href="/portail/atelier/emballage/nouveau" class="btn btn-primary" style="text-decoration:none;">
+      {T('list.new')}
+    </a>
+  </div>
+
+  {flashOk && <div class="flash flash-ok" style="margin-bottom:16px;">{flashOk}</div>}
+  {flashError && <div class="flash flash-error" style="margin-bottom:16px;">{flashError}</div>}
+
+  <div class="filters">
+    {FILTERS.map((f) => (
+      <a href={`?statut=${f}`} class={filter === f ? 'chip on' : 'chip'}>
+        {T(`list.filter.${f}` as keyof typeof frEmballage)}
+      </a>
+    ))}
+  </div>
+
+  {(runs ?? []).length === 0 ? (
+    <div class="card empty-state">{T('list.empty')}</div>
+  ) : (
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>{T('col.run')}</th>
+            <th>{T('col.product')}</th>
+            <th>{T('col.source')}</th>
+            <th class="num">{T('col.units')}</th>
+            <th>{T('col.customer')}</th>
+            <th>{T('col.date')}</th>
+            <th>{T('col.output')}</th>
+            <th>{T('col.status')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(runs ?? []).map((r: any) => (
+            <tr>
+              <td class="mono">
+                <a href={`/portail/atelier/emballage/${r.id}`}>{r.run_no}</a>
+              </td>
+              <td>
+                {r.product_name}
+                {r.brand && <span class="sub block">{r.brand}</span>}
+              </td>
+              <td class="mono">{r.source_lot_code}</td>
+              <td class="num mono">
+                {r.units_produced ?? r.units_planned ?? '—'}
+                {r.consumed_g && <span class="sub block">{formatQty(r.consumed_g)}</span>}
+              </td>
+              <td>{r.customer_name ?? <span class="sub">{T('detail.stock')}</span>}</td>
+              <td class="mono">{formatDate(r.packaged_on)}</td>
+              <td class="mono">
+                {r.output_lot_code
+                  ? <a href={`/portail/atelier/lots/${r.output_lot_id}`}>{r.output_lot_code}</a>
+                  : '—'}
+              </td>
+              <td><span class={`pill ${r.status}`}>{T(`status.${r.status}` as keyof typeof frEmballage)}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+          flex-wrap:wrap; margin-bottom:18px; }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip { padding:5px 12px; border:1px solid var(--p-border); border-radius:999px;
+          font-size:.82rem; text-decoration:none; color:var(--p-text); background:var(--p-card); }
+  .chip.on { border-color:var(--p-accent); color:var(--p-accent); }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--p-border); vertical-align:top; }
+  th { font-size:.74rem; text-transform:uppercase; letter-spacing:.4px; color:var(--p-muted); font-weight:600; }
+  tbody tr:last-child td { border-bottom:0; }
+  .num { text-align:right; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .sub { color:var(--p-muted); font-size:.76rem; }
+  .sub.block { display:block; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem;
+          text-transform:uppercase; letter-spacing:.4px; font-weight:600;
+          background:var(--p-bg); color:var(--p-muted); }
+  .pill.done { background:#ecfdf5; color:#047857; }
+  .pill.draft { background:#fff7ed; color:#c2410c; }
+  .pill.cancelled { background:var(--p-bg); color:var(--p-muted); text-decoration:line-through; }
+</style>

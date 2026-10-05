@@ -1,0 +1,186 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { formatQty, formatDate } from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frLots, enLots } from '../../../../i18n/portail/atelier-lots';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frLots, enLots);
+
+const url = new URL(Astro.request.url);
+const filter = url.searchParams.get('filter') ?? 'stock';
+const material = url.searchParams.get('material') ?? '';
+
+let q = supabase.from('v_ops_lot_ledger').select('*').order('date_created', { ascending: false }).limit(500);
+if (filter === 'stock') q = q.gt('computed_on_hand_g', 0);
+if (filter === 'depleted') q = q.lte('computed_on_hand_g', 0);
+if (material) q = q.eq('material_code', material);
+
+const [{ data: lotsData, error: lotErr }, { data: materials }] = await Promise.all([
+  q,
+  supabase.from('ops_materials').select('code, name_fr, name_en').eq('is_active', true).order('code'),
+]);
+if (lotErr) console.error('[atelier] lot list failed:', lotErr);
+const lots = lotsData ?? [];
+
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frLots)
+  : error ? T(`flash.error.${error}` as keyof typeof frLots) : null;
+
+const filters = [
+  { key: 'stock', label: T('list.filter.inStock') },
+  { key: 'all', label: T('list.filter.all') },
+  { key: 'depleted', label: T('list.filter.depleted') },
+];
+
+const totalOnHand = lots.reduce((t: number, l: any) => t + Number(l.computed_on_hand_g ?? 0), 0);
+---
+<PortailLayout title={T('list.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; Atelier</a>
+  </p>
+
+  <div class="head-row">
+    <div>
+      <h1 style="margin-bottom: 6px;">{T('list.title')}</h1>
+      <p style="color: var(--p-muted); font-size: .9rem; margin: 0; max-width: 72ch;">{T('list.subtitle')}</p>
+    </div>
+    <a href="/portail/atelier/lots/reception" class="btn btn-primary" style="text-decoration:none; white-space:nowrap;">
+      + {T('receive.button')}
+    </a>
+  </div>
+
+  {flash && <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-top:16px;">{flash}</div>}
+
+  <div class="list-head">
+    <div class="tabs">
+      {filters.map((f) => (
+        <a href={`?filter=${f.key}${material ? `&material=${material}` : ''}`}
+           class={filter === f.key ? 'tab active' : 'tab'}>{f.label}</a>
+      ))}
+    </div>
+    <div class="tools">
+      <form method="GET" style="margin:0;">
+        <input type="hidden" name="filter" value={filter} />
+        <select name="material" onchange="this.form.submit()">
+          <option value="">{T('list.allMaterials')}</option>
+          {(materials ?? []).map((m: any) => (
+            <option value={m.code} selected={material === m.code}>
+              {m.code} — {locale === 'en' ? m.name_en : m.name_fr}
+            </option>
+          ))}
+        </select>
+      </form>
+      <span class="count">
+        {T('list.count').replace('{n}', String(lots.length))}
+        {totalOnHand > 0 && <> · <strong>{formatQty(totalOnHand)} g</strong></>}
+      </span>
+      {lots.length > 0 && <input type="search" id="lotSearch" placeholder={T('list.search')} autocomplete="off" />}
+    </div>
+  </div>
+
+  {lots.length === 0 ? (
+    <div class="card empty-state">{T('list.empty')}</div>
+  ) : (
+    <div class="table-wrap">
+      <table class="data" id="lotTable">
+        <thead>
+          <tr>
+            <th>{T('col.lot')}</th>
+            <th>{T('col.material')}</th>
+            <th>{T('col.cultivar')}</th>
+            <th style="text-align:right">{T('col.received')}</th>
+            <th style="text-align:right">{T('col.produced')}</th>
+            <th style="text-align:right">{T('col.consumed')}</th>
+            <th style="text-align:right">{T('col.onHand')}</th>
+            <th>{T('col.potency')}</th>
+            <th>{T('col.dates')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lots.map((l: any) => (
+            <tr data-search={[
+              l.lot_code, l.material_code, l.cultivar, l.supplier_name, l.external_refs,
+            ].filter(Boolean).join(' ').toLowerCase()}>
+              <td>
+                <a href={`/portail/atelier/lots/${l.id}`} class="lotlink">
+                  <strong class="mono">{l.lot_code}</strong>
+                  {l.external_refs && <span class="sub">{l.external_refs}</span>}
+                </a>
+              </td>
+              <td>
+                <span class="mono">{l.material_code}</span>
+                <span class="sub block">{T(`state.${l.state}` as keyof typeof frLots)}</span>
+              </td>
+              <td>{l.cultivar ?? '—'}<span class="sub block">{l.supplier_name ?? ''}</span></td>
+              <td class="mono num">{Number(l.received_g) ? formatQty(l.received_g) : '—'}</td>
+              <td class="mono num">{Number(l.produced_g) ? formatQty(l.produced_g) : '—'}</td>
+              <td class="mono num">{Number(l.consumed_g) ? formatQty(l.consumed_g) : '—'}</td>
+              <td class="mono num"><strong>{formatQty(l.computed_on_hand_g)}</strong></td>
+              <td class="mono">
+                {l.thc_pct !== null ? `${formatQty(l.thc_pct)}%` : '—'}
+                {l.cbd_pct !== null && <span class="sub"> / {formatQty(l.cbd_pct)}%</span>}
+              </td>
+              <td class="sub" style="white-space:nowrap;">
+                {formatDate(l.date_received ?? l.date_produced ?? l.date_created)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="no-results hint" hidden>{T('list.searchNone')}</p>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 0 10px; flex-wrap: wrap; }
+  .tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tools select { width: auto; font-size: .85rem; padding: 5px 9px; }
+  .tools .count { font-size: .82rem; color: var(--p-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tools input[type="search"] { width: auto; min-width: 250px; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { font-size: .85rem; padding: 5px 11px; border-radius: 6px; text-decoration: none;
+         color: var(--p-muted); border: 1px solid transparent; }
+  .tab:hover { background: var(--p-bg); color: var(--p-text); }
+  .tab.active { background: var(--p-card); border-color: var(--p-border); color: var(--p-text); font-weight: 500; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-card); }
+  .table-wrap table.data { margin: 0; font-size: .87rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  td.num { text-align: right; }
+  .lotlink { display: flex; flex-direction: column; gap: 1px; text-decoration: none; }
+  .lotlink strong { color: var(--p-text); }
+  .lotlink:hover strong { color: var(--p-accent); }
+  .sub { color: var(--p-muted); font-size: .76rem; }
+  .sub.block { display: block; }
+  .no-results { padding: 18px; margin: 0; text-align: center; }
+</style>
+
+<script>
+  const search = document.getElementById('lotSearch') as HTMLInputElement | null;
+  if (search) {
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('#lotTable tbody tr'));
+    const none = document.querySelector<HTMLElement>('.no-results');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of rows) {
+        const hit = !q || (row.dataset.search || '').includes(q);
+        row.hidden = !hit;
+        if (hit) shown++;
+      }
+      if (none) none.hidden = shown !== 0;
+    });
+  }
+</script>

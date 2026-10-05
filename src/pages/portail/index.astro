@@ -113,6 +113,13 @@ const allSections = [
     tag: pendingCount ? T('section.forms.tag').replace('{count}', String(pendingCount)) : null,
   },
   {
+    show: perms.has('atelier'),
+    href: '/portail/atelier',
+    title: Tc('nav.atelier'),
+    desc: T('section.atelier.desc'),
+    tag: null,
+  },
+  {
     show: perms.has('calculators'),
     href: '/portail/calculatrices',
     title: Tc('nav.calculators'),

@@ -1,0 +1,290 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { formatDate, formatDateTime, formatQty } from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frDestructions, enDestructions } from '../../../../i18n/portail/atelier-destructions';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frDestructions, enDestructions);
+const { id } = Astro.params;
+
+const { data: des } = await supabase
+  .from('v_ops_destructions').select('*').eq('id', id).maybeSingle();
+if (!des) return Astro.redirect('/portail/atelier/destructions?error=unknown');
+
+const [{ data: lines }, { data: stock }] = await Promise.all([
+  supabase.from('ops_destruction_lines')
+    .select('id, qty_g, units, notes, lot:ops_lots ( id, lot_code, material:ops_materials ( code, name_fr, name_en ) )')
+    .eq('destruction_id', id),
+  supabase.from('v_ops_inventory')
+    .select('id, lot_code, material_fr, material_en, computed_on_hand_g, qty_on_hand_units')
+    .order('lot_code'),
+]);
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const ok = url.searchParams.get('ok');
+// A refused rule carries the database's own wording, which is written to be read.
+const flash = error === 'rule'
+  ? (url.searchParams.get('msg') || T('flash.error.unknown'))
+  : error ? T(`flash.error.${error}` as keyof typeof frDestructions) : null;
+const flashOk = ok ? T(`flash.ok.${ok}` as keyof typeof frDestructions) : null;
+
+const isPlanned = des.status === 'planned';
+const isDone = des.status === 'completed';
+const canApprove = staff.ops_role === 'qa' || staff.ops_role === 'admin';
+
+// PostgREST returns embedded relations as arrays; flatten once.
+const rows = (lines ?? []).map((l: any) => {
+  const lot = Array.isArray(l.lot) ? l.lot[0] ?? null : l.lot ?? null;
+  const mat = lot && (Array.isArray(lot.material) ? lot.material[0] ?? null : lot.material ?? null);
+  return { ...l, lot, mat };
+});
+const matName = (m: any) => (m ? (locale === 'en' ? m.name_en : m.name_fr) : '—');
+const fill = (s: string, k: string, v: string) => s.replace(`{${k}}`, v);
+const today = new Date().toISOString().slice(0, 10);
+---
+<PortailLayout title={des.destruction_no} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/destructions" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('detail.back')}
+    </a>
+  </p>
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 4px;">{des.destruction_no}</h1>
+      <p style="color: var(--p-muted); font-size: .92rem;">
+        {T(`method.${des.method}` as keyof typeof frDestructions)} · {des.reason}
+      </p>
+    </div>
+    <span class={`pill ${des.status}`}>{T(`status.${des.status}` as keyof typeof frDestructions)}</span>
+  </div>
+
+  {flashOk && <div class="flash flash-ok" style="margin-bottom:16px;">{flashOk}</div>}
+  {flash && <div class="flash flash-error" style="margin-bottom:16px;">{flash}</div>}
+
+  <div class="cols">
+    <div>
+      <!-- ================================================== the lots -->
+      <div class="card">
+        <h2 class="sec">{T('detail.lines')}</h2>
+        {rows.length === 0 ? (
+          <p class="sub">{T('detail.noLines')}</p>
+        ) : (
+          <table>
+            <thead>
+              <tr><th>{T('f.lot')}</th><th class="num">{T('f.qty')}</th><th class="num">{T('f.units')}</th><th></th></tr>
+            </thead>
+            <tbody>
+              {rows.map((l: any) => (
+                <tr>
+                  <td>
+                    <a href={`/portail/atelier/lots/${l.lot?.id}`} class="mono">{l.lot?.lot_code}</a>
+                    <span class="sub block">{matName(l.mat)}</span>
+                  </td>
+                  <td class="num mono">{formatQty(l.qty_g)}</td>
+                  <td class="num mono">{l.units ?? '—'}</td>
+                  <td class="num">
+                    {isPlanned && (
+                      <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/lines`}>
+                        <input type="hidden" name="action" value="remove" />
+                        <input type="hidden" name="line_id" value={l.id} />
+                        <button type="submit" class="link-danger">{T('detail.remove')}</button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {isPlanned && (
+          <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/lines`} class="addline">
+            <input type="hidden" name="action" value="add" />
+            <div class="field grow">
+              <label for="lot_id">{T('detail.addLot')}</label>
+              <select id="lot_id" name="lot_id" required>
+                <option value="">—</option>
+                {(stock ?? []).map((s: any) => (
+                  <option value={s.id}>
+                    {s.lot_code} — {locale === 'en' ? s.material_en : s.material_fr} · {formatQty(s.computed_on_hand_g)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div class="field narrow">
+              <label for="qty_g">{T('f.qty')}</label>
+              <input type="number" id="qty_g" name="qty_g" step="0.001" min="0.001" required />
+            </div>
+            <div class="field narrow">
+              <label for="units">{T('f.units')}</label>
+              <input type="number" id="units" name="units" step="1" min="0" />
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm">+</button>
+          </form>
+        )}
+      </div>
+
+      <!-- =================================================== record -->
+      {isDone && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('detail.record')}</h2>
+          <dl class="facts">
+            <dt>{T('f.destroyedOn')}</dt><dd class="mono">{formatDate(des.destroyed_on)}</dd>
+            <dt>{T('detail.performedBy')}</dt><dd>{des.performed_by ?? '—'}</dd>
+            <dt>{T('detail.witnesses')}</dt>
+            <dd>{des.witness_1_name}<span class="block">{des.witness_2_name}</span></dd>
+            <dt>{T('f.attestation')}</dt>
+            <dd>
+              {des.attestation_text}
+              {des.attested_at && <span class="sub block">{formatDateTime(des.attested_at)}</span>}
+            </dd>
+          </dl>
+        </div>
+      )}
+    </div>
+
+    <div>
+      <!-- ================================================== approval -->
+      <div class="card">
+        <h2 class="sec">{T('detail.approve')}</h2>
+        {des.approved_at ? (
+          <p class="ok-line">
+            ✓ {fill(fill(T('detail.approvedBy'), 'name', des.approved_by ?? '—'), 'date', formatDate(des.approved_at))}
+          </p>
+        ) : isPlanned ? (
+          <>
+            <p class="sub" style="margin-bottom:12px;">{T('detail.approveHint')}</p>
+            {canApprove ? (
+              <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/action`}>
+                <input type="hidden" name="action" value="approve" />
+                <button type="submit" class="btn btn-primary">{T('detail.approve')}</button>
+              </form>
+            ) : (
+              <p class="sub">{T('detail.awaitingApproval')}</p>
+            )}
+          </>
+        ) : <p class="sub">—</p>}
+      </div>
+
+      <!-- ================================================== complete -->
+      {isPlanned && des.approved_at && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('detail.complete')}</h2>
+          <p class="sub" style="margin-bottom:14px;">{T('detail.completeIntro')}</p>
+          <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/action`}>
+            <input type="hidden" name="action" value="complete" />
+            <div class="grid">
+              <div class="field">
+                <label for="destroyed_on">{T('f.destroyedOn')}</label>
+                <input type="date" id="destroyed_on" name="destroyed_on" value={today} />
+              </div>
+              <div class="field"></div>
+              <div class="field">
+                <label for="w1">{T('f.witness1')} <em>*</em></label>
+                <input type="text" id="w1" name="witness_1_name" required />
+              </div>
+              <div class="field">
+                <label for="w2">{T('f.witness2')} <em>*</em></label>
+                <input type="text" id="w2" name="witness_2_name" required />
+              </div>
+              <div class="field wide">
+                <p class="hint" style="margin-top:0;">{T('f.witness.hint')}</p>
+              </div>
+              <div class="field wide">
+                <label for="attestation">{T('f.attestation')} <em>*</em></label>
+                <textarea id="attestation" name="attestation" rows="3" required>{T('f.attestationDefault')}</textarea>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:12px;">
+              {T('detail.complete')}
+            </button>
+          </form>
+
+          <details style="margin-top:18px;">
+            <summary class="sub">{T('detail.cancel')}</summary>
+            <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/action`}
+                  style="margin-top:10px; display:flex; gap:8px; align-items:flex-end;">
+              <input type="hidden" name="action" value="cancel" />
+              <div class="field" style="flex:1;">
+                <label for="reason">{T('detail.cancelReason')} <em>*</em></label>
+                <input type="text" id="reason" name="reason" required />
+              </div>
+              <button type="submit" class="btn btn-secondary">{T('detail.cancel')}</button>
+            </form>
+          </details>
+        </div>
+      )}
+
+      {isPlanned && !des.approved_at && (
+        <div class="card" style="margin-top:16px;">
+          <details>
+            <summary class="sub">{T('detail.cancel')}</summary>
+            <form method="POST" action={`/api/portail/atelier/destructions/${des.id}/action`}
+                  style="margin-top:10px; display:flex; gap:8px; align-items:flex-end;">
+              <input type="hidden" name="action" value="cancel" />
+              <div class="field" style="flex:1;">
+                <label for="reason2">{T('detail.cancelReason')} <em>*</em></label>
+                <input type="text" id="reason2" name="reason" required />
+              </div>
+              <button type="submit" class="btn btn-secondary">{T('detail.cancel')}</button>
+            </form>
+          </details>
+        </div>
+      )}
+
+      {des.notes && (
+        <div class="card" style="margin-top:16px;">
+          <p class="notes">{des.notes}</p>
+        </div>
+      )}
+    </div>
+  </div>
+</PortailLayout>
+
+<style>
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+          flex-wrap:wrap; margin-bottom:18px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  h2.sec { font-size:.95rem; margin:0 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; margin-bottom:6px; }
+  th, td { padding:8px 6px; text-align:left; border-bottom:1px solid var(--p-border); vertical-align:top; }
+  th { font-size:.72rem; text-transform:uppercase; letter-spacing:.4px; color:var(--p-muted); font-weight:600; }
+  tbody tr:last-child td { border-bottom:0; }
+  .num { text-align:right; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .sub { color:var(--p-muted); font-size:.8rem; }
+  .block { display:block; }
+  .sub.block { display:block; }
+  .ok-line { color:#047857; font-size:.88rem; margin:0; }
+  .facts { display:grid; grid-template-columns:auto 1fr; gap:8px 18px; margin:0; font-size:.9rem; }
+  .facts dt { color:var(--p-muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.4px; }
+  .facts dd { margin:0; }
+  .addline { display:flex; gap:10px; align-items:flex-end; margin-top:12px;
+             padding-top:12px; border-top:1px solid var(--p-border); }
+  .addline .grow { flex:1; }
+  .addline .narrow { width:110px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .field.wide { grid-column:1 / -1; }
+  .field em { color:var(--p-accent); font-style:normal; }
+  .link-danger { background:none; border:0; color:var(--p-danger); cursor:pointer;
+                 font-size:.8rem; padding:0; text-decoration:underline; }
+  .notes { margin:0; font-size:.86rem; color:var(--p-muted); white-space:pre-line; }
+  .pill { display:inline-block; padding:3px 11px; border-radius:999px; font-size:.74rem;
+          text-transform:uppercase; letter-spacing:.4px; font-weight:600;
+          background:var(--p-bg); color:var(--p-muted); }
+  .pill.completed { background:#fef2f2; color:var(--p-danger); }
+  .pill.planned { background:#fff7ed; color:#c2410c; }
+  .pill.cancelled { background:var(--p-bg); color:var(--p-muted); }
+</style>

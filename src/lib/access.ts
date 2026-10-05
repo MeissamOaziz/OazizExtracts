@@ -28,7 +28,12 @@ export const ROLE_PRESETS: Record<PortalRole, readonly Permission[]> = {
 
 export type PermissionOverrides = Partial<Record<Permission, boolean>>;
 
+// Atelier isn't open to the team yet: only these accounts can ever get the
+// 'atelier' permission, no matter their role or overrides.
+export const ATELIER_ALLOWED_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
+
 export interface AccessSubject {
+  email: string;
   portal_role: string | null;
   portal_permission_overrides: unknown;
 }
@@ -51,6 +56,12 @@ export function cleanOverrides(raw: unknown): PermissionOverrides {
 // out through an override); everyone else = preset + overrides. No role =
 // no access.
 export function effectivePermissions(s: AccessSubject): Set<Permission> {
+  const perms = rolePermissions(s);
+  if (!ATELIER_ALLOWED_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('atelier');
+  return perms;
+}
+
+function rolePermissions(s: AccessSubject): Set<Permission> {
   if (!isRole(s.portal_role)) return new Set();
   if (s.portal_role === 'admin') return new Set(PERMISSIONS);
   const perms = new Set<Permission>(ROLE_PRESETS[s.portal_role]);

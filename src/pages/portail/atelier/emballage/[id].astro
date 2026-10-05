@@ -1,0 +1,286 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { PROVINCES, formatDate, formatQty } from '../../../../lib/ops-orders';
+import { requirementsFor, blockingCount, expectedGrams } from '../../../../lib/ops-packaging';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frEmballage, enEmballage } from '../../../../i18n/portail/atelier-emballage';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frEmballage, enEmballage);
+const { id } = Astro.params;
+
+const { data: run } = await supabase
+  .from('v_ops_packaging_runs').select('*').eq('id', id).maybeSingle();
+if (!run) return Astro.redirect('/portail/atelier/emballage?error=unknown');
+
+// What is left in the source lot, and the potency the label would inherit.
+const [{ data: source }, { data: potency }] = await Promise.all([
+  supabase.from('v_ops_lot_ledger')
+    .select('computed_on_hand_g, cultivar, release_status, thc_pct, cbd_pct')
+    .eq('id', run.source_lot_id).maybeSingle(),
+  supabase.from('ops_lot_potency')
+    .select('thc_pct, cbd_pct').eq('lot_id', run.source_lot_id)
+    .order('recorded_at', { ascending: false }).limit(1).maybeSingle(),
+]);
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const ok = url.searchParams.get('ok');
+// A refused rule carries the database's own wording, which is written to be read.
+const flash = error === 'rule'
+  ? (url.searchParams.get('msg') || T('flash.error.unknown'))
+  : error ? T(`flash.error.${error}` as keyof typeof frEmballage) : null;
+const flashOk = ok ? T(`flash.ok.${ok}` as keyof typeof frEmballage) : null;
+
+const isDone = run.status === 'done';
+const isCancelled = run.status === 'cancelled';
+
+const cultivar = run.label_cultivar ?? source?.cultivar ?? null;
+const thc = run.label_thc_pct ?? potency?.thc_pct ?? null;
+const cbd = run.label_cbd_pct ?? potency?.cbd_pct ?? null;
+
+const reqs = requirementsFor({
+  product: {
+    id: run.id,
+    is_bulk: run.is_bulk,
+    gtin: run.product_gtin,
+    case_gtin: run.product_case_gtin,
+    units_per_case: run.product_units_per_case,
+    requires_excise: run.requires_excise,
+    is_rotational: run.is_rotational,
+  },
+  customerRequiresCaseGtin: run.customer_requires_case_gtin === true,
+  isExcised: run.is_excised === true,
+  exciseProvince: run.excise_province,
+  cultivar,
+  thcPct: thc,
+});
+const blocking = blockingCount(reqs);
+
+const prefillG = expectedGrams(run.units_planned, run.unit_size_g ?? run.sku_size_g);
+const today = new Date().toISOString().slice(0, 10);
+const fill = (s: string, k: string, v: string) => s.replace(`{${k}}`, v);
+---
+<PortailLayout title={fill(T('detail.title'), 'run', run.run_no)} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/emballage" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('detail.backToRuns')}
+    </a>
+  </p>
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 4px;">{run.run_no}</h1>
+      <p style="color: var(--p-muted); font-size: .92rem;">
+        {run.product_name}{run.brand ? ` · ${run.brand}` : ''}
+      </p>
+    </div>
+    <span class={`pill ${run.status}`}>{T(`status.${run.status}` as keyof typeof frEmballage)}</span>
+  </div>
+
+  {flashOk && <div class="flash flash-ok" style="margin-bottom:16px;">{flashOk}</div>}
+  {flash && <div class="flash flash-error" style="margin-bottom:16px;">{flash}</div>}
+
+  <div class="cols">
+    <div>
+      <div class="card">
+        <dl class="facts">
+          <dt>{T('detail.source')}</dt>
+          <dd>
+            <a href={`/portail/atelier/lots/${run.source_lot_id}`} class="mono">{run.source_lot_code}</a>
+            <span class="sub block">
+              {fill(T('detail.onHand'), 'qty', formatQty(source?.computed_on_hand_g ?? 0))}
+            </span>
+          </dd>
+
+          <dt>{T('detail.destination')}</dt>
+          <dd>
+            {run.customer_name ?? <span class="sub">{T('detail.stock')}</span>}
+            {run.customer_po_ref && <span class="sub block mono">{run.customer_po_ref}</span>}
+          </dd>
+
+          <dt>{T('col.date')}</dt>
+          <dd class="mono">{formatDate(run.packaged_on)}</dd>
+
+          <dt>{T('col.units')}</dt>
+          <dd class="mono">
+            {run.units_produced ?? run.units_planned ?? '—'}
+            {run.consumed_g && <span class="sub block">{formatQty(run.consumed_g)}</span>}
+          </dd>
+
+          {isDone && (
+            <>
+              <dt>{T('detail.outputLot')}</dt>
+              <dd>
+                <a href={`/portail/atelier/lots/${run.output_lot_id}`} class="mono">{run.output_lot_code}</a>
+                {run.completed_by && (
+                  <span class="sub block">{fill(T('detail.completedBy'), 'name', run.completed_by)}</span>
+                )}
+              </dd>
+            </>
+          )}
+        </dl>
+        {run.notes && <p class="notes">{run.notes}</p>}
+      </div>
+
+      {isDone && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('detail.label')}</h2>
+          <p class="sub" style="margin-bottom:12px;">{T('detail.labelIntro')}</p>
+          <dl class="facts">
+            <dt>GTIN</dt><dd class="mono">{run.label_gtin ?? '—'}</dd>
+            <dt>{T('req.caseGtin')}</dt><dd class="mono">{run.label_case_gtin ?? '—'}</dd>
+            <dt>{T('req.unitsPerCase')}</dt><dd class="mono">{run.label_units_per_case ?? '—'}</dd>
+            <dt>THC</dt><dd class="mono">{run.label_thc_pct ?? '—'} %</dd>
+            <dt>CBD</dt><dd class="mono">{run.label_cbd_pct ?? '—'} %</dd>
+            <dt>{T('f.cultivar')}</dt><dd>{run.label_cultivar ?? '—'}</dd>
+            <dt>{T('f.excised')}</dt>
+            <dd>{run.is_excised ? `✓ ${run.excise_province ?? ''}` : '—'}</dd>
+          </dl>
+        </div>
+      )}
+    </div>
+
+    <div>
+      <!-- ============================================= requirements -->
+      <div class="card">
+        <h2 class="sec">{T('req.title')}</h2>
+        <ul class="reqs">
+          {reqs.map((r) => (
+            <li class={r.state}>
+              <span class="mark">{r.state === 'ok' ? '✓' : r.state === 'missing' ? '!' : '–'}</span>
+              <span class="what">{T(`req.${r.key}` as keyof typeof frEmballage)}</span>
+              <span class="state">{T(`req.${r.state}` as keyof typeof frEmballage)}</span>
+            </li>
+          ))}
+        </ul>
+        {blocking > 0 && !isDone && (
+          <p class="sub" style="margin-top:10px;">
+            <a href="/portail/atelier/parametres/produits">{T('req.fixProduct')}</a>
+          </p>
+        )}
+      </div>
+
+      <!-- ================================================ complete -->
+      {!isDone && !isCancelled && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('detail.completeTitle')}</h2>
+          <p class="sub" style="margin-bottom:14px;">{T('detail.completeIntro')}</p>
+
+          <form method="POST" action={`/api/portail/atelier/packaging/${run.id}/complete`}>
+            <div class="grid">
+              <div class="field">
+                <label for="units_produced">{T('f.unitsProduced')} <em>*</em></label>
+                <input type="number" id="units_produced" name="units_produced" step="1" min="1"
+                       value={run.units_planned ?? ''} required />
+              </div>
+              <div class="field">
+                <label for="consumed_g">{T('f.consumed')} <em>*</em></label>
+                <input type="number" id="consumed_g" name="consumed_g" step="0.001" min="0.001"
+                       value={prefillG ?? ''} required />
+                <p class="hint">{T('f.consumed.hint')}</p>
+              </div>
+              <div class="field">
+                <label for="packaged_on_c">{T('f.packagedOn')}</label>
+                <input type="date" id="packaged_on_c" name="packaged_on" value={run.packaged_on ?? today} />
+              </div>
+              <div class="field">
+                <label for="province_c">{T('f.province')}</label>
+                <select id="province_c" name="excise_province">
+                  <option value="">—</option>
+                  {PROVINCES.map((p) => (
+                    <option value={p} selected={run.excise_province === p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div class="field wide check">
+                <label>
+                  <input type="checkbox" name="is_excised" value="1" checked={run.is_excised} />
+                  <span>{T('f.excised')}</span>
+                </label>
+              </div>
+              <div class="field">
+                <label for="thc_pct">{T('f.thc')}</label>
+                <input type="number" id="thc_pct" name="thc_pct" step="0.001" min="0" max="100"
+                       placeholder={thc != null ? String(thc) : ''} />
+                <p class="hint">{T('f.potency.hint')}</p>
+              </div>
+              <div class="field">
+                <label for="cbd_pct">{T('f.cbd')}</label>
+                <input type="number" id="cbd_pct" name="cbd_pct" step="0.001" min="0" max="100"
+                       placeholder={cbd != null ? String(cbd) : ''} />
+              </div>
+              <div class="field wide">
+                <label for="cultivar">{T('f.cultivar')}</label>
+                <input type="text" id="cultivar" name="cultivar" value={cultivar ?? ''} />
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:14px;">
+              {T('detail.complete')}
+            </button>
+          </form>
+
+          <details style="margin-top:18px;">
+            <summary class="sub">{T('detail.cancel')}</summary>
+            <form method="POST" action={`/api/portail/atelier/packaging/${run.id}/cancel`}
+                  style="margin-top:10px; display:flex; gap:8px; align-items:flex-end;">
+              <div class="field" style="flex:1;">
+                <label for="reason">{T('detail.cancelReason')} <em>*</em></label>
+                <input type="text" id="reason" name="reason" required />
+              </div>
+              <button type="submit" class="btn btn-secondary">{T('detail.cancel')}</button>
+            </form>
+          </details>
+        </div>
+      )}
+    </div>
+  </div>
+</PortailLayout>
+
+<style>
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+          flex-wrap:wrap; margin-bottom:18px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  h2.sec { font-size:.95rem; margin:0 0 6px; }
+  .facts { display:grid; grid-template-columns:auto 1fr; gap:8px 18px; margin:0; font-size:.9rem; }
+  .facts dt { color:var(--p-muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.4px; }
+  .facts dd { margin:0; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .sub { color:var(--p-muted); font-size:.8rem; }
+  .sub.block { display:block; }
+  .notes { margin:14px 0 0; padding-top:12px; border-top:1px solid var(--p-border);
+           font-size:.86rem; color:var(--p-muted); white-space:pre-line; }
+  .reqs { list-style:none; margin:0; padding:0; font-size:.88rem; }
+  .reqs li { display:flex; align-items:center; gap:10px; padding:7px 0;
+             border-bottom:1px solid var(--p-border); }
+  .reqs li:last-child { border-bottom:0; }
+  .reqs .mark { width:20px; height:20px; border-radius:50%; display:grid; place-items:center;
+                font-size:.72rem; font-weight:700; flex:none; }
+  .reqs li.ok .mark { background:#ecfdf5; color:#047857; }
+  .reqs li.missing .mark { background:#fef2f2; color:var(--p-danger); }
+  .reqs li.na .mark { background:var(--p-bg); color:var(--p-muted); }
+  .reqs .what { flex:1; }
+  .reqs li.na .what { color:var(--p-muted); }
+  .reqs .state { font-size:.76rem; color:var(--p-muted); }
+  .reqs li.missing .state { color:var(--p-danger); font-weight:600; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .field.wide { grid-column:1 / -1; }
+  .field em { color:var(--p-accent); font-style:normal; }
+  .field.check label { display:flex; align-items:center; gap:8px; font-weight:400; }
+  .field.check input { width:auto; }
+  .pill { display:inline-block; padding:3px 11px; border-radius:999px; font-size:.74rem;
+          text-transform:uppercase; letter-spacing:.4px; font-weight:600;
+          background:var(--p-bg); color:var(--p-muted); }
+  .pill.done { background:#ecfdf5; color:#047857; }
+  .pill.draft { background:#fff7ed; color:#c2410c; }
+  .pill.cancelled { background:var(--p-bg); color:var(--p-muted); }
+</style>

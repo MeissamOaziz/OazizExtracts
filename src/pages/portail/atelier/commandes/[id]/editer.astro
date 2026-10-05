@@ -1,0 +1,92 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../../layouts/PortailLayout.astro';
+import OrderForm from '../../../../../components/portail/OrderForm.astro';
+import { createServerClient } from '../../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../../lib/ops';
+import { ORDER_SOURCES, ORDER_STATUSES, bi, EDITABLE_STATUSES } from '../../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../../../../i18n/portail/atelier-commandes';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const id = String(Astro.params.id ?? '');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+
+const { data: order } = await supabase
+  .from('ops_orders')
+  .select(`
+    *,
+    lines:ops_order_lines ( * ),
+    spec:ops_refill_specs ( * ),
+    attachments:ops_order_attachments ( * )
+  `)
+  .eq('id', id)
+  .maybeSingle();
+
+if (!order) return new Response('Not found', { status: 404 });
+
+const detailHref = `/portail/atelier/commandes/${order.id}`;
+
+// A shipped or closed order is a record of what happened, not a draft.
+if (!EDITABLE_STATUSES.includes(order.status)) {
+  return Astro.redirect(`${detailHref}?error=locked`);
+}
+
+const [c, p, m] = await Promise.all([
+  supabase.from('ops_customers')
+    .select('id, name, customer_type, requires_case_gtin, default_excise_province, payment_terms')
+    .eq('is_active', true).order('name'),
+  supabase.from('ops_products').select('id, name, brand, sku_size_g, gtin')
+    .neq('status', 'delisted').order('brand').order('name').limit(500),
+  supabase.from('ops_materials').select('id, code, name_fr, name_en').eq('is_active', true).order('code'),
+]);
+
+const lines = (order.lines ?? []).sort((a: any, b: any) => a.line_no - b.line_no);
+const spec = Array.isArray(order.spec) ? order.spec[0] ?? null : order.spec ?? null;
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const badFields = (url.searchParams.get('fields') ?? '').split(',').filter(Boolean);
+const flash = error ? T(`flash.error.${error}` as keyof typeof frCommandes) : null;
+
+const title = order.customer_po_ref ?? order.order_no;
+---
+<PortailLayout title={`${T('edit.title')} — ${title}`} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href={detailHref} style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {title}
+    </a>
+  </p>
+
+  <h1 style="margin-bottom: 6px;">{T('edit.title')}</h1>
+  <p style="color: var(--p-muted); font-size: .9rem; margin-bottom: 8px; max-width: 66ch;">
+    {T('edit.subtitle')}
+  </p>
+  <p style="color: var(--p-muted); font-size: .85rem; margin-bottom: 20px;">
+    <span style="font-variant-numeric: tabular-nums;">{order.order_no}</span>
+    &nbsp;·&nbsp; {bi(ORDER_SOURCES, order.source, locale)}
+    &nbsp;·&nbsp; {bi(ORDER_STATUSES, order.status, locale)}
+  </p>
+
+  {flash && <div class="flash flash-error" style="margin-bottom: 16px;">{flash}</div>}
+
+  <OrderForm
+    mode="edit"
+    source={order.source}
+    action={`/api/portail/atelier/commandes/${order.id}/update`}
+    order={order}
+    lines={lines}
+    spec={spec}
+    attachments={order.attachments ?? []}
+    customers={c.data ?? []}
+    products={p.data ?? []}
+    materials={m.data ?? []}
+    badFields={badFields}
+    cancelHref={detailHref}
+  />
+</PortailLayout>

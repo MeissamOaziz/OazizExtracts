@@ -1,0 +1,63 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff, REF_TABLES, tableLabel, tableDesc, canManage } from '../../../../lib/ops';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frAtelier, enAtelier } from '../../../../i18n/portail/atelier';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frAtelier, enAtelier);
+
+const sections = await Promise.all(
+  REF_TABLES.map(async (spec) => {
+    const { count } = await supabase.from(spec.table).select('id', { count: 'exact', head: true });
+    return { spec, count: count ?? 0 };
+  }),
+);
+---
+<PortailLayout title={T('settings.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; {T('title')}</a>
+  </p>
+
+  <h1>{T('settings.title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px; max-width: 64ch;">{T('settings.subtitle')}</p>
+
+  {!canManage(staff.ops_role) && (
+    <div class="flash" style="margin-bottom:18px; background: var(--p-bg); border:1px solid var(--p-border); color: var(--p-muted);">
+      {T('readonly.notice')}
+    </div>
+  )}
+
+  <div class="set-grid">
+    {sections.map(({ spec, count }) => (
+      <a href={`/portail/atelier/parametres/${spec.slug}`} class="card set-card">
+        <div class="set-head">
+          <h2>{tableLabel(spec, locale)}</h2>
+          <span class="set-count">{count}</span>
+        </div>
+        <p>{tableDesc(spec, locale)}</p>
+      </a>
+    ))}
+  </div>
+</PortailLayout>
+
+<style>
+  .set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .set-card { display: block; text-decoration: none; color: inherit; transition: border-color .15s ease; }
+  .set-card:hover { border-color: var(--p-accent); }
+  .set-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .set-card h2 { margin: 0; font-size: 1rem; }
+  .set-card p { color: var(--p-muted); font-size: .86rem; margin: 0; line-height: 1.5; }
+  .set-count {
+    font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--p-muted);
+    background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 5px; padding: 1px 7px;
+  }
+  @media (prefers-reduced-motion: reduce) { .set-card { transition: none; } }
+</style>

@@ -1,0 +1,95 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import OrderForm from '../../../../components/portail/OrderForm.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { ORDER_SOURCES, bi, type OrderSource } from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../../../i18n/portail/atelier-commandes';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+
+const url = new URL(Astro.request.url);
+const SOURCES: OrderSource[] = ['customer_po', 'internal_refill', 'packaging_request'];
+const typeParam = url.searchParams.get('type');
+const source = SOURCES.includes(typeParam as OrderSource) ? (typeParam as OrderSource) : null;
+
+const error = url.searchParams.get('error');
+const badFields = (url.searchParams.get('fields') ?? '').split(',').filter(Boolean);
+const flash = error ? T(`flash.error.${error}` as keyof typeof frCommandes) : null;
+
+// Reference data for the pickers. Only loaded once a door is chosen.
+let customers: any[] = [];
+let products: any[] = [];
+let materials: any[] = [];
+if (source) {
+  const [c, p, m] = await Promise.all([
+    supabase.from('ops_customers')
+      .select('id, name, customer_type, requires_case_gtin, default_excise_province, payment_terms')
+      .eq('is_active', true).order('name'),
+    supabase.from('ops_products').select('id, name, brand, sku_size_g, gtin')
+      .neq('status', 'delisted').order('brand').order('name').limit(500),
+    supabase.from('ops_materials').select('id, code, name_fr, name_en').eq('is_active', true).order('code'),
+  ]);
+  customers = c.data ?? [];
+  products = p.data ?? [];
+  materials = m.data ?? [];
+}
+---
+<PortailLayout title={T('new.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/commandes" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('list.title')}
+    </a>
+  </p>
+
+  <h1 style="margin-bottom: 6px;">{T('new.title')}</h1>
+
+  {flash && <div class="flash flash-error" style="margin: 14px 0;">{flash}</div>}
+
+  {!source ? (
+    <>
+      <p style="color: var(--p-muted); margin-bottom: 20px;">{T('new.pick')}</p>
+      <div class="door-grid">
+        {SOURCES.map((s) => (
+          <a href={`?type=${s}`} class="card door">
+            <h2>{bi(ORDER_SOURCES, s, locale)}</h2>
+            <p>{T(`new.${s}.desc` as keyof typeof frCommandes)}</p>
+          </a>
+        ))}
+      </div>
+    </>
+  ) : (
+    <>
+      <p style="color: var(--p-muted); font-size: .9rem; margin-bottom: 20px;">
+        {bi(ORDER_SOURCES, source, locale)} · <a href="/portail/atelier/commandes/nouvelle">{T('new.pick')}</a>
+      </p>
+      <OrderForm
+        mode="create"
+        source={source}
+        action="/api/portail/atelier/commandes"
+        customers={customers}
+        products={products}
+        materials={materials}
+        badFields={badFields}
+        cancelHref="/portail/atelier/commandes"
+      />
+    </>
+  )}
+</PortailLayout>
+
+<style>
+  .door-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .door { display: block; text-decoration: none; color: inherit; transition: border-color .15s ease; }
+  .door:hover { border-color: var(--p-accent); }
+  .door h2 { margin: 0 0 8px; font-size: 1rem; }
+  .door p { margin: 0; color: var(--p-muted); font-size: .87rem; line-height: 1.5; }
+  @media (prefers-reduced-motion: reduce) { .door { transition: none; } }
+</style>

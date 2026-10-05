@@ -1,0 +1,211 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import QuickAdd from '../../../../components/portail/QuickAdd.astro';
+import Combo from '../../../../components/portail/Combo.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import { comboRows } from '../../../../lib/ops-quick';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frLots, enLots } from '../../../../i18n/portail/atelier-lots';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frLots, enLots);
+
+const [{ data: materials }, { data: customers }, { data: suppliers }] = await Promise.all([
+  supabase.from('ops_materials')
+    .select('id, code, name_fr, name_en, category, tracks_potency')
+    .eq('is_active', true).order('code'),
+  supabase.from('ops_customers')
+    .select('id, name, short_code').eq('is_active', true).order('name'),
+  supabase.from('ops_suppliers')
+    .select('id, name, short_code, licence_no').eq('is_active', true).order('name'),
+]);
+
+const comboSeeds = {
+  material: comboRows('material', materials, locale),
+  customer: comboRows('customer', customers, locale),
+  supplier: comboRows('supplier', suppliers, locale),
+};
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+const flash = error ? T(`flash.error.${error}` as keyof typeof frLots) : null;
+
+const today = new Date().toISOString().slice(0, 10);
+
+const ORIGINS = ['purchased', 'produced', 'returned', 'customer_supplied', 'supplier_special'];
+// Material held under one of these arrangements is not unconditionally ours, and
+// the database refuses it without a counterparty — so the form asks for the right
+// one: tolling belongs to a customer, a supplier special is owed to a supplier.
+const COUNTERPARTY = { customer_supplied: 'owner', supplier_special: 'supplier' };
+const SOURCES = ['coa', 'supplier', 'estimate', 'calculated'];
+---
+<PortailLayout title={T('receive.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/lots" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('list.title')}
+    </a>
+  </p>
+
+  <h1 style="margin-bottom: 6px;">{T('receive.title')}</h1>
+  <p style="color: var(--p-muted); font-size: .92rem; margin-bottom: 20px; max-width: 70ch;">
+    {T('receive.subtitle')}
+  </p>
+
+  {flash && <div class="flash flash-error" style="margin-bottom:16px;">{flash}</div>}
+
+  <form method="POST" action="/api/portail/atelier/lots" enctype="multipart/form-data">
+    <div class="card">
+      <h2 class="sec">{T('receive.section.what')}</h2>
+      <div class="grid">
+        <Combo kind="material" name="material_id" id="material_id"
+               label={T('f.material')} required placeholder={T('combo.hint')} />
+        <div class="field">
+          <label for="qty_g">{T('f.qty')} <em>*</em></label>
+          <input type="number" id="qty_g" name="qty_g" step="0.001" min="0.001" required />
+        </div>
+        <div class="field">
+          <label for="origin">{T('f.origin')}</label>
+          <select id="origin" name="origin">
+            {ORIGINS.map((o) => (
+              <option value={o} selected={o === 'purchased'}>{T(`origin.${o}` as keyof typeof frLots)}</option>
+            ))}
+          </select>
+        </div>
+        <Combo kind="supplier" name="supplier_id" id="supplier_id"
+               label={T('f.supplier')} placeholder={T('combo.hint')} />
+        <Combo kind="customer" name="owner_customer_id" id="owner_customer_id"
+               label={T('f.owner')} placeholder={T('combo.hint')}
+               hint={T('f.owner.hint')} wide />
+        <div class="field">
+          <label for="received_at">{T('f.receivedAt')}</label>
+          <input type="date" id="received_at" name="received_at" value={today} />
+        </div>
+        <div class="field">
+          <label for="cultivar">{T('f.cultivar')}</label>
+          <input type="text" id="cultivar" name="cultivar" />
+        </div>
+        <div class="field field-wide">
+          <label for="lot_code">{T('f.lotCode')}</label>
+          <input type="text" id="lot_code" name="lot_code" placeholder="TRIM-2026-0001" />
+          <p class="hint">{T('f.lotCode.hint')}</p>
+        </div>
+        <div class="field field-wide">
+          <label for="notes">{T('f.notes')}</label>
+          <textarea id="notes" name="notes" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="sec">{T('receive.section.potency')}</h2>
+      <div class="grid">
+        <div class="field narrow">
+          <label for="thc_pct">{T('f.thc')}</label>
+          <input type="number" id="thc_pct" name="thc_pct" step="0.001" min="0" max="100" />
+        </div>
+        <div class="field narrow">
+          <label for="cbd_pct">{T('f.cbd')}</label>
+          <input type="number" id="cbd_pct" name="cbd_pct" step="0.001" min="0" max="100" />
+        </div>
+        <div class="field">
+          <label for="potency_source">{T('f.potencySource')}</label>
+          <select id="potency_source" name="potency_source">
+            {SOURCES.map((s) => (
+              <option value={s} selected={s === 'coa'}>{T(`src.${s}` as keyof typeof frLots)}</option>
+            ))}
+          </select>
+        </div>
+        <div class="field">
+          <label for="coa_ref">{T('f.coaRef')}</label>
+          <input type="text" id="coa_ref" name="coa_ref" />
+        </div>
+        <div class="field">
+          <label for="tested_at">{T('f.testedAt')}</label>
+          <input type="date" id="tested_at" name="tested_at" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="sec">{T('receive.section.refs')}</h2>
+      <div class="grid">
+        <div class="field">
+          <label for="groweriq_ref">{T('f.groweriqRef')}</label>
+          <input type="text" id="groweriq_ref" name="groweriq_ref" />
+          <p class="hint">{T('f.groweriqRef.hint')}</p>
+        </div>
+        <div class="field">
+          <label for="supplier_ref">{T('f.supplierRef')}</label>
+          <input type="text" id="supplier_ref" name="supplier_ref" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="sec">{T('receive.section.coa')}</h2>
+      <div class="field">
+        <label for="coa_file">{T('f.coaFile')}</label>
+        <input type="file" id="coa_file" name="coa_file" accept=".pdf,.png,.jpg,.jpeg,.webp" />
+        <p class="hint">{T('f.coaFile.hint')}</p>
+      </div>
+    </div>
+
+    <QuickAdd kinds={['material', 'supplier', 'customer']} seeds={comboSeeds}
+              materials={materials ?? []} />
+
+    <div style="display:flex; gap:10px; margin-top:18px;">
+      <button type="submit" class="btn btn-primary">{T('receive.submit')}</button>
+      <a href="/portail/atelier/lots" class="btn btn-secondary" style="text-decoration:none;">Annuler</a>
+    </div>
+  </form>
+</PortailLayout>
+
+<script type="application/json" id="counterparty-map" set:html={JSON.stringify(COUNTERPARTY)}></script>
+
+<script>
+  // Ask for the counterparty only when the origin implies one, and mark it required
+  // at the same time so the browser catches it before the round trip does.
+  const map: Record<string, string> = JSON.parse(
+    document.getElementById('counterparty-map')?.textContent || '{}',
+  );
+  const origin = document.getElementById('origin') as HTMLSelectElement | null;
+  const owner = document.getElementById('owner_customer_id') as HTMLInputElement | null;
+  const supplier = document.getElementById('supplier_id') as HTMLInputElement | null;
+  const ownerField = owner?.closest('.field') as HTMLElement | null;
+
+  function sync() {
+    if (!origin || !owner || !supplier || !ownerField) return;
+    const needs = map[origin.value];
+
+    ownerField.hidden = needs !== 'owner';
+    owner.required = needs === 'owner';
+    if (needs !== 'owner') {
+      owner.value = '';
+      (owner.parentElement?.querySelector('.combo-id') as HTMLInputElement | null)?.setAttribute('value', '');
+    }
+
+    // The supplier field is always on the form; it only becomes mandatory when the
+    // supplier is the one who fronted the material.
+    supplier.required = needs === 'supplier';
+    supplier.closest('.field')?.querySelector('label')
+      ?.classList.toggle('needed', needs === 'supplier');
+  }
+  origin?.addEventListener('change', sync);
+  sync();
+</script>
+
+<style>
+  h2.sec { font-size: .95rem; margin: 0 0 14px; }
+  .field em { color: var(--p-accent); font-style: normal; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .field-wide { grid-column: 1 / -1; }
+  .field.narrow { max-width: 160px; }
+  .field em { color: var(--p-accent); font-style: normal; }
+</style>

@@ -31,7 +31,7 @@ export const frAdminUsers = {
   'perm.hr': 'RH — attestations et rapports d\'incident',
   'perm.hr_employees': 'RH — dossiers de nouveaux employés',
   'perm.hr_evaluations': 'RH — évaluations et suivi',
-  'perm.atelier': 'Atelier',
+  'perm.atelier': 'Atelier (réservé à Meissam)',
   'perm.admin': 'Administration (utilisateurs et accès)',
 
   'edit.back': '← Utilisateurs',
@@ -99,7 +99,7 @@ export const enAdminUsers: Partial<Record<keyof AdminUsersDict, string>> = {
   'perm.hr': 'HR — attestations and incident reports',
   'perm.hr_employees': 'HR — new employee packages',
   'perm.hr_evaluations': 'HR — evaluations and tracker',
-  'perm.atelier': 'Atelier',
+  'perm.atelier': 'Atelier (Meissam only)',
   'perm.admin': 'Administration (users and access)',
 
   'edit.back': '← Users',

@@ -1,0 +1,229 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../lib/supabase';
+import { currentOpsStaff } from '../../../lib/ops';
+import { formatQty, formatDate } from '../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frLots, enLots } from '../../../i18n/portail/atelier-lots';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frLots, enLots);
+
+const url = new URL(Astro.request.url);
+const filter = url.searchParams.get('filter') ?? 'all';
+
+let q = supabase.from('v_ops_inventory').select('*');
+if (filter === 'released') q = q.eq('is_released', true);
+if (filter === 'batches') q = q.eq('release_status', 'batch');
+if (filter === 'conditional') q = q.eq('release_status', 'conditional');
+
+const { data, error: qErr } = await q;
+if (qErr) console.error('[atelier] inventory failed:', qErr);
+const rows = data ?? [];
+
+const matName = (r: any) => (locale === 'en' ? r.material_en : r.material_fr);
+
+// Meissam's ordering: by category, then material name alphabetically, then by
+// descending potency so the strongest of a given material sits at the top.
+const CATEGORY_ORDER = [
+  'cannabis_raw', 'cannabis_intermediate', 'cannabis_finished',
+  'additive', 'packaging', 'other',
+];
+const collator = new Intl.Collator(locale === 'en' ? 'en' : 'fr', { sensitivity: 'base' });
+
+const grouped = CATEGORY_ORDER
+  .map((cat) => ({
+    cat,
+    rows: rows
+      .filter((r: any) => r.material_category === cat)
+      .sort((a: any, b: any) => {
+        const byName = collator.compare(matName(a), matName(b));
+        if (byName !== 0) return byName;
+        const at = a.thc_pct === null ? -1 : Number(a.thc_pct);
+        const bt = b.thc_pct === null ? -1 : Number(b.thc_pct);
+        if (bt !== at) return bt - at;                     // strongest first
+        return collator.compare(a.lot_code, b.lot_code);
+      }),
+  }))
+  .filter((g) => g.rows.length > 0);
+
+const sum = (list: any[]) => list.reduce((t, r) => t + Number(r.computed_on_hand_g ?? 0), 0);
+const grandTotal = sum(rows);
+
+const filters = [
+  { key: 'all', label: T('inv.all') },
+  { key: 'released', label: T('inv.releasedOnly') },
+  { key: 'batches', label: T('inv.batchesOnly') },
+  { key: 'conditional', label: T('cond.badge') },
+];
+---
+<PortailLayout title={T('inv.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; Atelier</a>
+  </p>
+
+  <div class="head-row">
+    <div>
+      <h1 style="margin-bottom: 6px;">{T('inv.title')}</h1>
+      <p style="color: var(--p-muted); font-size: .9rem; margin: 0; max-width: 76ch;">{T('inv.subtitle')}</p>
+    </div>
+    <a href="/portail/atelier/lots/reception" class="btn btn-primary" style="text-decoration:none; white-space:nowrap;">
+      + {T('receive.button')}
+    </a>
+  </div>
+
+  <div class="list-head">
+    <div class="tabs">
+      {filters.map((f) => (
+        <a href={`?filter=${f.key}`} class={filter === f.key ? 'tab active' : 'tab'}>{f.label}</a>
+      ))}
+    </div>
+    <div class="tools">
+      <span class="count">
+        {T('inv.grandTotal').replace('{n}', String(rows.length)).replace('{g}', formatQty(grandTotal))}
+      </span>
+      {rows.length > 0 && <input type="search" id="invSearch" placeholder={T('list.search')} autocomplete="off" />}
+    </div>
+  </div>
+
+  {rows.length === 0 ? (
+    <div class="card empty-state">{T('inv.empty')}</div>
+  ) : (
+    grouped.map((g) => (
+      <section class="catblock">
+        <header>
+          <h2>{T(`cat.${g.cat}` as keyof typeof frLots)}</h2>
+          <span class="sub">
+            {T('inv.catTotal').replace('{n}', String(g.rows.length)).replace('{g}', formatQty(sum(g.rows)))}
+          </span>
+        </header>
+        <div class="table-wrap">
+          <table class="data inv">
+            <thead>
+              <tr>
+                <th>{T('col.material')}</th>
+                <th>{T('col.lot')}</th>
+                <th>{T('col.cultivar')}</th>
+                <th>{T('col.potency')}</th>
+                <th>{T('col.release')}</th>
+                <th style="text-align:right">{T('col.sampled')}</th>
+                <th style="text-align:right">{T('col.onHand')}</th>
+                <th>{T('col.dates')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.rows.map((r: any) => (
+                <tr data-search={[
+                  r.lot_code, r.material_code, matName(r), r.cultivar, r.supplier_name,
+                  r.product_name, r.gtin, r.packaging_run_no,
+                ].filter(Boolean).join(' ').toLowerCase()}>
+                  <td>
+                    <strong>{r.is_packaged ? r.product_name : matName(r)}</strong>
+                    <span class="sub block mono">
+                      {r.material_code}
+                      {r.is_packaged && r.sku_size_g ? ` · ${formatQty(r.sku_size_g)}` : ''}
+                    </span>
+                  </td>
+                  <td>
+                    <a href={`/portail/atelier/lots/${r.id}`} class="mono">{r.lot_code}</a>
+                    {r.is_packaged && (
+                      <span class="sub block">
+                        <a href={`/portail/atelier/emballage`} class="mono">{r.packaging_run_no}</a>
+                        {r.is_excised ? ` · ${r.excise_province ?? ''}` : ''}
+                      </span>
+                    )}
+                  </td>
+                  <td>{r.cultivar ?? '—'}<span class="sub block">{r.supplier_name ?? ''}</span></td>
+                  <td class="mono">
+                    {r.thc_pct !== null ? `${formatQty(r.thc_pct)}%` : '—'}
+                    {r.cbd_pct !== null && <span class="sub"> / {formatQty(r.cbd_pct)}%</span>}
+                  </td>
+                  <td>
+                    {r.release_status === 'released'
+                      ? <span class="pill tone-good">{T('lot.word')}</span>
+                      : r.release_status === 'conditional'
+                        ? <span class="pill tone-cond" title={T('cond.banner')}>{T('cond.badge')}</span>
+                        : <span class="pill tone-warn">{T('batch.badge')}</span>}
+                  </td>
+                  <td class="mono num sub">{Number(r.sampled_g) ? formatQty(r.sampled_g) : '—'}</td>
+                  <td class="mono num">
+                    <strong>{formatQty(r.computed_on_hand_g)}</strong>
+                    {r.is_packaged && r.qty_on_hand_units != null && (
+                      <span class="sub block">{r.qty_on_hand_units} {T('col.units')}</span>
+                    )}
+                  </td>
+                  <td class="sub" style="white-space:nowrap;">
+                    {formatDate(r.released_at ?? r.produced_at ?? r.received_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ))
+  )}
+  <p class="no-results hint" hidden>{T('list.searchNone')}</p>
+</PortailLayout>
+
+<style>
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+               margin: 26px 0 14px; flex-wrap: wrap; }
+  .tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tools .count { font-size: .82rem; color: var(--p-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tools input[type="search"] { width: auto; min-width: 250px; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { font-size: .85rem; padding: 5px 11px; border-radius: 6px; text-decoration: none;
+         color: var(--p-muted); border: 1px solid transparent; }
+  .tab:hover { background: var(--p-bg); color: var(--p-text); }
+  .tab.active { background: var(--p-card); border-color: var(--p-border); color: var(--p-text); font-weight: 500; }
+
+  .catblock { margin-bottom: 22px; }
+  .catblock header { display: flex; align-items: baseline; justify-content: space-between;
+                     gap: 12px; margin-bottom: 7px; }
+  .catblock h2 { margin: 0; font-size: .95rem; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-card); }
+  table.inv { margin: 0; font-size: .87rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  td.num { text-align: right; }
+  .sub { color: var(--p-muted); font-size: .76rem; }
+  .sub.block { display: block; }
+  .pill { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+          text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+          border: 1px solid var(--p-border); color: var(--p-muted); white-space: nowrap; }
+  .pill.tone-good { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .pill.tone-warn { color: var(--p-warn); border-color: #fde68a; background: #fffbeb; }
+  .pill.tone-cond { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .no-results { padding: 18px; margin: 0; text-align: center; }
+</style>
+
+<script>
+  const search = document.getElementById('invSearch') as HTMLInputElement | null;
+  if (search) {
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('table.inv tbody tr'));
+    const blocks = Array.from(document.querySelectorAll<HTMLElement>('.catblock'));
+    const none = document.querySelector<HTMLElement>('.no-results');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of rows) {
+        const hit = !q || (row.dataset.search || '').includes(q);
+        row.hidden = !hit;
+        if (hit) shown++;
+      }
+      // Hide a whole category once none of its rows match.
+      for (const b of blocks) {
+        const any = Array.from(b.querySelectorAll<HTMLTableRowElement>('tbody tr')).some((r) => !r.hidden);
+        b.hidden = !any;
+      }
+      if (none) none.hidden = shown !== 0;
+    });
+  }
+</script>

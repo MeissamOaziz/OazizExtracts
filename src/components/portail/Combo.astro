@@ -1,0 +1,42 @@
+---
+// One reference picker: a text input that searches, backed by a hidden id that is
+// what actually gets submitted. QuickAdd.astro must be on the same page — it owns
+// the behaviour, the drawers and the styles for every combo at once.
+
+interface Props {
+  /** Entity kind, matching a QUICK_SPECS entry: product, customer, supplier, … */
+  kind: string;
+  /** Form field name for the submitted id. */
+  name: string;
+  /** Omit inside a repeated row, where the column header is the label. */
+  label?: string;
+  /** Preselected row, when editing. */
+  value?: string | null;
+  valueLabel?: string | null;
+  required?: boolean;
+  placeholder?: string;
+  hint?: string;
+  wide?: boolean;
+  /** Extra classes on the wrapper, e.g. 'grow' inside a line row. */
+  class?: string;
+  id?: string;
+}
+
+const {
+  kind, name, label, value = '', valueLabel = '',
+  required = false, placeholder, hint, wide = false,
+  class: extra = '', id,
+} = Astro.props;
+
+// Rows cloned from a <template> would all share one id, so a combo inside a
+// repeated row goes without one — and then the label must not claim a `for`.
+---
+<div class:list={['field', 'combo', wide && 'wide', extra]} data-combo={kind}>
+  {label && <label for={id}>{label} {required && <em>*</em>}</label>}
+  <input class="combo-input" type="text" id={id} autocomplete="off"
+         role="combobox" aria-expanded="false" aria-autocomplete="list"
+         aria-label={label ? undefined : placeholder}
+         placeholder={placeholder} value={valueLabel ?? ''} required={required} />
+  <input class="combo-id" type="hidden" name={name} value={value ?? ''} />
+  {hint && <p class="hint">{hint}</p>}
+</div>

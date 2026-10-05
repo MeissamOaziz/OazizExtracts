@@ -1,0 +1,513 @@
+---
+// QuickBooks-style pickers, for every reference record Atelier can create inline.
+//
+// A `.combo` is a text input backed by a filtered dropdown. "Add …" is always the
+// FIRST row, because the list can only ever offer what already exists — the whole
+// point is the thing you are typing is usually not in it yet. Choosing it opens a
+// side drawer prefilled with whatever has been typed, and saving creates the
+// record, selects it into the field that opened it, and adds it to the in-memory
+// list so later lines can pick it too.
+//
+// Drawers, their fields and their validation all come from QUICK_SPECS. A page
+// asks for the kinds it needs; nothing about an entity is written out here.
+//
+// Wiring is by event delegation on document, so rows cloned from a <template>
+// after page load work with no extra initialisation.
+
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../i18n/portail/atelier-commandes';
+import { QUICK_SPECS, type ComboRow, type QuickField } from '../../lib/ops-quick';
+
+interface Props {
+  /** Which drawers this page needs, e.g. ['material', 'supplier']. */
+  kinds: string[];
+  /** Rows each combobox starts with, keyed by kind — already shaped by comboRows(). */
+  seeds?: Record<string, ComboRow[]>;
+  /** Option lists for the specs' `fk` fields. */
+  materials?: Array<{ id: string; code: string; name_fr: string; name_en: string }>;
+  rooms?: Array<{ id: string; code: string; name_fr: string; name_en: string }>;
+}
+const { kinds, seeds = {}, materials = [], rooms = [] } = Astro.props;
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+const en = locale === 'en';
+
+const specs = QUICK_SPECS.filter((s) => kinds.includes(s.kind));
+
+const listFor = (f: QuickField) => (f.list === 'rooms' ? rooms : materials);
+const fkLabel = (r: any) => `${r.code} — ${en ? r.name_en : r.name_fr}`;
+const fieldLabel = (f: QuickField) => (en ? f.en : f.fr);
+
+// Strings the client script needs. Passed as a data island rather than define:vars
+// so the script stays bundled and type-checked.
+const clientStrings = {
+  addNew: T('combo.addNew'),
+  noMatch: T('combo.noMatch'),
+  saving: T('quick.saving'),
+  err_field_required: T('quick.err.field_required'),
+  err_field_invalid: T('quick.err.field_invalid'),
+  err_duplicate: T('quick.err.duplicate'),
+  err_no_role: T('quick.err.no_role'),
+  err_insert_failed: T('quick.err.insert_failed'),
+  err_network: T('quick.err.network'),
+};
+---
+
+<script type="application/json" id="quick-i18n" set:html={JSON.stringify(clientStrings)}></script>
+<script type="application/json" id="quick-seeds" set:html={JSON.stringify(seeds)}></script>
+
+<div class="drawer-scrim" id="drawerScrim" hidden></div>
+
+{specs.map((spec) => (
+  <aside class="drawer" id={`drawer-${spec.kind}`} hidden aria-hidden="true" role="dialog"
+         aria-modal="true" aria-labelledby={`drawerTitle-${spec.kind}`}
+         data-prefill={spec.prefill.join(' ')}>
+    <div class="drawer-head">
+      <h2 id={`drawerTitle-${spec.kind}`}>{en ? spec.titleEn : spec.titleFr}</h2>
+      <button type="button" class="drawer-close" data-drawer-close aria-label={T('quick.close')}>&times;</button>
+    </div>
+    <p class="drawer-intro">{en ? spec.introEn : spec.introFr}</p>
+
+    <div class="drawer-body">
+      <div class="drawer-grid">
+        {spec.fields.map((f) => {
+          const id = `q_${spec.kind}_${f.key}`;
+          return (
+            <div class={f.wide || f.type === 'textarea' ? 'field wide' : 'field'}>
+              {f.type === 'checkbox' ? (
+                <label class="check" for={id}>
+                  <input type="checkbox" id={id} data-qf={f.key} checked={f.default === true} />
+                  <span>{fieldLabel(f)}</span>
+                </label>
+              ) : (
+                <>
+                  <label for={id}>{fieldLabel(f)} {f.required && <em>*</em>}</label>
+                  {f.type === 'select' ? (
+                    <select id={id} data-qf={f.key} data-required={f.required ? '' : null}>
+                      <option value="">—</option>
+                      {(f.options ?? []).map((o) => (
+                        <option value={o.v}>{en ? o.en : o.fr}</option>
+                      ))}
+                    </select>
+                  ) : f.type === 'fk' ? (
+                    <select id={id} data-qf={f.key} data-required={f.required ? '' : null}>
+                      <option value="">—</option>
+                      {listFor(f).map((r: any) => <option value={r.id}>{fkLabel(r)}</option>)}
+                    </select>
+                  ) : f.type === 'textarea' ? (
+                    <textarea id={id} data-qf={f.key} rows="2" data-required={f.required ? '' : null}></textarea>
+                  ) : f.type === 'colour' ? (
+                    <input type="color" id={id} data-qf={f.key} value="#0f7b6c"
+                           data-required={f.required ? '' : null} />
+                  ) : (
+                    <input type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : 'text'}
+                           id={id} data-qf={f.key} step={f.step} autocomplete="off"
+                           data-required={f.required ? '' : null} />
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <p class="drawer-error" data-drawer-error hidden></p>
+    <div class="drawer-foot">
+      <button type="button" class="btn btn-primary" data-drawer-save>{T('quick.save')}</button>
+      <button type="button" class="btn btn-secondary" data-drawer-close>{T('quick.close')}</button>
+    </div>
+  </aside>
+))}
+
+<style is:global>
+  /* ---------------------------------------------------------- combobox */
+  .combo { position: relative; }
+  .combo-list {
+    position: absolute; z-index: 40; top: calc(100% + 3px); left: 0; right: 0;
+    max-height: 268px; overflow-y: auto; margin: 0; padding: 4px;
+    list-style: none; background: var(--p-card);
+    border: 1px solid var(--p-border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+  }
+  .combo-list li {
+    padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    font-size: .88rem; display: flex; align-items: baseline; gap: 8px;
+  }
+  .combo-list li[aria-selected="true"] { background: var(--p-bg); }
+  .combo-list li .meta { color: var(--p-muted); font-size: .76rem; margin-left: auto; white-space: nowrap; }
+  .combo-list li mark { background: none; color: var(--p-accent); font-weight: 600; }
+  .combo-list li.combo-add { color: var(--p-accent); font-weight: 500; border-bottom: 1px solid var(--p-border);
+                             border-radius: 5px 5px 0 0; margin-bottom: 3px; padding-bottom: 9px; }
+  .combo-list li.combo-empty { color: var(--p-muted); cursor: default; }
+  .combo-input.has-pick { padding-right: 26px; }
+  .combo-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: 0; color: var(--p-muted); cursor: pointer;
+    font-size: 1rem; line-height: 1; padding: 2px 4px;
+  }
+  .combo-clear:hover { color: var(--p-danger); }
+  .combo[hidden] { display: none; }
+  /* A picker the surrounding form has just made mandatory says so. */
+  .combo label.needed::after { content: ' *'; color: var(--p-accent); }
+
+  /* ------------------------------------------------------------ drawer */
+  .drawer-scrim {
+    position: fixed; inset: 0; background: rgba(16, 24, 40, .38);
+    z-index: 90; animation: scrimIn .16s ease;
+  }
+  @keyframes scrimIn { from { opacity: 0 } to { opacity: 1 } }
+
+  .drawer {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(430px, 100vw);
+    background: var(--p-card); border-right: 1px solid var(--p-border);
+    box-shadow: 4px 0 28px rgba(16, 24, 40, .16);
+    z-index: 100; display: flex; flex-direction: column;
+    animation: drawerIn .18s cubic-bezier(.2, .8, .3, 1);
+  }
+  @keyframes drawerIn { from { transform: translateX(-100%) } to { transform: translateX(0) } }
+
+  /* `hidden` is only display:none at UA specificity, which .drawer's display:flex
+     beats — so the panels would render open on page load without this. */
+  .drawer[hidden], .drawer-scrim[hidden], .combo-list[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .drawer, .drawer-scrim { animation: none; }
+  }
+
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 18px 20px 0;
+  }
+  .drawer-head h2 { margin: 0; font-size: 1.05rem; }
+  .drawer-close {
+    background: none; border: 0; color: var(--p-muted); font-size: 1.5rem;
+    line-height: 1; cursor: pointer; padding: 0 4px;
+  }
+  .drawer-close:hover { color: var(--p-text); }
+  .drawer-intro { margin: 6px 20px 0; color: var(--p-muted); font-size: .84rem; }
+  .drawer-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+  .drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .drawer-grid .field.wide { grid-column: 1 / -1; }
+  .drawer .field em { color: var(--p-accent); font-style: normal; }
+  .drawer .field input[type="color"] { padding: 2px; height: 38px; }
+  .drawer .check { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-top: 6px; }
+  .drawer .check input { width: auto; }
+  .drawer .check span { font-size: .88rem; color: var(--p-text); }
+  .drawer .field.bad input, .drawer .field.bad select, .drawer .field.bad textarea {
+    border-color: var(--p-danger);
+  }
+  .drawer-error {
+    margin: 0 20px; padding: 9px 12px; border-radius: 6px;
+    background: #fef2f2; border: 1px solid #fecaca; color: var(--p-danger); font-size: .85rem;
+  }
+  .drawer-foot {
+    display: flex; gap: 10px; padding: 14px 20px 18px;
+    border-top: 1px solid var(--p-border);
+  }
+</style>
+
+<script>
+  interface ComboRow { id: string; label: string; meta?: string; [k: string]: unknown }
+
+  const strings: Record<string, string> = JSON.parse(
+    document.getElementById('quick-i18n')?.textContent || '{}',
+  );
+
+  // In-memory option lists, seeded from the page and grown by the drawers.
+  const lists: Record<string, ComboRow[]> = JSON.parse(
+    document.getElementById('quick-seeds')?.textContent || '{}',
+  );
+
+  const fold = (s: string) =>
+    s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+
+  function highlight(label: string, q: string): string {
+    if (!q) return esc(label);
+    const i = fold(label).indexOf(fold(q));
+    if (i < 0) return esc(label);
+    return `${esc(label.slice(0, i))}<mark>${esc(label.slice(i, i + q.length))}</mark>${esc(label.slice(i + q.length))}`;
+  }
+
+  // ------------------------------------------------------------- rendering
+  function listEl(combo: HTMLElement): HTMLUListElement {
+    let ul = combo.querySelector<HTMLUListElement>('.combo-list');
+    if (!ul) {
+      ul = document.createElement('ul');
+      ul.className = 'combo-list';
+      ul.setAttribute('role', 'listbox');
+      ul.hidden = true;
+      combo.appendChild(ul);
+    }
+    return ul;
+  }
+
+  function close(combo: HTMLElement) {
+    const ul = combo.querySelector<HTMLUListElement>('.combo-list');
+    if (ul) { ul.hidden = true; ul.innerHTML = ''; }
+    combo.querySelector('.combo-input')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function kindOf(combo: HTMLElement) {
+    return combo.dataset.combo || 'product';
+  }
+
+  function render(combo: HTMLElement) {
+    const input = combo.querySelector<HTMLInputElement>('.combo-input');
+    if (!input) return;
+    const kind = kindOf(combo);
+    const q = input.value.trim();
+    const rows = lists[kind] ?? [];
+    const matches = (q ? rows.filter((r) => fold(r.label).includes(fold(q))) : rows).slice(0, 8);
+
+    const ul = listEl(combo);
+    ul.innerHTML = '';
+
+    // "Add …" is always first, exactly as asked. It appears even when something
+    // matched: "Bubble Hash 1 g" existing must not stop you creating "Bubble Hash 2 g".
+    if (q && document.getElementById(`drawer-${kind}`)) {
+      const add = document.createElement('li');
+      add.className = 'combo-add';
+      add.setAttribute('role', 'option');
+      add.dataset.action = 'add';
+      add.textContent = (strings.addNew || 'Add “{q}”').replace('{q}', q);
+      ul.appendChild(add);
+    }
+
+    for (const r of matches) {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.dataset.id = r.id;
+      li.innerHTML = `<span>${highlight(r.label, q)}</span>${r.meta ? `<span class="meta">${esc(r.meta)}</span>` : ''}`;
+      ul.appendChild(li);
+    }
+
+    if (matches.length === 0 && ul.children.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'combo-empty';
+      li.textContent = strings.noMatch || 'No match';
+      ul.appendChild(li);
+    }
+
+    ul.hidden = ul.children.length === 0;
+    input.setAttribute('aria-expanded', String(!ul.hidden));
+    const first = ul.querySelector('li:not(.combo-empty)');
+    ul.querySelectorAll('li').forEach((li) => li.setAttribute('aria-selected', 'false'));
+    first?.setAttribute('aria-selected', 'true');
+  }
+
+  function pick(combo: HTMLElement, row: ComboRow) {
+    const input = combo.querySelector<HTMLInputElement>('.combo-input');
+    const hidden = combo.querySelector<HTMLInputElement>('.combo-id');
+    if (input) input.value = row.label;
+    if (hidden) hidden.value = row.id;
+    close(combo);
+    combo.dispatchEvent(new CustomEvent('combo:pick', { detail: row, bubbles: true }));
+  }
+
+  // ------------------------------------------------------------- delegation
+  document.addEventListener('input', (e) => {
+    const input = (e.target as HTMLElement)?.closest?.('.combo-input') as HTMLInputElement | null;
+    if (!input) return;
+    const combo = input.closest('.combo') as HTMLElement;
+    // Typing invalidates any previous pick.
+    const hidden = combo.querySelector<HTMLInputElement>('.combo-id');
+    if (hidden) hidden.value = '';
+    render(combo);
+  });
+
+  document.addEventListener('focusin', (e) => {
+    const input = (e.target as HTMLElement)?.closest?.('.combo-input') as HTMLInputElement | null;
+    if (input) render(input.closest('.combo') as HTMLElement);
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const li = target.closest('.combo-list li') as HTMLElement | null;
+
+    if (li) {
+      const combo = li.closest('.combo') as HTMLElement;
+      const input = combo.querySelector<HTMLInputElement>('.combo-input');
+      if (li.classList.contains('combo-empty')) return;
+      if (li.dataset.action === 'add') {
+        openDrawer(kindOf(combo), input?.value.trim() || '', combo);
+        close(combo);
+        return;
+      }
+      const row = (lists[kindOf(combo)] ?? []).find((r) => r.id === li.dataset.id);
+      if (row) pick(combo, row);
+      return;
+    }
+
+    if (!target.closest('.combo')) {
+      document.querySelectorAll<HTMLElement>('.combo').forEach(close);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const input = (e.target as HTMLElement)?.closest?.('.combo-input') as HTMLInputElement | null;
+    if (!input) return;
+    const combo = input.closest('.combo') as HTMLElement;
+    const ul = combo.querySelector<HTMLUListElement>('.combo-list');
+    if (!ul || ul.hidden) {
+      if (e.key === 'ArrowDown') { render(combo); e.preventDefault(); }
+      return;
+    }
+    const items = Array.from(ul.querySelectorAll<HTMLElement>('li:not(.combo-empty)'));
+    if (items.length === 0) return;
+    const current = items.findIndex((li) => li.getAttribute('aria-selected') === 'true');
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = e.key === 'ArrowDown'
+        ? Math.min(current + 1, items.length - 1)
+        : Math.max(current - 1, 0);
+      items.forEach((li) => li.setAttribute('aria-selected', 'false'));
+      items[next].setAttribute('aria-selected', 'true');
+      items[next].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      items[current < 0 ? 0 : current].click();
+    } else if (e.key === 'Escape') {
+      close(combo);
+    }
+  });
+
+  // ---------------------------------------------------------------- drawer
+  let originCombo: HTMLElement | null = null;
+  let openKind: string | null = null;
+
+  type QField = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+  function labelOf(field: QField): string {
+    const wrap = field.closest('.field');
+    const text = wrap?.querySelector('label')?.textContent ?? field.dataset.qf ?? '';
+    return text.replace('*', '').trim();
+  }
+
+  function openDrawer(kind: string, prefillName: string, combo: HTMLElement | null) {
+    const drawer = document.getElementById(`drawer-${kind}`);
+    const scrim = document.getElementById('drawerScrim');
+    if (!drawer || !scrim) return;
+    originCombo = combo;
+    openKind = kind;
+
+    drawer.querySelectorAll<QField>('[data-qf]').forEach((f) => {
+      f.closest('.field')?.classList.remove('bad');
+      if (f instanceof HTMLInputElement && f.type === 'checkbox') {
+        // The spec's default is what the server would apply, so show that.
+        f.checked = f.defaultChecked;
+      } else if (f instanceof HTMLInputElement && f.type === 'color') {
+        f.value = f.defaultValue;
+      } else {
+        f.value = '';
+      }
+    });
+
+    // Whatever was typed lands in every field the spec nominates — a material
+    // needs both its names, a customer just its name.
+    for (const key of (drawer.dataset.prefill || '').split(/\s+/).filter(Boolean)) {
+      const field = drawer.querySelector<QField>(`[data-qf="${key}"]`);
+      if (field) field.value = prefillName;
+    }
+
+    const err = drawer.querySelector<HTMLElement>('[data-drawer-error]');
+    if (err) { err.hidden = true; err.textContent = ''; }
+
+    scrim.hidden = false;
+    drawer.hidden = false;
+    drawer.setAttribute('aria-hidden', 'false');
+    drawer.querySelector<QField>('[data-qf]')?.focus();
+  }
+
+  function closeDrawer() {
+    const scrim = document.getElementById('drawerScrim');
+    if (scrim) scrim.hidden = true;
+    document.querySelectorAll<HTMLElement>('.drawer').forEach((d) => {
+      d.hidden = true;
+      d.setAttribute('aria-hidden', 'true');
+    });
+    originCombo?.querySelector<HTMLInputElement>('.combo-input')?.focus();
+    originCombo = null;
+    openKind = null;
+  }
+
+  document.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest('[data-drawer-close]') || t.id === 'drawerScrim') { closeDrawer(); return; }
+
+    const saveBtn = t.closest('[data-drawer-save]') as HTMLButtonElement | null;
+    if (saveBtn) void save(saveBtn);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openKind) closeDrawer();
+  });
+
+  async function save(btn: HTMLButtonElement) {
+    const drawer = btn.closest('.drawer') as HTMLElement | null;
+    if (!drawer || !openKind) return;
+    const err = drawer.querySelector<HTMLElement>('[data-drawer-error]');
+    const showErr = (msg: string) => {
+      if (err) { err.textContent = msg; err.hidden = false; }
+    };
+
+    const payload: Record<string, unknown> = {};
+    const fields = Array.from(drawer.querySelectorAll<QField>('[data-qf]'));
+    fields.forEach((f) => {
+      f.closest('.field')?.classList.remove('bad');
+      payload[f.dataset.qf!] =
+        f instanceof HTMLInputElement && f.type === 'checkbox' ? f.checked : f.value;
+    });
+
+    // Catch the required fields here so the round trip is not spent saying no.
+    const missing = fields.find(
+      (f) => f.dataset.required !== undefined && !String(f.value || '').trim(),
+    );
+    if (missing) {
+      missing.closest('.field')?.classList.add('bad');
+      showErr((strings.err_field_required || 'Required: {f}').replace('{f}', labelOf(missing)));
+      missing.focus();
+      return;
+    }
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = strings.saving || 'Saving…';
+    if (err) err.hidden = true;
+
+    try {
+      const res = await fetch(`/api/portail/atelier/quick/${openKind}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        const culprit = data.field
+          ? fields.find((f) => f.dataset.qf === data.field)
+          : undefined;
+        culprit?.closest('.field')?.classList.add('bad');
+        const template = strings[`err_${data.error}`] || strings.err_insert_failed || 'Failed.';
+        showErr(template.replace('{f}', culprit ? labelOf(culprit) : (data.field ?? '')));
+        return;
+      }
+
+      // The API hands back a row shaped exactly like the seeded ones.
+      const row = data.row as ComboRow;
+      (lists[openKind] ??= []).unshift(row);
+      const combo = originCombo;
+      closeDrawer();
+      if (combo) pick(combo, row);
+    } catch {
+      showErr(strings.err_network || 'Network error.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+</script>

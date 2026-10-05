@@ -1,0 +1,361 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import {
+  ORDER_SOURCES, ORDER_STATUSES, WO_STATUSES, PRIORITIES, REFILL_PURPOSES,
+  EDITABLE_STATUSES, bi, statusTone, formatDate, formatDateTime, formatQty, formatMoney,
+} from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../../../i18n/portail/atelier-commandes';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const id = String(Astro.params.id ?? '');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+
+const { data: order } = await supabase
+  .from('ops_orders')
+  .select(`
+    *,
+    customer:ops_customers ( id, name, customer_type ),
+    lines:ops_order_lines ( * ),
+    spec:ops_refill_specs ( * ),
+    attachments:ops_order_attachments ( * ),
+    work_orders:ops_work_orders ( * ),
+    creator:staff!ops_orders_created_by_staff_id_fkey ( full_name )
+  `)
+  .eq('id', id)
+  .maybeSingle();
+
+if (!order) return new Response('Not found', { status: 404 });
+
+const [{ data: events }, { data: holds }, { data: materials }] = await Promise.all([
+  supabase.from('ops_events')
+    .select('*, actor:staff ( full_name )')
+    .eq('order_id', id).order('created_at', { ascending: false }).limit(50),
+  supabase.from('ops_holds')
+    .select('*, held_by:staff!ops_holds_held_by_staff_id_fkey ( full_name )')
+    .eq('entity_type', 'order').eq('entity_id', id).order('held_at', { ascending: false }),
+  supabase.from('ops_materials').select('id, code'),
+]);
+
+const activeHold = (holds ?? []).find((h: any) => h.lifted_at === null) ?? null;
+const canHold = staff.ops_role === 'qa' || staff.ops_role === 'admin';
+const wo = (order.work_orders ?? [])[0];
+const lines = (order.lines ?? []).sort((a: any, b: any) => a.line_no - b.line_no);
+const spec = Array.isArray(order.spec) ? order.spec[0] : order.spec;
+const matCode = (mid: string | null) => (materials ?? []).find((m: any) => m.id === mid)?.code ?? null;
+
+const lineTotal = lines.reduce(
+  (sum: number, l: any) => sum + (Number(l.unit_price ?? 0) * Number(l.qty ?? 0)),
+  0,
+);
+const hasPrices = lines.some((l: any) => l.unit_price !== null);
+
+const url = new URL(Astro.request.url);
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frCommandes)
+  : error ? T(`flash.error.${error}` as keyof typeof frCommandes) : null;
+
+const title = order.customer_po_ref ?? order.order_no;
+const canEdit = EDITABLE_STATUSES.includes(order.status);
+const range = (a: number | null, b: number | null) =>
+  a === null && b === null ? null : `${a ?? '?'} – ${b ?? '?'} %`;
+---
+<PortailLayout title={title} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier/commandes" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">
+      &larr; {T('list.title')}
+    </a>
+  </p>
+
+  {flash && <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-bottom:16px;">{flash}</div>}
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 4px;">{title}</h1>
+      <p class="submeta">
+        <span class="mono">{order.order_no}</span>
+        <span>·</span>
+        <span>{bi(ORDER_SOURCES, order.source, locale)}</span>
+        {order.customer?.name && <><span>·</span><span>{order.customer.name}</span></>}
+      </p>
+    </div>
+    <div class="head-side">
+      <div class="head-pills">
+        <span class={`pill tone-${statusTone(order.status)}`}>{bi(ORDER_STATUSES, order.status, locale)}</span>
+        {order.priority !== 'normal' && <span class="pill">{bi(PRIORITIES, order.priority, locale)}</span>}
+        {order.on_hold && <span class="pill tone-stop">{T('hold.badge')}</span>}
+      </div>
+      {canEdit && (
+        <div class="head-actions">
+          <a href={`/portail/atelier/commandes/${order.id}/editer`} class="btn btn-secondary">
+            {T('edit.button')}
+          </a>
+          <form method="POST" action={`/api/portail/atelier/commandes/${order.id}/cancel`}
+                onsubmit="return confirm(this.dataset.confirm)"
+                data-confirm={T('cancelOrder.confirm')} style="margin:0;">
+            <button type="submit" class="btn btn-danger">{T('cancelOrder.button')}</button>
+          </form>
+        </div>
+      )}
+    </div>
+  </div>
+
+  {activeHold && (
+    <div class="hold-banner">
+      <div class="hold-head">
+        <strong>&#9940; {T('hold.title')}</strong>
+        <span>{T('hold.by')
+          .replace('{name}', activeHold.held_by?.full_name ?? '—')
+          .replace('{date}', formatDateTime(activeHold.held_at))}</span>
+      </div>
+      <p class="hold-reason"><span class="k">{T('hold.reason')}</span> {activeHold.reason}</p>
+      <p class="hold-note">{T('hold.blocks')}</p>
+      {canHold && (
+        <form method="POST" action={`/api/portail/atelier/commandes/${order.id}/hold`} class="hold-form">
+          <input type="hidden" name="_action" value="lift" />
+          <input type="text" name="lift_note" placeholder={T('hold.liftNote')} />
+          <button type="submit" class="btn btn-secondary">{T('hold.lift')}</button>
+        </form>
+      )}
+    </div>
+  )}
+
+  <div class="cols">
+    <div class="main">
+      <!-- ------------------------------------------------------- lines -->
+      <div class="card">
+        <h2 class="sec">{T('detail.lines')}</h2>
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{T('f.product')}</th>
+                <th>{T('f.lot_ref')}</th>
+                <th style="text-align:right">{T('f.qty')}</th>
+                <th>{T('f.sku_size')}</th>
+                <th style="text-align:right">{T('f.unit_price')}</th>
+                <th>{T('f.excise_province')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l: any) => (
+                <tr>
+                  <td class="mono">{l.line_no}</td>
+                  <td>
+                    {l.product_name}
+                    {l.cultivar && <span class="sub"> · {l.cultivar}</span>}
+                    {l.notes && <span class="sub block">{l.notes}</span>}
+                  </td>
+                  <td class="mono">{l.lot_ref ?? <span class="tbd">{locale === 'en' ? 'to assign' : 'à assigner'}</span>}</td>
+                  <td class="mono" style="text-align:right">{formatQty(l.qty)} {l.uom}</td>
+                  <td class="mono">{l.sku_size_g ? `${formatQty(l.sku_size_g)} g` : '—'}</td>
+                  <td class="mono" style="text-align:right">{formatMoney(l.unit_price, order.currency)}</td>
+                  <td class="mono">{l.excise_province ?? order.excise_province ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            {hasPrices && (
+              <tfoot>
+                <tr>
+                  <td colspan="5"></td>
+                  <td class="mono" style="text-align:right; font-weight:600;">
+                    {T('detail.total')} {formatMoney(lineTotal, order.currency)}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+
+      <!-- -------------------------------------------------- refill spec -->
+      {spec && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('detail.spec')}</h2>
+          <dl class="kv">
+            {range(spec.thc_min_pct, spec.thc_max_pct) && (
+              <><dt>{T('f.thc_range')}</dt><dd class="mono">{range(spec.thc_min_pct, spec.thc_max_pct)}</dd></>
+            )}
+            {range(spec.cbd_min_pct, spec.cbd_max_pct) && (
+              <><dt>{T('f.cbd_range')}</dt><dd class="mono">{range(spec.cbd_min_pct, spec.cbd_max_pct)}</dd></>
+            )}
+            {spec.purpose && (<><dt>{T('f.purpose')}</dt><dd>{bi(REFILL_PURPOSES, spec.purpose, locale)}</dd></>)}
+            {spec.source_material_id && (
+              <><dt>{T('f.source_material')}</dt><dd class="mono">{matCode(spec.source_material_id)}</dd></>
+            )}
+            {spec.source_lot_ref && (<><dt>{T('f.source_lot')}</dt><dd class="mono">{spec.source_lot_ref}</dd></>)}
+            {spec.special_requests && (
+              <><dt>{T('f.special_requests')}</dt><dd>{spec.special_requests}</dd></>
+            )}
+          </dl>
+        </div>
+      )}
+
+      <!-- --------------------------------------------------- activity -->
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.activity')}</h2>
+        <ol class="feed">
+          {(events ?? []).map((e: any) => (
+            <li>
+              <span class="dot"></span>
+              <div>
+                <strong>{T(`ev.${e.action}` as keyof typeof frCommandes) || e.action}</strong>
+                <span class="sub">
+                  {e.actor?.full_name ?? e.actor_email ?? '—'} · {formatDateTime(e.created_at)}
+                </span>
+                {e.detail?.reason && <span class="sub block">{e.detail.reason}</span>}
+                {e.detail?.note && <span class="sub block">{e.detail.note}</span>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------- sidebar -->
+    <aside class="side">
+      <div class="card">
+        <h2 class="sec">{T('detail.production')}</h2>
+        {wo ? (
+          <>
+            <p class="wo-no mono">{wo.wo_no}</p>
+            <p><span class={`pill tone-${wo.status === 'awaiting_plan' ? 'muted' : 'active'}`}>
+              {bi(WO_STATUSES, wo.status, locale)}
+            </span></p>
+            {wo.status === 'awaiting_plan' && <p class="hint">{T('detail.awaitingPlan')}</p>}
+            <a href={`/portail/atelier/production/${wo.id}`} class="btn btn-primary"
+               style="text-decoration:none; margin-top:10px; display:inline-block;">
+              {T('detail.planLink')}
+            </a>
+          </>
+        ) : <p class="hint">—</p>}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <dl class="kv">
+          <dt>{T('f.order_date')}</dt><dd>{formatDate(order.order_date)}</dd>
+          <dt>{T('f.requested_delivery_date')}</dt><dd>{formatDate(order.requested_delivery_date)}</dd>
+          {order.payment_terms && (<><dt>{T('f.payment_terms')}</dt><dd>{order.payment_terms}</dd></>)}
+          {order.excise_province && (<><dt>{T('f.excise_province')}</dt><dd class="mono">{order.excise_province}</dd></>)}
+          {order.ship_to_text && (<><dt>{T('f.ship_to')}</dt><dd class="pre">{order.ship_to_text}</dd></>)}
+          {order.notes && (<><dt>{T('f.notes')}</dt><dd class="pre">{order.notes}</dd></>)}
+        </dl>
+        <p class="hint" style="margin-top:12px;">
+          {T('detail.enteredBy')
+            .replace('{name}', order.creator?.full_name ?? order.created_by_email ?? '—')
+            .replace('{date}', formatDateTime(order.created_at))}
+        </p>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 class="sec">{T('detail.attachments')}</h2>
+        {(order.attachments ?? []).length === 0 ? (
+          <p class="hint">{T('detail.noAttachments')}</p>
+        ) : (
+          <ul class="files">
+            {(order.attachments ?? []).map((a: any) => (
+              <li>
+                <a href={`/api/portail/atelier/attachments/${a.id}`}>{a.filename}</a>
+                <span class="sub">{a.kind.toUpperCase()} · {Math.round((a.size_bytes ?? 0) / 1024)} ko</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {!activeHold && (
+        <div class="card" style="margin-top:16px;">
+          <h2 class="sec">{T('hold.title')}</h2>
+          {canHold ? (
+            <form method="POST" action={`/api/portail/atelier/commandes/${order.id}/hold`}>
+              <input type="hidden" name="_action" value="hold" />
+              <div class="field">
+                <label for="reason">{T('hold.reasonLabel')}</label>
+                <textarea id="reason" name="reason" rows="2" required
+                          placeholder={T('hold.reasonPlaceholder')}></textarea>
+              </div>
+              <button type="submit" class="btn btn-danger" style="margin-top:10px;">{T('hold.place')}</button>
+            </form>
+          ) : <p class="hint">{T('hold.onlyQa')}</p>}
+        </div>
+      )}
+    </aside>
+  </div>
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .submeta { display: flex; gap: 7px; flex-wrap: wrap; color: var(--p-muted); font-size: .88rem; margin: 0; }
+  .head-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .head-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .head-actions { display: flex; gap: 8px; align-items: center; }
+  .head-actions .btn { text-decoration: none; white-space: nowrap; }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  h2.sec { font-size: .95rem; margin: 0 0 12px; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .sub { color: var(--p-muted); font-size: .78rem; }
+  .sub.block { display: block; }
+  .tbd { color: var(--p-warn); font-size: .8rem; }
+  .pre { white-space: pre-wrap; }
+
+  .tbl-wrap { overflow-x: auto; margin: 0 -21px -19px; }
+  .tbl-wrap table.data { margin: 0; font-size: .87rem; }
+  .tbl-wrap th:first-child, .tbl-wrap td:first-child { padding-left: 21px; }
+  .tbl-wrap th:last-child, .tbl-wrap td:last-child { padding-right: 21px; }
+  tfoot td { border-top: 1px solid var(--p-border); }
+
+  dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; font-size: .88rem; }
+  dl.kv dt { color: var(--p-muted); font-size: .8rem; }
+  dl.kv dd { margin: 0; }
+
+  .wo-no { font-size: 1.05rem; font-weight: 600; margin: 0 0 8px; }
+
+  ol.feed { list-style: none; margin: 0; padding: 0; }
+  ol.feed li { display: flex; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--p-border); }
+  ol.feed li:last-child { border-bottom: 0; padding-bottom: 0; }
+  ol.feed strong { display: block; font-size: .88rem; font-weight: 500; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--p-accent); margin-top: 7px; flex: none; }
+
+  ul.files { list-style: none; margin: 0; padding: 0; }
+  ul.files li { padding: 6px 0; border-bottom: 1px solid var(--p-border); }
+  ul.files li:last-child { border-bottom: 0; }
+  ul.files a { display: block; font-size: .88rem; word-break: break-all; }
+
+  .hold-banner {
+    background: #fef2f2; border: 1px solid #fecaca; border-left: 3px solid var(--p-danger);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;
+  }
+  .hold-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+  .hold-head strong { color: var(--p-danger); }
+  .hold-head span { color: var(--p-muted); font-size: .82rem; }
+  .hold-reason { margin: 0 0 4px; font-size: .92rem; }
+  .hold-reason .k { color: var(--p-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; margin-right: 6px; }
+  .hold-note { margin: 0; color: var(--p-muted); font-size: .82rem; }
+  .hold-form { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .hold-form input { flex: 1 1 220px; }
+
+  .pill {
+    display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+    border: 1px solid var(--p-border); color: var(--p-muted); white-space: nowrap;
+  }
+  .pill.tone-active { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .pill.tone-good   { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .pill.tone-stop   { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+  .pill.tone-muted  { color: var(--p-muted); background: var(--p-bg); }
+</style>

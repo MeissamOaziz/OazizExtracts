@@ -1,0 +1,198 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../../lib/supabase';
+import { currentOpsStaff } from '../../../../lib/ops';
+import {
+  ORDER_SOURCES, ORDER_STATUSES, WO_STATUSES, bi, statusTone,
+  formatDate, formatQty,
+} from '../../../../lib/ops-orders';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frCommandes, enCommandes } from '../../../../i18n/portail/atelier-commandes';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frCommandes, enCommandes);
+
+const url = new URL(Astro.request.url);
+const filter = url.searchParams.get('filter') ?? 'open';
+const ok = url.searchParams.get('ok');
+const error = url.searchParams.get('error');
+
+let query = supabase
+  .from('ops_orders')
+  .select(`
+    id, order_no, source, status, on_hold, customer_po_ref,
+    requested_delivery_date, currency,
+    customer:ops_customers ( name ),
+    lines:ops_order_lines ( product_name, qty, uom ),
+    work_orders:ops_work_orders ( wo_no, status )
+  `)
+  .order('created_at', { ascending: false })
+  .limit(300);
+
+if (filter === 'open') query = query.in('status', ['draft', 'submitted', 'in_production', 'ready_to_ship']);
+if (filter === 'held') query = query.eq('on_hold', true);
+
+const { data: ordersData, error: qErr } = await query;
+if (qErr) console.error('[atelier] order list failed:', qErr);
+const orders = ordersData ?? [];
+
+const flash = ok
+  ? T(`flash.${ok}` as keyof typeof frCommandes)
+  : error
+    ? T(`flash.error.${error}` as keyof typeof frCommandes)
+    : null;
+
+const filters = [
+  { key: 'open', label: T('list.filter.open') },
+  { key: 'all', label: T('list.filter.all') },
+  { key: 'held', label: T('list.filter.held') },
+];
+
+function contentOf(o: any): string {
+  const lines = o.lines ?? [];
+  if (lines.length === 0) return '—';
+  if (lines.length === 1) return `${lines[0].product_name} — ${formatQty(lines[0].qty)} ${lines[0].uom}`;
+  const word = locale === 'en' ? 'lines' : 'lignes';
+  return `${lines.length} ${word} — ${lines.map((l: any) => l.product_name).slice(0, 2).join(', ')}${lines.length > 2 ? '…' : ''}`;
+}
+---
+<PortailLayout title={T('list.title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; Atelier</a>
+  </p>
+
+  <div class="head-row">
+    <div>
+      <h1 style="margin-bottom: 6px;">{T('list.title')}</h1>
+      <p style="color: var(--p-muted); font-size: .9rem; margin: 0; max-width: 70ch;">{T('list.subtitle')}</p>
+    </div>
+    <a href="/portail/atelier/commandes/nouvelle" class="btn btn-primary" style="text-decoration:none; white-space:nowrap;">
+      {T('new.title')}
+    </a>
+  </div>
+
+  {flash && <div class={`flash ${error ? 'flash-error' : 'flash-success'}`} style="margin-top:16px;">{flash}</div>}
+
+  <div class="list-head">
+    <div class="tabs">
+      {filters.map((f) => (
+        <a href={`?filter=${f.key}`} class={filter === f.key ? 'tab active' : 'tab'}>{f.label}</a>
+      ))}
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span class="count">{T('list.count').replace('{n}', String(orders.length))}</span>
+      {orders.length > 0 && (
+        <input type="search" id="orderSearch" placeholder={T('list.search')} autocomplete="off" />
+      )}
+    </div>
+  </div>
+
+  {orders.length === 0 ? (
+    <div class="card empty-state">{T('list.empty')}</div>
+  ) : (
+    <div class="table-wrap">
+      <table class="data" id="orderTable">
+        <thead>
+          <tr>
+            <th>{T('col.reference')}</th>
+            <th>{T('col.customer')}</th>
+            <th>{T('col.content')}</th>
+            <th>{T('col.status')}</th>
+            <th>{T('col.due')}</th>
+            <th>{T('col.wo')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o: any) => {
+            const wo = (o.work_orders ?? [])[0];
+            return (
+              <tr data-search={[
+                o.customer_po_ref, o.order_no, o.customer?.name,
+                ...(o.lines ?? []).map((l: any) => l.product_name),
+              ].filter(Boolean).join(' ').toLowerCase()}>
+                <td>
+                  <a href={`/portail/atelier/commandes/${o.id}`} class="ref">
+                    <strong>{o.customer_po_ref ?? bi(ORDER_SOURCES, o.source, locale)}</strong>
+                    <span class="sub">{o.order_no}</span>
+                  </a>
+                </td>
+                <td>{o.customer?.name ?? '—'}</td>
+                <td style="max-width: 320px;">{contentOf(o)}</td>
+                <td style="white-space:nowrap;">
+                  <span class={`pill tone-${statusTone(o.status)}`}>{bi(ORDER_STATUSES, o.status, locale)}</span>
+                  {o.on_hold && <span class="pill tone-stop" style="margin-left:5px;">{T('hold.badge')}</span>}
+                </td>
+                <td style="white-space:nowrap;">{formatDate(o.requested_delivery_date)}</td>
+                <td style="white-space:nowrap;">
+                  {wo ? (
+                    <span class="wo">
+                      <span class="mono">{wo.wo_no}</span>
+                      <span class="sub">{bi(WO_STATUSES, wo.status, locale)}</span>
+                    </span>
+                  ) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="no-results hint" hidden>{T('list.searchNone')}</p>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 0 10px; flex-wrap: wrap; }
+  .list-head .count { font-size: .82rem; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+  .list-head input[type="search"] { width: auto; min-width: 240px; }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    font-size: .85rem; padding: 5px 11px; border-radius: 6px; text-decoration: none;
+    color: var(--p-muted); border: 1px solid transparent;
+  }
+  .tab:hover { background: var(--p-bg); color: var(--p-text); }
+  .tab.active { background: var(--p-card); border-color: var(--p-border); color: var(--p-text); font-weight: 500; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-card); }
+  .table-wrap table.data { margin: 0; }
+  .ref { display: flex; flex-direction: column; gap: 1px; text-decoration: none; }
+  .ref strong { color: var(--p-text); font-size: .92rem; }
+  .ref:hover strong { color: var(--p-accent); }
+  .sub { font-size: .75rem; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+  .wo { display: flex; flex-direction: column; gap: 1px; }
+  .mono { font-size: .82rem; font-variant-numeric: tabular-nums; }
+  .pill {
+    display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+    border: 1px solid var(--p-border); color: var(--p-muted); white-space: nowrap;
+  }
+  .pill.tone-active { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .pill.tone-good   { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .pill.tone-stop   { color: var(--p-danger); border-color: #fecaca; background: #fef2f2; }
+  .pill.tone-muted  { color: var(--p-muted); background: var(--p-bg); }
+  .no-results { padding: 18px; margin: 0; text-align: center; }
+</style>
+
+<script>
+  const search = document.getElementById('orderSearch') as HTMLInputElement | null;
+  if (search) {
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('#orderTable tbody tr'));
+    const none = document.querySelector<HTMLElement>('.no-results');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const row of rows) {
+        const hit = !q || (row.dataset.search || '').includes(q);
+        row.hidden = !hit;
+        if (hit) shown++;
+      }
+      if (none) none.hidden = shown !== 0;
+    });
+  }
+</script>

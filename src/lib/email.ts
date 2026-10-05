@@ -440,6 +440,85 @@ export async function sendPortalInvite(
 }
 
 // ============================================================
+// Atelier — new order landed, sent to the production manager
+// ============================================================
+
+export interface NewOrderEmail {
+  toEmail: string;
+  toName: string;
+  order: {
+    order_no: string;
+    customer_po_ref: string | null;
+    source: 'customer_po' | 'internal_refill' | 'packaging_request';
+    customer_name: string | null;
+    requested_delivery_date: string | null;
+    line_summary: string;
+    created_by_name: string;
+  };
+  orderUrl: string;
+}
+
+const ORDER_SOURCE_FR: Record<string, string> = {
+  customer_po: 'Bon de commande client',
+  internal_refill: 'Réapprovisionnement interne',
+  packaging_request: "Demande d'emballage",
+};
+
+export async function sendNewOrderNotice(
+  n: NewOrderEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[atelier-email] RESEND_API_KEY not set; would-have-notified ${n.toEmail} about ${n.order.order_no}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const o = n.order;
+
+  const rows: Array<{ label: string; value: string }> = [
+    { label: 'Numéro', value: o.order_no },
+  ];
+  if (o.customer_po_ref) rows.push({ label: 'Bon de commande client', value: o.customer_po_ref });
+  if (o.customer_name) rows.push({ label: 'Client', value: o.customer_name });
+  rows.push({ label: 'Type', value: ORDER_SOURCE_FR[o.source] ?? o.source });
+  rows.push({ label: 'Contenu', value: o.line_summary });
+  if (o.requested_delivery_date) {
+    rows.push({ label: 'Livraison demandée', value: formatDateFr(o.requested_delivery_date) });
+  }
+  rows.push({ label: 'Saisi par', value: o.created_by_name });
+
+  const html = renderEmailShell({
+    preheader: `${o.order_no} — ${o.line_summary}`,
+    badge: 'Atelier — nouvelle commande',
+    greeting: `Bonjour ${n.toName.split(' ')[0] || n.toName},`,
+    intro: 'Une nouvelle commande vient d\'entrer dans l\'Atelier et attend son plan de production&nbsp;:',
+    rows,
+    ctaLabel: 'Ouvrir la commande',
+    ctaUrl: n.orderUrl,
+    fallbackNote: 'Le bon de travail est déjà créé et attend la répartition en étapes.',
+    footerNote: 'Vous recevez ce courriel parce que vous êtes responsable de la production.',
+  });
+
+  const label = o.customer_po_ref ? `${o.customer_po_ref} · ${o.order_no}` : o.order_no;
+  const subject = `[Oaziz Atelier] Nouvelle commande - ${label}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: [n.toEmail], replyTo, subject, html });
+    if (error) {
+      console.error('[atelier-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[atelier-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
 // New vendor package submitted — sent individually to each of the five
 // required approvers (Jacob, Stephane, Jorge, Kyle, Meissam). Each of them
 // must personally click "Approved" in the portal; this is not a single

@@ -1,0 +1,453 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient } from '../../../lib/supabase';
+import { currentOpsStaff } from '../../../lib/ops';
+import { formatDate } from '../../../lib/ops-orders';
+import { addDays, dayCount } from '../../../lib/ops-stages';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPlanning, enPlanning } from '../../../i18n/portail/atelier-planning';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentOpsStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPlanning, enPlanning);
+
+const url = new URL(Astro.request.url);
+const VIEWS = ['kanban', 'calendrier', 'gantt', 'salles'] as const;
+type View = (typeof VIEWS)[number];
+const view: View = (VIEWS as readonly string[]).includes(url.searchParams.get('vue') ?? '')
+  ? (url.searchParams.get('vue') as View)
+  : 'kanban';
+
+// Anchor date drives the window; the arrows shift it.
+const todayIso = new Date().toISOString().slice(0, 10);
+const anchor = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('d') ?? '')
+  ? (url.searchParams.get('d') as string)
+  : todayIso;
+
+// Calendar shows a whole month; the timelines show six weeks from a week back.
+function monthBounds(iso: string) {
+  const [y, m] = iso.split('-').map(Number);
+  const first = `${y}-${String(m).padStart(2, '0')}-01`;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { start: first, end: `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}` };
+}
+const bounds = view === 'calendrier'
+  ? monthBounds(anchor)
+  : { start: addDays(anchor, -7), end: addDays(anchor, 34) };
+
+const days: string[] = [];
+for (let d = bounds.start; d <= bounds.end; d = addDays(d, 1)) days.push(d);
+
+const [stageRes, procRes, roomRes, woRes, confRes] = await Promise.all([
+  supabase.from('v_ops_stages').select('*').order('planned_start', { nullsFirst: false }),
+  supabase.from('ops_process_types').select('id, code, name_fr, name_en, sort_order')
+    .eq('is_active', true).order('sort_order'),
+  supabase.from('ops_rooms').select('id, code, name_fr, name_en, colour, allows_concurrent')
+    .eq('is_active', true).order('sort_order'),
+  supabase.from('ops_work_orders')
+    .select('id, wo_no, status, at_risk, promised_date, projected_completion, order:ops_orders ( order_no, customer_po_ref, customer:ops_customers ( name ) )')
+    .not('status', 'in', '("done","cancelled")'),
+  supabase.from('v_ops_room_conflicts').select('stage_id, room_code'),
+]);
+
+const allStages = stageRes.data ?? [];
+const processes = procRes.data ?? [];
+const rooms = roomRes.data ?? [];
+// PostgREST returns embedded relations as arrays; flatten them once so the
+// template can read `wo.order.customer.name` without guarding every level.
+const workOrders: any[] = (woRes.data ?? []).map((w: any) => {
+  const order = Array.isArray(w.order) ? w.order[0] ?? null : w.order ?? null;
+  const customer = order && Array.isArray(order.customer) ? order.customer[0] ?? null : order?.customer ?? null;
+  return { ...w, order: order ? { ...order, customer } : null };
+});
+const conflictIds = new Set((confRes.data ?? []).map((c: any) => c.stage_id));
+
+// Stages overlapping the window, for the three timeline views.
+const inWindow = allStages.filter((s: any) =>
+  s.planned_start && s.planned_end && s.planned_start <= bounds.end && s.planned_end >= bounds.start,
+);
+
+const liveStages = allStages.filter((s: any) => s.status !== 'cancelled');
+const blockedCount = liveStages.filter((s: any) => s.is_blocked && s.status !== 'done').length;
+const lateCount = workOrders.filter((w: any) => w.at_risk).length;
+
+const procLabel = (p: any) => (locale === 'en' ? p.name_en : p.name_fr);
+const roomLabel = (r: any) => (locale === 'en' ? r.name_en : r.name_fr);
+const stageLabel = (s: any) => (locale === 'en' ? s.label_en : s.label_fr);
+const refOf = (s: any) => s.customer_po_ref ?? s.order_no;
+
+// Who a stage is for. A bar on the Gantt or a chip on the calendar has to say
+// what it serves without anyone opening the order, so customer work shows the
+// customer and their PO, and internal work says plainly that it is internal.
+function whoFor(s: any): { text: string; internal: boolean } {
+  if (s.customer_name) {
+    return {
+      text: s.customer_po_ref ? `${s.customer_name} · ${s.customer_po_ref}` : s.customer_name,
+      internal: false,
+    };
+  }
+  if (s.order_source === 'packaging_request') return { text: T('ref.packaging'), internal: true };
+  if (s.order_source === 'customer_po') return { text: refOf(s), internal: false };
+  return { text: T('ref.internal'), internal: true };
+}
+
+// Column position in the day grid: +2 because column 1 is the row label.
+function span(s: any) {
+  const a = Math.max(0, days.indexOf(s.planned_start < bounds.start ? bounds.start : s.planned_start));
+  const bRaw = s.planned_end > bounds.end ? bounds.end : s.planned_end;
+  const b = Math.max(a, days.indexOf(bRaw));
+  return { start: a + 2, end: b + 3 };
+}
+
+// Kanban columns: the process catalogue, bookended by "to plan" and "done".
+const unplanned = workOrders.filter((w: any) => w.status === 'awaiting_plan');
+const kanbanCols = [
+  { key: 'toplan', label: T('col.toPlan'), colour: null as string | null },
+  ...processes.map((p: any) => ({ key: p.id, label: procLabel(p), colour: null as string | null })),
+  { key: 'done', label: T('col.done'), colour: null as string | null },
+];
+function kanbanBucket(s: any): string {
+  if (s.status === 'done') return 'done';
+  return s.process_type_id;
+}
+
+const shiftBy = view === 'calendrier' ? 30 : 28;
+const navHref = (d: string) => `?vue=${view}&d=${d}`;
+
+const monthLabel = new Date(`${anchor}T12:00:00`).toLocaleDateString(
+  locale === 'en' ? 'en-CA' : 'fr-CA', { month: 'long', year: 'numeric' },
+);
+
+// Calendar grid starts on the Monday on or before the 1st.
+const firstDow = (new Date(`${bounds.start}T12:00:00`).getUTCDay() + 6) % 7;
+const calCells: (string | null)[] = [
+  ...Array.from({ length: firstDow }, () => null),
+  ...days,
+];
+const weekdayNames = locale === 'en'
+  ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  : ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+const stagesOn = (d: string) =>
+  inWindow.filter((s: any) => s.planned_start <= d && s.planned_end >= d);
+
+// Gantt rows grouped by work order, rooms view grouped by room.
+const woOfStage = (s: any) => workOrders.find((w: any) => w.wo_no === s.wo_no);
+const ganttGroups = [...new Set(inWindow.map((s: any) => s.wo_no))].map((wo) => ({
+  wo,
+  stages: inWindow.filter((s: any) => s.wo_no === wo).sort((a: any, b: any) => a.seq - b.seq),
+}));
+const roomGroups = [
+  ...rooms.map((r: any) => ({ room: r, stages: inWindow.filter((s: any) => s.room_id === r.id) })),
+  { room: null, stages: inWindow.filter((s: any) => !s.room_id) },
+].filter((g) => g.room !== null || g.stages.length > 0);
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <p style="margin-bottom: 10px;">
+    <a href="/portail/atelier" style="color: var(--p-muted); font-size: .88rem; text-decoration: none;">&larr; Atelier</a>
+  </p>
+
+  <div class="head">
+    <div>
+      <h1 style="margin-bottom: 6px;">{T('title')}</h1>
+      <p style="color: var(--p-muted); font-size: .9rem; margin: 0; max-width: 74ch;">{T('subtitle')}</p>
+    </div>
+    <div class="stats">
+      <span>{T('stat.stages').replace('{n}', String(liveStages.length))}</span>
+      {blockedCount > 0 && <span class="warn">{T('stat.blocked').replace('{n}', String(blockedCount))}</span>}
+      {lateCount > 0 && <span class="danger">{T('stat.late').replace('{n}', String(lateCount))}</span>}
+      {conflictIds.size > 0 && <span class="warn">{T('stat.conflicts').replace('{n}', String(conflictIds.size))}</span>}
+    </div>
+  </div>
+
+  <nav class="views">
+    {VIEWS.map((v) => (
+      <a href={`?vue=${v}&d=${anchor}`} class={view === v ? 'vtab active' : 'vtab'}>
+        <strong>{T(`view.${v === 'calendrier' ? 'calendar' : v === 'salles' ? 'rooms' : v}` as keyof typeof frPlanning)}</strong>
+        <span>{T(`view.${v === 'calendrier' ? 'calendar' : v === 'salles' ? 'rooms' : v}.q` as keyof typeof frPlanning)}</span>
+      </a>
+    ))}
+  </nav>
+
+  {allStages.length === 0 ? (
+    <div class="card empty-state">{T('empty')}</div>
+  ) : (
+    <>
+      {view !== 'kanban' && (
+        <div class="timenav">
+          <a href={navHref(addDays(anchor, -shiftBy))} class="btn btn-secondary btn-sm">&larr;</a>
+          <a href={navHref(todayIso)} class="btn btn-secondary btn-sm">{T('nav.today')}</a>
+          <a href={navHref(addDays(anchor, shiftBy))} class="btn btn-secondary btn-sm">&rarr;</a>
+          <span class="window">
+            {view === 'calendrier' ? monthLabel
+              : T('nav.window').replace('{start}', formatDate(bounds.start)).replace('{end}', formatDate(bounds.end))}
+          </span>
+          <span class="legend">
+            <i class="lg blocked"></i>{T('legend.blocked')}
+            <i class="lg conflict"></i>{T('legend.conflict')}
+          </span>
+        </div>
+      )}
+
+      <!-- ======================================================= KANBAN -->
+      {view === 'kanban' && (
+        <div class="kanban">
+          {kanbanCols.map((col) => {
+            const cards = col.key === 'toplan'
+              ? unplanned.map((w: any) => ({ kind: 'wo', wo: w }))
+              : liveStages.filter((s: any) => kanbanBucket(s) === col.key).map((s: any) => ({ kind: 'stage', s }));
+            if (col.key === 'done' && cards.length === 0) return null;
+            return (
+              <div class="kcol">
+                <header>
+                  <h2>{col.label}</h2>
+                  <span class="n">{cards.length}</span>
+                </header>
+                <div class="kbody">
+                  {cards.map((c: any) => c.kind === 'wo' ? (
+                    <a href={`/portail/atelier/production/${c.wo.id}`} class="kcard toplan">
+                      <strong>{c.wo.order?.customer_po_ref ?? c.wo.order?.order_no}</strong>
+                      <span class="sub">{c.wo.order?.customer?.name ?? '—'}</span>
+                      <span class="sub mono">{c.wo.wo_no}</span>
+                    </a>
+                  ) : (
+                    <a href={`/portail/atelier/production/${woOfStage(c.s)?.id ?? ''}#stage-${c.s.id}`}
+                       class={`kcard${c.s.is_blocked && c.s.status !== 'done' ? ' blocked' : ''}`}
+                       style={c.s.room_colour ? `--room:${c.s.room_colour}` : ''}>
+                      <strong>{refOf(c.s)}</strong>
+                      <span class="sub">{c.s.customer_name ?? stageLabel(c.s)}</span>
+                      <span class="krow">
+                        {c.s.room_code && <span class="chip">{c.s.room_code}</span>}
+                        <span class="sub mono">
+                          {c.s.planned_start ? formatDate(c.s.planned_start) : T('card.noDates')}
+                        </span>
+                      </span>
+                      {c.s.is_blocked && c.s.status !== 'done' && (
+                        <span class="flag" title={T('tip.blocked')}>{T('legend.blocked')}</span>
+                      )}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <!-- ===================================================== CALENDAR -->
+      {view === 'calendrier' && (
+        <div class="card cal">
+          <div class="calhead">
+            {weekdayNames.map((w) => <span>{w}</span>)}
+          </div>
+          <div class="calgrid">
+            {calCells.map((d) => d === null ? <div class="cell blank"></div> : (
+              <div class={`cell${d === todayIso ? ' today' : ''}`}>
+                <span class="dnum">{Number(d.slice(-2))}</span>
+                {stagesOn(d).slice(0, 3).map((s: any) => (
+                  <a href={`/portail/atelier/production/${woOfStage(s)?.id ?? ''}#stage-${s.id}`}
+                     class={`ev${s.is_blocked && s.status !== 'done' ? ' blocked' : ''}`}
+                     style={`--room:${s.room_colour ?? 'var(--p-muted)'}`}
+                     title={`${whoFor(s).text} · ${stageLabel(s)} · ${s.wo_no}`}>
+                    <span class={`ev-who${whoFor(s).internal ? ' internal' : ''}`}>
+                      <i></i>{whoFor(s).text}
+                    </span>
+                    <span class="ev-lbl">{stageLabel(s)}</span>
+                  </a>
+                ))}
+                {stagesOn(d).length > 3 && <span class="more">+{stagesOn(d).length - 3}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- ================================================ GANTT / ROOMS -->
+      {(view === 'gantt' || view === 'salles') && (
+        inWindow.length === 0 ? (
+          <div class="card empty-state">{T('emptyWindow')}</div>
+        ) : (
+          <div class="card tl-wrap">
+            <div class="tl" style={`--days:${days.length}`}>
+              <div class="tlhead">
+                <span class="lbl"></span>
+                {days.map((d) => (
+                  <span class={`dh${d === todayIso ? ' today' : ''}${[0, 6].includes(new Date(`${d}T12:00:00`).getUTCDay()) ? ' we' : ''}`}>
+                    {Number(d.slice(-2))}
+                  </span>
+                ))}
+              </div>
+
+              {view === 'gantt' && ganttGroups.map((g) => {
+                const wo = workOrders.find((w: any) => w.wo_no === g.wo);
+                const who = whoFor(g.stages[0]);
+                return (
+                  <>
+                    <p class="grp">
+                      <a href={`/portail/atelier/production/${wo?.id ?? ''}`}
+                         class={who.internal ? 'internal' : ''}>
+                        {who.text}
+                      </a>
+                      <span class="sub mono">{g.wo}</span>
+                      <span class="sub mono">{g.stages[0].order_no}</span>
+                      {wo?.at_risk && <span class="flag danger" title={T('tip.late')}>{T('legend.atRisk')}</span>}
+                    </p>
+                    {g.stages.map((s: any) => (
+                      <div class="tlrow">
+                        <span class="lbl">{stageLabel(s)}</span>
+                        <span class={`bar${s.is_blocked && s.status !== 'done' ? ' blocked' : ''}${s.status === 'done' ? ' done' : ''}`}
+                              style={`grid-column:${span(s).start}/${span(s).end}; --room:${s.room_colour ?? 'var(--p-muted)'}`}
+                              title={`${who.text} · ${stageLabel(s)} · ${formatDate(s.planned_start)} → ${formatDate(s.planned_end)}`}>
+                          <em>{dayCount(s.planned_start, s.planned_end)} j</em>
+                          {conflictIds.has(s.id) && <b title={T('tip.conflict')}>&#9888;</b>}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                );
+              })}
+
+              {view === 'salles' && roomGroups.map((g) => (
+                <>
+                  <p class="grp">
+                    {g.room ? (
+                      <>
+                        <span class="chip" style={`--room:${g.room.colour}`}>{g.room.code}</span>
+                        <span>{roomLabel(g.room)}</span>
+                        <span class="sub">
+                          {g.room.allows_concurrent ? T('room.concurrent') : T('room.exclusive')}
+                        </span>
+                      </>
+                    ) : <span class="sub">{T('room.none')}</span>}
+                  </p>
+                  {g.stages.length === 0 ? (
+                    <div class="tlrow"><span class="lbl sub">—</span></div>
+                  ) : g.stages.map((s: any) => (
+                    <div class="tlrow">
+                      <span class="lbl">
+                        <span class={whoFor(s).internal ? 'internal' : ''}>{whoFor(s).text}</span>
+                        <span class="sub block">{stageLabel(s)}</span>
+                      </span>
+                      <span class={`bar${conflictIds.has(s.id) ? ' conflict' : ''}${s.status === 'done' ? ' done' : ''}`}
+                            style={`grid-column:${span(s).start}/${span(s).end}; --room:${s.room_colour ?? 'var(--p-muted)'}`}
+                            title={conflictIds.has(s.id) ? T('tip.conflict') : `${whoFor(s).text} · ${stageLabel(s)}`}>
+                        <em>{dayCount(s.planned_start, s.planned_end)} j</em>
+                        {conflictIds.has(s.id) && <b>&#9888;</b>}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              ))}
+            </div>
+          </div>
+        )
+      )}
+    </>
+  )}
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; font-size: .82rem; color: var(--p-muted); }
+  .stats .warn { color: var(--p-warn); font-weight: 600; }
+  .stats .danger { color: var(--p-danger); font-weight: 600; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .sub { color: var(--p-muted); font-size: .76rem; }
+  .sub.block { display: block; }
+
+  .views { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .vtab { display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: 8px;
+          text-decoration: none; border: 1px solid var(--p-border); background: var(--p-card); }
+  .vtab strong { font-size: .9rem; color: var(--p-muted); }
+  .vtab span { font-size: .74rem; color: var(--p-muted); }
+  .vtab:hover { border-color: var(--p-accent); }
+  .vtab.active { border-color: var(--p-accent); background: rgba(208,88,38,.05); }
+  .vtab.active strong { color: var(--p-accent); }
+
+  .timenav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .btn-sm { padding: 4px 10px; font-size: .82rem; text-decoration: none; }
+  .timenav .window { font-size: .85rem; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+  .timenav .legend { margin-left: auto; display: flex; align-items: center; gap: 6px;
+                     font-size: .75rem; color: var(--p-muted); }
+  .lg { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-left: 8px; }
+  .lg.blocked { background: repeating-linear-gradient(45deg, #fecaca 0 3px, #fff 3px 6px); border: 1px solid var(--p-danger); }
+  .lg.conflict { background: #fffbeb; border: 1px solid var(--p-warn); }
+
+  /* ------------------------------------------------------------ kanban */
+  .kanban { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
+  .kcol { flex: 0 0 232px; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 9px; }
+  .kcol header { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+                 padding: 9px 12px; border-bottom: 1px solid var(--p-border); }
+  .kcol h2 { margin: 0; font-size: .82rem; font-weight: 600; }
+  .kcol .n { font-size: .74rem; color: var(--p-muted); background: var(--p-card);
+             border: 1px solid var(--p-border); border-radius: 10px; padding: 0 7px; }
+  .kbody { padding: 8px; display: flex; flex-direction: column; gap: 7px; min-height: 40px; }
+  .kcard { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px 9px 12px;
+           background: var(--p-card); border: 1px solid var(--p-border); border-left: 3px solid var(--room, var(--p-border));
+           border-radius: 7px; text-decoration: none; color: inherit; }
+  .kcard:hover { border-color: var(--p-accent); }
+  .kcard strong { font-size: .85rem; }
+  .kcard.blocked { background: #fef2f2; border-color: #fecaca; }
+  .kcard.toplan { border-left-color: var(--p-accent); }
+  .krow { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .chip { font-size: .68rem; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+          color: var(--room, var(--p-muted));
+          border: 1px solid color-mix(in srgb, var(--room, var(--p-muted)) 40%, transparent);
+          background: color-mix(in srgb, var(--room, var(--p-muted)) 10%, transparent); }
+  .flag { align-self: flex-start; margin-top: 4px; font-size: .64rem; font-weight: 700;
+          letter-spacing: .4px; text-transform: uppercase; color: var(--p-danger); }
+  .flag.danger { color: var(--p-danger); }
+
+  /* ---------------------------------------------------------- calendar */
+  .cal { padding: 14px; }
+  .calhead, .calgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .calhead span { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px;
+                  color: var(--p-muted); padding: 0 4px 6px; }
+  .cell { min-height: 92px; border: 1px solid var(--p-border); border-radius: 6px; padding: 4px;
+          display: flex; flex-direction: column; gap: 2px; }
+  .cell.blank { border: 0; }
+  .cell.today { border-color: var(--p-accent); background: rgba(208,88,38,.04); }
+  .dnum { font-size: .72rem; color: var(--p-muted); font-variant-numeric: tabular-nums; }
+  .ev { display: flex; flex-direction: column; gap: 0; font-size: .7rem; text-decoration: none;
+        color: var(--p-text); background: var(--p-bg); border-radius: 4px; padding: 3px 4px;
+        overflow: hidden; }
+  .ev-who, .ev-lbl { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block; }
+  .ev-who { display: flex; align-items: center; gap: 4px; font-weight: 600; }
+  .ev-lbl { color: var(--p-muted); padding-left: 10px; font-size: .66rem; }
+  .ev.blocked .ev-lbl { color: inherit; opacity: .8; }
+  .ev i { width: 6px; height: 6px; border-radius: 50%; background: var(--room); flex: none; }
+  .ev:hover { background: var(--p-border); }
+  .ev.blocked { background: #fef2f2; color: var(--p-danger); }
+  .more { font-size: .68rem; color: var(--p-muted); padding-left: 4px; }
+
+  /* ----------------------------------------------------- gantt / rooms */
+  .tl-wrap { overflow-x: auto; padding: 14px; }
+  .tl { min-width: 900px; }
+  .tlhead, .tlrow { display: grid; grid-template-columns: 190px repeat(var(--days), minmax(17px, 1fr)); gap: 0; }
+  .tlhead { border-bottom: 1px solid var(--p-border); padding-bottom: 5px; margin-bottom: 6px; }
+  .dh { font-size: .64rem; color: var(--p-muted); text-align: center; font-variant-numeric: tabular-nums; }
+  .dh.we { color: var(--p-border); }
+  .dh.today { color: var(--p-accent); font-weight: 700; }
+  .tlrow { align-items: center; min-height: 26px; }
+  .tlrow .lbl { font-size: .78rem; padding-right: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grp { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin: 14px 0 4px;
+         padding-top: 10px; border-top: 1px solid var(--p-border); font-size: .84rem; }
+  .grp:first-of-type { border-top: 0; padding-top: 0; margin-top: 6px; }
+  .grp a { font-weight: 600; }
+  /* Internal jobs have no customer to name, so they read as a label, not a name. */
+  .internal { color: var(--p-muted); font-size: .74rem; letter-spacing: .5px; text-transform: uppercase; }
+  .bar { height: 18px; border-radius: 4px; background: var(--room); display: flex; align-items: center;
+         gap: 4px; padding: 0 5px; overflow: hidden; }
+  .bar em { font-style: normal; font-size: .62rem; color: #fff; font-variant-numeric: tabular-nums; }
+  .bar b { font-size: .7rem; color: #fff; }
+  .bar.done { opacity: .45; }
+  .bar.blocked { background: repeating-linear-gradient(45deg,
+                   color-mix(in srgb, var(--room) 55%, transparent) 0 5px,
+                   color-mix(in srgb, var(--room) 20%, transparent) 5px 10px);
+                 outline: 1px solid var(--p-danger); }
+  .bar.conflict { outline: 2px solid var(--p-warn); }
+</style>
