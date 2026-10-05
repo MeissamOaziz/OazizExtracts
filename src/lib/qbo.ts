@@ -85,7 +85,11 @@ async function saveTokens(admin: SupabaseClient, t: TokenResponse, extra: Record
     refresh_expires_at: t.x_refresh_token_expires_in ? new Date(now + t.x_refresh_token_expires_in * 1000).toISOString() : null,
     ...extra,
   };
-  const { error } = await admin.from('qbo_connection').upsert(row);
+  // First connection inserts the full row; a token refresh only updates the
+  // token columns (an upsert would fail the NOT NULL check on realm/environment).
+  const { error } = extra.realm_id
+    ? await admin.from('qbo_connection').upsert(row)
+    : await admin.from('qbo_connection').update(row).eq('id', 1);
   if (error) throw error;
 }
 
