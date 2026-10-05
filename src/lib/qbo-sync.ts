@@ -96,6 +96,61 @@ async function matchOpenBills(admin: SupabaseClient, qbo: Qbo): Promise<number> 
 
 export const TO_CLASSIFY = 'À classer : choisissez le compte de dépense QuickBooks (Paiements → QuickBooks → Factures à classer)';
 
+// ------------------------------------------------------------------ vendor choice at review
+/** QB vendor that best matches a supplier (its link, else names/aliases/extracted names, whole words). */
+export function matchVendor(
+  vendors: Array<{ id: string; name: string }>,
+  names: Array<string | null | undefined>,
+): string | null {
+  const keys = names.map(norm).filter(Boolean);
+  if (!keys.length) return null;
+  const words = (t: string) => new Set(t.split(' ').filter((w) => w.length > 1));
+  let best: { id: string; score: number } | null = null;
+  for (const v of vendors) {
+    const vn = norm(v.name);
+    if (!vn) continue;
+    for (const k of keys) {
+      let score = 0;
+      if (vn === k) score = 1;
+      else {
+        const a = words(vn), b = words(k);
+        if (a.size && b.size && ([...a].every((w) => b.has(w)) || [...b].every((w) => a.has(w)))) score = 0.8;
+      }
+      if (score && (!best || score > best.score)) best = { id: v.id, score };
+    }
+  }
+  return best?.id ?? null;
+}
+
+/** Link the supplier to an existing QB vendor, or create one under the name printed on the invoice. */
+export async function linkVendorChoice(
+  admin: SupabaseClient, supplierId: string, choice: string,
+  opts: { displayName?: string | null; legalName?: string | null; email?: string | null },
+): Promise<void> {
+  if (!choice) return;
+  if (choice !== 'new') {
+    const { error } = await admin.from('ap_suppliers').update({ qbo_vendor_id: choice }).eq('id', supplierId);
+    if (error) await log(admin, { direction: 'system', entity: 'vendor', portal_id: supplierId, qbo_id: choice, status: 'warning', message: `Lien fournisseur QB refusé : ${error.message}` });
+    return;
+  }
+  const qbo = await getQbo(admin);
+  if (!qbo) return;
+  const { data: s } = await admin.from('ap_suppliers').select('name, legal_name, contact_email').eq('id', supplierId).single();
+  const display = (opts.displayName || s?.legal_name || s?.name || 'Fournisseur').slice(0, 100);
+  try {
+    const found = await qbo.query('Vendor', `DisplayName = ${qstr(display)}`);
+    const id = found[0]?.Id ?? (await qbo.post('/vendor', {
+      DisplayName: display,
+      ...(opts.legalName ? { CompanyName: opts.legalName.slice(0, 100) } : {}),
+      ...((opts.email ?? s?.contact_email) ? { PrimaryEmailAddr: { Address: opts.email ?? s?.contact_email } } : {}),
+    })).Vendor.Id;
+    await admin.from('ap_suppliers').update({ qbo_vendor_id: id, qbo_vendor_name: display }).eq('id', supplierId);
+    await log(admin, { direction: 'push', entity: 'vendor', portal_id: supplierId, qbo_id: id, status: 'ok', message: `Fournisseur QB ${found[0] ? 'lié' : 'créé'} : ${display}` });
+  } catch (e) {
+    await log(admin, { direction: 'push', entity: 'vendor', portal_id: supplierId, status: 'error', message: errMsg(e) });
+  }
+}
+
 // ------------------------------------------------------------------ coding suggestion
 export interface CodingSuggestion {
   accountId: string | null;
@@ -277,6 +332,27 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     return { ok: true, message: partial ?? 'Paiement créé dans QuickBooks' };
   } catch (e) {
     return fail(errMsg(e));
+  }
+}
+
+/** When a portal invoice is voided, delete its Bill / VendorCredit in QB too (refused by QB if paid). */
+export async function deleteQboBill(admin: SupabaseClient, invoiceId: string): Promise<string | null> {
+  const { data: inv } = await admin.from('ap_invoices').select('qbo_bill_id, kind').eq('id', invoiceId).maybeSingle();
+  if (!inv?.qbo_bill_id) return null;
+  const qbo = await getQbo(admin);
+  if (!qbo) return 'QuickBooks non connecté — supprimez la facture dans QB manuellement';
+  const entity = inv.kind === 'credit' ? 'vendorcredit' : 'bill';
+  const key = inv.kind === 'credit' ? 'VendorCredit' : 'Bill';
+  try {
+    const cur = await qbo.get(`/${entity}/${inv.qbo_bill_id}`);
+    await qbo.post(`/${entity}?operation=delete`, { Id: inv.qbo_bill_id, SyncToken: cur[key].SyncToken });
+    await admin.from('ap_invoices').update({ qbo_bill_id: null }).eq('id', invoiceId);
+    await log(admin, { direction: 'push', entity, portal_id: invoiceId, qbo_id: inv.qbo_bill_id, status: 'ok', message: 'Facture supprimée dans QB (annulée au portail)' });
+    return null;
+  } catch (e) {
+    const message = `Suppression dans QB impossible (${errMsg(e)}) — supprimez-la dans QB manuellement`;
+    await log(admin, { direction: 'push', entity, portal_id: invoiceId, qbo_id: inv.qbo_bill_id, status: 'error', message });
+    return message;
   }
 }
 

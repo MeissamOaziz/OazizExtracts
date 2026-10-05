@@ -64,19 +64,33 @@ const norm = (s: string) => s.toLowerCase()
   .replace(/\b(inc|ltd|ltee|limited|corp|corporation|enr|senc|llc|co|qc|quebec|canada)\b\.?/g, ' ')
   .replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** Best existing-supplier matches for an extracted vendor, by name token overlap. */
+const taxNo = (v: string | null | undefined) => (v ?? '').replace(/[^0-9]/g, '').slice(0, 9);
+
+/**
+ * Best existing-supplier matches for an extracted vendor. A GST/QST number on
+ * file wins outright; otherwise whole-word name overlap against the supplier's
+ * name, legal name, QB name and learned aliases ("Canadian Cannabis Exchange"
+ * → CCX). Partial words never count ("Cannabis" must not match "BIS").
+ */
 export function matchSuppliers(x: InvoiceExtraction, suppliers: SupplierRow[]): Array<{ id: string; name: string; score: number }> {
-  const targets = [x.vendor_name, x.vendor_legal_name].filter(Boolean).map((v) => norm(v!));
+  const gst = taxNo(x.vendor_gst_number);
+  const qst = taxNo(x.vendor_qst_number);
+  const targets = [x.vendor_name, x.vendor_legal_name].filter(Boolean).map((v) => norm(v!)).filter(Boolean);
+  const words = (t: string) => new Set(t.split(' ').filter((w) => w.length > 1));
   const scored = suppliers.map((s) => {
-    const names = [s.name, s.legal_name, s.qbo_vendor_name].filter(Boolean).map((v) => norm(v!));
+    if ((gst && taxNo(s.gst_number) === gst) || (qst && taxNo(s.qst_number) === qst)) {
+      return { id: s.id, name: s.name, score: 1 };
+    }
+    const names = [s.name, s.legal_name, s.qbo_vendor_name, ...(s.aliases ?? [])].filter(Boolean).map((v) => norm(v!)).filter(Boolean);
     let best = 0;
     for (const t of targets) {
-      const tt = new Set(t.split(' ').filter((w) => w.length > 1));
+      const tt = words(t);
       for (const nme of names) {
-        if (!nme || !t) continue;
         if (nme === t) { best = 1; continue; }
-        if (nme.includes(t) || t.includes(nme)) best = Math.max(best, 0.85);
-        const nn = new Set(nme.split(' ').filter((w) => w.length > 1));
+        const nn = words(nme);
+        // Whole-word containment ("ccx" inside "ccx canada" counts, "bis" inside "cannabis" doesn't).
+        const contained = [...nn].every((w) => tt.has(w)) || [...tt].every((w) => nn.has(w));
+        if (contained && nn.size && tt.size) best = Math.max(best, 0.85);
         const inter = [...tt].filter((w) => nn.has(w)).length;
         const union = new Set([...tt, ...nn]).size || 1;
         best = Math.max(best, inter / union);

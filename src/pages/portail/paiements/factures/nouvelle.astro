@@ -26,6 +26,7 @@ const i18n = {
   qbSubtotal: T('pdf.subtotal'), qbGst: T('pdf.gst'), qbQst: T('pdf.qst'), qbOther: T('pdf.otherTaxes'),
   qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), locale,
   codingFrom: T('pdf.qbFromHistory'), codingNone: T('pdf.qbNoHistory'), codingNew: T('pdf.qbNewSupplier'),
+  saving: T('pdf.saving'), vendorNew: T('pdf.qbVendorNew'), vendorMatched: T('pdf.qbVendorMatched'), vendorNone: T('pdf.qbVendorNone'),
 };
 ---
 <PortailLayout title={T('pdf.title')} staffName={staff.full_name} wide>
@@ -45,9 +46,15 @@ const i18n = {
   <div class="grid">
     <form class="card" method="POST" action="/api/portail/paiements/invoices/create" id="inv-form">
       <input type="hidden" name="file_path" id="file_path" />
+      <input type="hidden" name="submission_key" value={crypto.randomUUID()} />
       <input type="hidden" name="subtotal" id="subtotal" />
       <input type="hidden" name="tax_gst" id="tax_gst" />
       <input type="hidden" name="tax_qst" id="tax_qst" />
+      <input type="hidden" name="x_vendor_name" id="x_vendor_name" />
+      <input type="hidden" name="x_vendor_legal_name" id="x_vendor_legal_name" />
+      <input type="hidden" name="x_vendor_email" id="x_vendor_email" />
+      <input type="hidden" name="x_gst_number" id="x_gst_number" />
+      <input type="hidden" name="x_qst_number" id="x_qst_number" />
       <div class="form-row">
         <label>{T('col.supplier')} *</label>
         <select name="supplier_id" id="supplier_id" required>
@@ -78,9 +85,13 @@ const i18n = {
       <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" id="description" /></div>
       <fieldset class="qb-coding" id="qb-coding" hidden>
         <legend>{T('pdf.qbCoding')}</legend>
+        <div class="form-row"><label>{T('pdf.qbVendor')}</label>
+          <select name="qbo_vendor_choice" id="qbo_vendor_choice"><option value="new" id="qbo_vendor_new">{T('pdf.qbVendorNew')}</option></select>
+          <p class="hint" id="qb-vendor-hint"></p>
+        </div>
         <div class="two-col">
           <div class="form-row"><label>{T('pdf.qbAccount')}</label>
-            <select name="qbo_account_id" id="qbo_account_id"><option value="">{T('pdf.qbAccountNone')}</option></select>
+            <select name="qbo_account_id" id="qbo_account_id"><option value="">—</option></select>
           </div>
           <div class="form-row"><label>{T('pdf.qbTax')}</label>
             <select name="qbo_tax_code_id" id="qbo_tax_code_id"><option value="">{T('qbo.noTax')}</option></select>
@@ -125,24 +136,53 @@ const i18n = {
 
   // QuickBooks coding: suggested from how this supplier's previous QB bills were coded.
   let listsLoaded = false;
+  let lastX: X | null = null;
+  // Tax code from the taxes printed on the invoice: GST+QST → GST/QST QC, GST only → GST,
+  // HST → HST, none → Exempt. Falls back to the supplier's history.
+  function taxFromInvoice(codes: Array<{ id: string; name: string }>, x: X | null): string | null {
+    if (!x) return null;
+    const sub = Number(x.subtotal) || 0, g = Number(x.gst_hst) || 0, q = Number(x.qst) || 0;
+    const find = (re: RegExp, not?: RegExp) => codes.find((c) => re.test(c.name) && !(not && not.test(c.name)))?.id ?? null;
+    if (g > 0 && q > 0) return find(/GST\s*\/\s*QST/i) ?? find(/QST/i);
+    if (g > 0 && sub > 0 && g / sub > 0.07) return find(/^HST/i);
+    if (g > 0) return find(/^GST$/i) ?? find(/^GST/i, /QST|HST|Adjust/i);
+    if (sub > 0 && Math.abs(sub - Math.abs(Number(x.total) || 0)) < 0.01) return find(/^Exempt/i) ?? find(/Zero/i);
+    return null;
+  }
   async function loadCoding() {
     const sid = supSel.value;
-    const r = await fetch(`/api/portail/paiements/qbo/suggest${sid && sid !== 'new' ? `?supplier_id=${sid}` : ''}`);
+    const qs = new URLSearchParams();
+    if (sid && sid !== 'new') qs.set('supplier_id', sid);
+    if (lastX?.vendor_name) qs.set('vendor_name', String(lastX.vendor_name));
+    if (lastX?.vendor_legal_name) qs.set('vendor_legal_name', String(lastX.vendor_legal_name));
+    const r = await fetch(`/api/portail/paiements/qbo/suggest?${qs}`);
     const res = await r.json().catch(() => ({}));
     if (!res.connected) return;
     $('qb-coding').hidden = false;
     const accSel = $<HTMLSelectElement>('qbo_account_id');
     const taxSel = $<HTMLSelectElement>('qbo_tax_code_id');
+    const venSel = $<HTMLSelectElement>('qbo_vendor_choice');
     if (!listsLoaded && res.accounts) {
       for (const a of res.accounts) accSel.add(new Option(a.name, a.id));
       for (const t of res.taxCodes) taxSel.add(new Option(t.name, t.id));
+      for (const v of res.vendors ?? []) venSel.add(new Option(v.name, v.id));
       listsLoaded = true;
     }
+    const printedName = String(lastX?.vendor_legal_name || lastX?.vendor_name || '');
+    $('qbo_vendor_new').textContent = printedName ? `${L.vendorNew} « ${printedName} »` : L.vendorNew;
+    venSel.value = res.vendorId ?? 'new';
+    $('qb-vendor-hint').textContent = res.vendorId ? L.vendorMatched : L.vendorNone;
+    // Account is required unless the bill is already keyed into QB by hand.
+    const already = document.querySelector<HTMLInputElement>('input[name="in_quickbooks"]')!;
+    accSel.required = !already.checked;
+    already.onchange = () => { accSel.required = !already.checked; };
+
     const s = res.suggestion;
     const hint = $('qb-coding-hint');
+    const fromInvoice = taxFromInvoice(res.taxCodes ?? [], lastX);
+    if (fromInvoice) taxSel.value = fromInvoice; else if (s?.taxCodeId) taxSel.value = s.taxCodeId;
     if (sid === 'new' || !sid) { accSel.value = ''; hint.textContent = L.codingNew; return; }
-    if (s?.accountId) accSel.value = s.accountId; else accSel.value = '';
-    if (s?.taxCodeId) taxSel.value = s.taxCodeId;
+    accSel.value = s?.accountId ?? '';
     hint.textContent = s?.basedOn ? L.codingFrom.replace('{n}', String(s.basedOn)).replace('{pct}', String(Math.round((s.share ?? 0) * 100))) : L.codingNone;
   }
   supSel.addEventListener('change', () => { toggleNew(); loadCoding(); });
@@ -162,7 +202,10 @@ const i18n = {
     $<HTMLInputElement>('file_path').value = res.file_path;
     if (!res.extracted) { say(res.warning === 'no_key' ? L.noKey : `${L.failed} ${res.detail ?? ''}`, true); return; }
     const x = res.extracted as X;
+    lastX = x;
     const set = (id: string, v: unknown) => { if (v !== null && v !== undefined && v !== '') $<HTMLInputElement>(id).value = String(v); };
+    set('x_vendor_name', x.vendor_name); set('x_vendor_legal_name', x.vendor_legal_name); set('x_vendor_email', x.vendor_email);
+    set('x_gst_number', x.vendor_gst_number); set('x_qst_number', x.vendor_qst_number);
     set('invoice_number', x.invoice_number); set('po_number', x.po_number);
     set('invoice_date', x.invoice_date); set('due_date', x.due_date);
     set('amount', Math.abs(Number(x.total)).toFixed(2)); set('description', x.description);
@@ -207,6 +250,22 @@ const i18n = {
     };
     status.hidden = true;
   }
+
+  // One save per form: grey out both buttons and show progress after the first click.
+  const invForm = $<HTMLFormElement>('inv-form');
+  invForm.addEventListener('submit', (ev) => {
+    const btns = invForm.querySelectorAll<HTMLButtonElement>('button[type=submit]');
+    if (invForm.dataset.sent) { ev.preventDefault(); return; }
+    invForm.dataset.sent = '1';
+    const clicked = (ev as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (clicked?.name) {
+      const h = document.createElement('input');
+      h.type = 'hidden'; h.name = clicked.name; h.value = clicked.value;
+      invForm.appendChild(h);
+    }
+    btns.forEach((b) => { b.disabled = true; });
+    if (clicked) clicked.textContent = L.saving;
+  });
 
   const drop = $('drop');
   const input = $<HTMLInputElement>('file');

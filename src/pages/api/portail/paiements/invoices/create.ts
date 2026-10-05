@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount } from '../../../../../lib/payables';
-import { autoPushInvoice } from '../../../../../lib/qbo-sync';
+import { autoPushInvoice, linkVendorChoice } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -16,6 +16,13 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const form = await request.formData();
   const admin = getAdminClient();
   const back = '/portail/paiements/factures/nouvelle';
+
+  // Same form submitted twice (double click, back + resubmit): send to the invoice already saved.
+  const submissionKey = str(form, 'submission_key');
+  if (submissionKey) {
+    const { data: existing } = await admin.from('ap_invoices').select('supplier_id').eq('submission_key', submissionKey).maybeSingle();
+    if (existing) return redirect(`/portail/paiements/fournisseurs/${existing.supplier_id}?ok=inv`, 303);
+  }
 
   let amount = parseAmount(form.get('amount'));
   if (amount === null || amount === 0) return redirect(`${back}?error=amount`, 303);
@@ -36,6 +43,29 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'supplier_created', details: { via: 'invoice_pdf' } });
   }
   if (!isUuid(supplierId)) return redirect(`${back}?error=supplier`, 303);
+
+  // Learn how this supplier appears on its invoices, so the next one matches by itself.
+  const printed = [str(form, 'x_vendor_name'), str(form, 'x_vendor_legal_name')].filter((v): v is string => !!v);
+  const gstNo = str(form, 'x_gst_number');
+  const qstNo = str(form, 'x_qst_number');
+  if (printed.length || gstNo || qstNo) {
+    const { data: sup } = await admin.from('ap_suppliers').select('name, legal_name, aliases, gst_number, qst_number').eq('id', supplierId).maybeSingle();
+    if (sup) {
+      const known = new Set([sup.name, sup.legal_name, ...(sup.aliases ?? [])].filter(Boolean).map((v: string) => v.toLowerCase()));
+      const newAliases = printed.filter((p) => !known.has(p.toLowerCase()));
+      const patch: Record<string, unknown> = {};
+      if (newAliases.length) patch.aliases = [...(sup.aliases ?? []), ...newAliases];
+      if (gstNo && !sup.gst_number) patch.gst_number = gstNo;
+      if (qstNo && !sup.qst_number) patch.qst_number = qstNo;
+      if (Object.keys(patch).length) await admin.from('ap_suppliers').update(patch).eq('id', supplierId);
+    }
+  }
+  const vendorChoice = str(form, 'qbo_vendor_choice');
+  if (vendorChoice && form.get('in_quickbooks') !== 'on') {
+    await linkVendorChoice(admin, supplierId, vendorChoice, {
+      displayName: str(form, 'x_vendor_name'), legalName: str(form, 'x_vendor_legal_name'), email: str(form, 'x_vendor_email'),
+    });
+  }
 
   const filePath = str(form, 'file_path');
   const safePath = filePath && /^inbox\/[\w\-/.]+$/.test(filePath) ? filePath : null;
@@ -59,8 +89,9 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     subtotal: subtotal && subtotal > 0 ? subtotal : null,
     tax_gst: parseAmount(form.get('tax_gst')), tax_qst: parseAmount(form.get('tax_qst')),
     qbo_account_id: str(form, 'qbo_account_id'), qbo_tax_code_id: str(form, 'qbo_tax_code_id'),
-    in_quickbooks: alreadyInQb, file_path: safePath, created_by: staff.id,
+    in_quickbooks: alreadyInQb, file_path: safePath, created_by: staff.id, submission_key: submissionKey,
   }).select('id').single();
+  if (error?.code === '23505') return redirect(`/portail/paiements/fournisseurs/${supplierId}?ok=inv`, 303);
   if (error || !created) {
     console.error('[paiements] invoice create failed:', error);
     return redirect(`${back}?error=save`, 303);

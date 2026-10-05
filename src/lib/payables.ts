@@ -27,6 +27,7 @@ export interface Supplier {
   terms_days: number | null; payment_details: string | null; notes: string | null;
   contact_name: string | null; contact_email: string | null; remittance_email: string | null;
   qbo_vendor_name: string | null; sheet_tab: string | null; is_active: boolean; sort_order: number;
+  aliases: string[]; gst_number: string | null; qst_number: string | null;
 }
 
 export interface SupplierBalance {

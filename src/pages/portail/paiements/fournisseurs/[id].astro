@@ -91,6 +91,7 @@ const okText: Record<string, string> = {
       <summary>{T('det.addInvoice')}</summary>
       <form class="details-body" method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} enctype="multipart/form-data">
         <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="submission_key" value={crypto.randomUUID()} />
         <div class="grid3">
           <div class="form-row"><label>{T('inv.kind')}</label>
             <select name="kind">
@@ -300,6 +301,15 @@ const okText: Record<string, string> = {
   sc.addEventListener('change', () => {
     document.querySelectorAll<HTMLTableRowElement>('tr.closed-row').forEach((r) => { r.hidden = !sc.checked; });
   });
+
+  // Registered last so a cancelled confirm() (void buttons) never locks the form.
+  // Any form submits once: further clicks while it's sending are ignored.
+  document.querySelectorAll<HTMLFormElement>('form').forEach((f) => f.addEventListener('submit', (ev) => {
+    if (ev.defaultPrevented) return;
+    if (f.dataset.sent) { ev.preventDefault(); return; }
+    f.dataset.sent = '1';
+    setTimeout(() => f.querySelectorAll<HTMLButtonElement>('button[type=submit], button:not([type])').forEach((b) => { b.disabled = true; }), 0);
+  }));
 </script>
 <style>
   .top-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }

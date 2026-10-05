@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount, uploadInvoiceFile } from '../../../../../../lib/payables';
-import { autoPushInvoice } from '../../../../../../lib/qbo-sync';
+import { autoPushInvoice, deleteQboBill } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -32,6 +32,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     const invoiceId = String(form.get('invoice_id') ?? '');
     if (!isUuid(invoiceId)) return redirect(back, 303);
     const { data: inv } = await admin.from('ap_invoices').select('invoice_number, amount').eq('id', invoiceId).eq('supplier_id', supplierId).maybeSingle();
+    const qbWarning = await deleteQboBill(admin, invoiceId);
     // Money already paid against a voided invoice becomes a credit on the
     // supplier's account instead of vanishing.
     const { data: bal } = await admin.from('ap_invoice_balances').select('allocated').eq('id', invoiceId).maybeSingle();
@@ -47,7 +48,13 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       voided_at: new Date().toISOString(), voided_by: staff.id, void_reason: String(form.get('reason') ?? '').trim() || 'Annulée',
     }).eq('id', invoiceId).eq('supplier_id', supplierId);
     await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_voided', details: { invoice: inv?.invoice_number ?? null, amount: inv?.amount ?? null } });
-    return redirect(`${back}?ok=invvoid`, 303);
+    return redirect(qbWarning ? `${back}?error=${encodeURIComponent(qbWarning)}` : `${back}?ok=invvoid`, 303);
+  }
+
+  const submissionKey = String(form.get('submission_key') ?? '').trim() || null;
+  if (submissionKey) {
+    const { data: existing } = await admin.from('ap_invoices').select('id').eq('submission_key', submissionKey).maybeSingle();
+    if (existing) return redirect(`${back}?ok=inv`, 303);
   }
 
   let amount = parseAmount(form.get('amount'));
@@ -87,8 +94,9 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     po_number: String(form.get('po_number') ?? '').trim() || null,
     invoice_date: invoiceDate, due_date: dueDate, amount,
     description: String(form.get('description') ?? '').trim() || null,
-    in_quickbooks: form.get('in_quickbooks') === 'on', file_path: filePath, created_by: staff.id,
+    in_quickbooks: form.get('in_quickbooks') === 'on', file_path: filePath, created_by: staff.id, submission_key: submissionKey,
   }).select('id').single();
+  if (error?.code === '23505') return redirect(`${back}?ok=inv`, 303);
   if (error || !created) {
     console.error('[paiements] invoice insert failed:', error);
     return redirect(`${back}?error=missing&addinv=1`, 303);
