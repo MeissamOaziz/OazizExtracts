@@ -6,6 +6,7 @@ import { createServerClient, currentStaff, getAdminClient } from '../../lib/supa
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frHub, enHub } from '../../i18n/portail/hub';
 import { frCommon, enCommon } from '../../i18n/portail/common';
+import { effectivePermissions, can, vqHref } from '../../lib/access';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 
@@ -102,36 +103,52 @@ const { count: pendingWitnessCount } = await getAdminClient()
   .eq('witness_staff_id', staff.id)
   .eq('status', 'awaiting_witness');
 
-const sections = [
+const perms = effectivePermissions(staff);
+const allSections = [
   {
+    show: perms.has('rnd'),
     href: '/portail/formulaires',
     title: Tc('nav.forms'),
     desc: T('section.forms.desc'),
     tag: pendingCount ? T('section.forms.tag').replace('{count}', String(pendingCount)) : null,
   },
   {
+    show: perms.has('calculators'),
     href: '/portail/calculatrices',
     title: Tc('nav.calculators'),
     desc: T('section.calc.desc'),
     tag: null,
   },
   {
-    href: '/portail/fournisseurs',
+    show: can(perms, 'vq', 'licenses'),
+    href: vqHref(perms),
     title: Tc('nav.vendors'),
     desc: T('section.vendors.desc'),
     tag: pendingApprovalsCount ? T('section.vendors.tag').replace('{count}', String(pendingApprovalsCount)) : null,
   },
   {
+    show: can(perms, 'hr', 'hr_employees', 'hr_evaluations'),
     href: '/portail/rh',
     title: Tc('nav.hr'),
     desc: T('section.hr.desc'),
     tag: pendingWitnessCount ? T('section.hr.tag').replace('{count}', String(pendingWitnessCount)) : null,
   },
+  {
+    show: perms.has('admin'),
+    href: '/portail/admin/utilisateurs',
+    title: Tc('nav.admin'),
+    desc: T('section.admin.desc'),
+    tag: null,
+  },
 ];
+const sections = allSections.filter((sec) => sec.show);
+const forbidden = new URL(Astro.request.url).searchParams.get('error') === 'forbidden';
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name}>
   <h1>{T('greeting').replace('{name}', staff.full_name.split(' ')[0])}</h1>
   <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+  {forbidden && <div class="flash flash-error">{T('error.forbidden')}</div>}
+  {sections.length === 0 && <div class="card"><p style="color: var(--p-muted);">{T('noAccess')}</p></div>}
 
   <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
     {sections.map((s) => (

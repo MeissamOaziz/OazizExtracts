@@ -5,6 +5,7 @@ import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frRhIndex, enRhIndex } from '../../../i18n/portail/rh-index';
+import { effectivePermissions } from '../../../lib/access';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
@@ -13,23 +14,38 @@ if (!staff) return Astro.redirect('/portail/connexion');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frRhIndex, enRhIndex);
 
+const perms = effectivePermissions(staff);
+const canDocs = perms.has('hr');
+const canEvaluations = perms.has('hr_evaluations');
+const canEmployees = perms.has('hr_employees');
+
+// Evaluations are confidential: only people with the evaluations permission
+// see them in the list; attestation/incident need the general HR permission.
+const visibleKinds = [
+  ...(canDocs ? ['attestation', 'incident_report'] : []),
+  ...(canEvaluations ? ['evaluation'] : []),
+];
 const admin = getAdminClient();
-const { data: recent } = await admin
-  .from('hr_generated_documents')
-  .select('id, kind, generated_at, sent_to')
-  .order('generated_at', { ascending: false })
-  .limit(20);
+const { data: recent } = visibleKinds.length === 0
+  ? { data: [] as Array<{ id: string; kind: string; generated_at: string; sent_to: string[] | null }> }
+  : await admin
+      .from('hr_generated_documents')
+      .select('id, kind, generated_at, sent_to')
+      .in('kind', visibleKinds)
+      .order('generated_at', { ascending: false })
+      .limit(20);
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 const cards = [
-  { href: '/portail/rh/attestation', title: T('card.attestation.title'), desc: T('card.attestation.desc') },
-  { href: '/portail/rh/incident', title: T('card.incident.title'), desc: T('card.incident.desc') },
-  { href: '/portail/rh/evaluation', title: T('card.evaluation.title'), desc: T('card.evaluation.desc') },
-  { href: '/portail/rh/employes', title: T('card.employees.title'), desc: T('card.employees.desc') },
-];
+  { show: canDocs, href: '/portail/rh/attestation', title: T('card.attestation.title'), desc: T('card.attestation.desc') },
+  { show: canDocs, href: '/portail/rh/incident', title: T('card.incident.title'), desc: T('card.incident.desc') },
+  { show: canEvaluations, href: '/portail/rh/evaluation', title: T('card.evaluation.title'), desc: T('card.evaluation.desc') },
+  { show: canEvaluations, href: '/portail/rh/evaluation/suivi', title: T('card.tracker.title'), desc: T('card.tracker.desc') },
+  { show: canEmployees, href: '/portail/rh/employes', title: T('card.employees.title'), desc: T('card.employees.desc') },
+].filter((c) => c.show);
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">

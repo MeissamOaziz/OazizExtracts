@@ -1,0 +1,90 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { effectivePermissions, cleanOverrides, isRole, PERMISSIONS, ROLES } from '../../../../lib/access';
+import { frAdminUsers, enAdminUsers } from '../../../../i18n/portail/admin-users';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+if (!effectivePermissions(staff).has('admin')) return Astro.redirect('/portail?error=forbidden');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frAdminUsers, enAdminUsers);
+
+const admin = getAdminClient();
+const { data: users } = await admin
+  .from('staff')
+  .select('id, full_name, email, title, is_active, portal_role, portal_permission_overrides')
+  .order('full_name');
+
+const url = new URL(Astro.request.url);
+const info = url.searchParams.get('info');
+const errCode = url.searchParams.get('error');
+const infoMessages: Record<string, string> = { created: T('info.created'), saved: T('info.saved') };
+const errorMessages: Record<string, string> = {
+  missing: T('error.missing'), invalid_email: T('error.invalid_email'),
+  duplicate: T('error.duplicate'), unknown: T('error.unknown'),
+};
+
+const rows = (users ?? []).map((u) => {
+  const perms = effectivePermissions(u);
+  const customized = Object.keys(cleanOverrides(u.portal_permission_overrides)).length > 0 && u.portal_role !== 'admin';
+  return { ...u, perms, customized };
+});
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <h1>{T('title')}</h1>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
+  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+
+  <div class="card" style="padding: 0; margin-bottom: 24px;">
+    <div style="padding: 20px 20px 0;"><h2>{T('section.users')}</h2></div>
+    <table class="data" style="margin-top: 14px;">
+      <thead>
+        <tr><th>{T('th.name')}</th><th>{T('th.email')}</th><th>{T('th.role')}</th><th>{T('th.access')}</th><th>{T('th.status')}</th><th></th></tr>
+      </thead>
+      <tbody>
+        {rows.map((u) => (
+          <tr>
+            <td><a href={`/portail/admin/utilisateurs/${u.id}`}><strong>{u.full_name}</strong></a>{u.title && <div class="hint" style="margin:0;">{u.title}</div>}</td>
+            <td>{u.email}</td>
+            <td>{isRole(u.portal_role) ? T(`role.${u.portal_role}` as keyof typeof frAdminUsers) : T('noRole')}</td>
+            <td style="font-size:.85rem;">
+              {u.perms.size === 0 ? '—' : PERMISSIONS.filter((p) => u.perms.has(p) && p !== 'admin').map((p) => T(`perm.${p}` as keyof typeof frAdminUsers).split(' — ')[0]).filter((v, i, a) => a.indexOf(v) === i).join(', ')}
+              {u.customized && <span class="badge badge-signing" style="margin-left:6px;">{T('access.custom')}</span>}
+            </td>
+            <td><span class={`badge ${u.is_active ? 'badge-complete' : 'badge-cancelled'}`}>{u.is_active ? T('status.active') : T('status.inactive')}</span></td>
+            <td style="text-align:right;"><a href={`/portail/admin/utilisateurs/${u.id}`} class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('editBtn')}</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="max-width: 560px;">
+    <h2>{T('section.add')}</h2>
+    <p class="hint" style="margin: 4px 0 14px;">{T('add.hint')}</p>
+    <form method="POST" action="/api/portail/admin/users/create">
+      <div class="form-row"><label for="full_name">{T('label.fullName')}</label><input type="text" id="full_name" name="full_name" required /></div>
+      <div class="form-row"><label for="email">{T('label.email')}</label><input type="email" id="email" name="email" required /></div>
+      <div class="form-row"><label for="title">{T('label.title')}</label><input type="text" id="title" name="title" /></div>
+      <div class="form-row">
+        <label for="portal_role">{T('label.role')}</label>
+        <select id="portal_role" name="portal_role">
+          <option value="">{T('role.none')}</option>
+          {ROLES.map((r) => <option value={r}>{T(`role.${r}` as keyof typeof frAdminUsers)}</option>)}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">{T('addBtn')}</button>
+    </form>
+  </div>
+</PortailLayout>

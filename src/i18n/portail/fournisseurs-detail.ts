@@ -1,5 +1,5 @@
 export const frFournisseursDetail = {
-  backLink: '← Fournisseurs',
+  backLink: '← VQ & licences Oaziz',
   submittedOn: 'Reçu le',
   notFound: 'Dossier introuvable.',
 
@@ -80,7 +80,7 @@ export const frFournisseursDetail = {
 export type FournisseursDetailDict = typeof frFournisseursDetail;
 
 export const enFournisseursDetail: Partial<Record<keyof FournisseursDetailDict, string>> = {
-  backLink: '← Vendors',
+  backLink: '← VQ & Oaziz Licenses',
   submittedOn: 'Received on',
   notFound: 'File not found.',
 

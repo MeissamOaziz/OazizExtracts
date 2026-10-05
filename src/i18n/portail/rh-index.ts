@@ -9,6 +9,8 @@ export const frRhIndex = {
   'card.incident.desc': 'Remplir, générer en PDF et envoyer par courriel.',
   'card.evaluation.title': "Évaluation de rendement",
   'card.evaluation.desc': 'Remplir, générer en PDF et envoyer par courriel.',
+  'card.tracker.title': 'Suivi des évaluations',
+  'card.tracker.desc': 'Historique des évaluations par employé et prochaines évaluations à planifier.',
   'card.employees.title': 'Nouveaux employés',
   'card.employees.desc': "Envoyer le dossier d'accueil, suivre les signatures et les contresignatures.",
 
@@ -37,6 +39,8 @@ export const enRhIndex: Partial<Record<keyof RhIndexDict, string>> = {
   'card.incident.desc': 'Fill in, generate a PDF and send by email.',
   'card.evaluation.title': 'Performance Evaluation',
   'card.evaluation.desc': 'Fill in, generate a PDF and send by email.',
+  'card.tracker.title': 'Evaluation Tracker',
+  'card.tracker.desc': 'Evaluation history per employee and upcoming reviews to schedule.',
   'card.employees.title': 'New Employees',
   'card.employees.desc': 'Send the onboarding package, track signatures and countersigning.',
 

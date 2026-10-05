@@ -87,14 +87,18 @@ function setSecureCookie(
 // Resolve the current staff row for the logged-in user (or null if not signed in).
 export async function currentStaff(
   supabase: SupabaseClient,
-): Promise<{ id: string; full_name: string; email: string; title: string | null } | null> {
+): Promise<{
+  id: string; full_name: string; email: string; title: string | null;
+  portal_role: string | null; portal_permission_overrides: unknown;
+} | null> {
   const { data: userResult } = await supabase.auth.getUser();
   const email = userResult.user?.email;
   if (!email) return null;
   const { data, error } = await supabase
     .from('staff')
-    .select('id, full_name, email, title')
+    .select('id, full_name, email, title, portal_role, portal_permission_overrides')
     .eq('email', email)
+    .eq('is_active', true)
     .maybeSingle();
   if (error || !data) return null;
   return data;

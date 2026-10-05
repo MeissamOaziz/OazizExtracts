@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { hrSignedUrl } from '../../../../../../lib/hr-storage';
+import { effectivePermissions } from '../../../../../../lib/access';
 
 export const prerender = false;
 
@@ -15,10 +16,15 @@ export const GET: APIRoute = async ({ params, request, cookies, redirect }) => {
   const admin = getAdminClient();
   const { data: doc } = await admin
     .from('hr_generated_documents')
-    .select('file_path')
+    .select('file_path, kind')
     .eq('id', id)
     .maybeSingle();
   if (!doc?.file_path) return new Response('not found', { status: 404 });
+
+  // Evaluations are confidential — gated separately from the general HR docs.
+  if (!effectivePermissions(staff).has(doc.kind === 'evaluation' ? 'hr_evaluations' : 'hr')) {
+    return new Response('Forbidden', { status: 403 });
+  }
 
   try {
     const url = await hrSignedUrl(doc.file_path, 60);

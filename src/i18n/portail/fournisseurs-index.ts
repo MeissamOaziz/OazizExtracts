@@ -1,5 +1,5 @@
 export const frFournisseursIndex = {
-  title: 'Fournisseurs',
+  title: 'VQ & licences Oaziz',
   backLink: '← Accueil',
   subtitle: 'Dossiers de qualification fournisseur et suivi des approbations.',
 
@@ -46,7 +46,7 @@ export const frFournisseursIndex = {
 export type FournisseursIndexDict = typeof frFournisseursIndex;
 
 export const enFournisseursIndex: Partial<Record<keyof FournisseursIndexDict, string>> = {
-  title: 'Vendors',
+  title: 'VQ & Oaziz Licenses',
   backLink: '← Home',
   subtitle: 'Vendor qualification files and approval tracking.',
 

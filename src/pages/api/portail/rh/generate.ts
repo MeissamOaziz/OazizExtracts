@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { uploadHrBytes } from '../../../../lib/hr-storage';
 import { sendHrDocumentEmail } from '../../../../lib/email';
+import { effectivePermissions } from '../../../../lib/access';
 import {
   buildAttestationPdf, buildIncidentReportPdf, buildEvaluationPdf,
   COMPETENCIES, type EvaluationInput,
@@ -35,6 +36,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   if (!['attestation', 'incident_report', 'evaluation'].includes(kind)) {
     return redirect('/portail/rh?error=unknown', 303);
+  }
+
+  if (!effectivePermissions(staff).has(kind === 'evaluation' ? 'hr_evaluations' : 'hr')) {
+    return new Response('Forbidden', { status: 403 });
   }
 
   const language = (get('language') === 'en' ? 'en' : 'fr') as 'fr' | 'en';

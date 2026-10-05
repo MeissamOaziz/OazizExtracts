@@ -18,3 +18,10 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare namespace App {
+  interface Locals {
+    /** Set by src/middleware.ts for signed-in /portail requests. */
+    access?: { staffId: string; perms: Set<import('./lib/access').Permission> };
+  }
+}

@@ -4,12 +4,14 @@ export const prerender = false;
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { effectivePermissions } from '../../../lib/access';
 import { frFournisseursIndex, enFournisseursIndex } from '../../../i18n/portail/fournisseurs-index';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
 
+const canLicenses = effectivePermissions(staff).has('licenses');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frFournisseursIndex, enFournisseursIndex);
 
@@ -100,7 +102,7 @@ const errorMessages: Record<string, string> = {
   </div>
   <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:8px;">
     <h1>{T('title')}</h1>
-    <a href="/portail/fournisseurs/licences" class="btn btn-secondary">{T('manageLicensesBtn')}</a>
+    {canLicenses && <a href="/portail/fournisseurs/licences" class="btn btn-secondary">{T('manageLicensesBtn')}</a>}
   </div>
   <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
 

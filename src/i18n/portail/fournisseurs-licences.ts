@@ -1,6 +1,6 @@
 export const frFournisseursLicences = {
   title: 'Nos licences',
-  backLink: '← Fournisseurs',
+  backLink: '← VQ & licences Oaziz',
   subtitle: "Gérez les licences d'Oaziz Extracts (CRA et Santé Canada) : téléversement, date d'expiration, rappels et envoi rapide.",
 
   'info.saved': 'Licence mise à jour.',
@@ -35,7 +35,7 @@ export type FournisseursLicencesDict = typeof frFournisseursLicences;
 
 export const enFournisseursLicences: Partial<Record<keyof FournisseursLicencesDict, string>> = {
   title: 'Our licenses',
-  backLink: '← Vendors',
+  backLink: '← VQ & Oaziz Licenses',
   subtitle: "Manage Oaziz Extracts' licenses (CRA and Health Canada): upload, expiry date, reminders, and quick send.",
 
   'info.saved': 'License updated.',

@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 
+import { effectivePermissions } from '../../../lib/access';
 import PortailLayout from '../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
@@ -9,6 +10,7 @@ import { frFournisseursLicences, enFournisseursLicences } from '../../../i18n/po
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
+const backHref = effectivePermissions(staff).has('vq') ? '/portail/fournisseurs' : '/portail';
 
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frFournisseursLicences, enFournisseursLicences);
@@ -47,7 +49,7 @@ function fmtDate(iso: string | null): string {
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
-    <a href="/portail/fournisseurs" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+    <a href={backHref} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
   </div>
   <h1>{T('title')}</h1>
   <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>

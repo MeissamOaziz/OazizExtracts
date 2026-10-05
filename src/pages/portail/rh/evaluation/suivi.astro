@@ -1,0 +1,149 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { effectivePermissions } from '../../../../lib/access';
+import { frRhEvaluationSuivi, enRhEvaluationSuivi } from '../../../../i18n/portail/rh-evaluation-suivi';
+
+const supabase = createServerClient(Astro.request, Astro.cookies);
+const staff = await currentStaff(supabase);
+if (!staff) return Astro.redirect('/portail/connexion');
+if (!effectivePermissions(staff).has('hr_evaluations')) return Astro.redirect('/portail?error=forbidden');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frRhEvaluationSuivi, enRhEvaluationSuivi);
+
+const admin = getAdminClient();
+const { data: rows } = await admin
+  .from('hr_generated_documents')
+  .select('id, generated_at, data')
+  .eq('kind', 'evaluation')
+  .order('generated_at', { ascending: false });
+
+interface Review {
+  id: string; employeeName: string; reviewDate: string; evaluationType: string;
+  overallRating: string; nextEvaluationDate: string; generatedAt: string;
+}
+const reviews: Review[] = (rows ?? []).map((r) => {
+  const d = (r.data ?? {}) as Record<string, string>;
+  return {
+    id: r.id,
+    employeeName: (d.employeeName ?? '').trim(),
+    reviewDate: d.reviewDate || r.generated_at.slice(0, 10),
+    evaluationType: d.evaluationType ?? '',
+    overallRating: d.overallRating ?? '',
+    nextEvaluationDate: d.nextEvaluationDate ?? '',
+    generatedAt: r.generated_at,
+  };
+}).filter((r) => r.employeeName);
+
+// Group by employee (case/space-insensitive name), newest review first.
+const byEmployee = new Map<string, Review[]>();
+for (const r of reviews) {
+  const key = r.employeeName.toLowerCase().replace(/\s+/g, ' ');
+  byEmployee.set(key, [...(byEmployee.get(key) ?? []), r]);
+}
+const employees = [...byEmployee.values()].map((list) => {
+  const sorted = [...list].sort((a, b) => b.reviewDate.localeCompare(a.reviewDate));
+  return { name: sorted[0].employeeName, latest: sorted[0], all: sorted };
+});
+
+const today = new Date().toISOString().slice(0, 10);
+const in30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+type NextState = 'overdue' | 'dueSoon' | 'scheduled' | 'none';
+function nextState(date: string): NextState {
+  if (!date) return 'none';
+  if (date < today) return 'overdue';
+  if (date <= in30) return 'dueSoon';
+  return 'scheduled';
+}
+const nextBadge: Record<NextState, string> = {
+  overdue: 'badge-cancelled', dueSoon: 'badge-signing', scheduled: 'badge-complete', none: 'badge-draft',
+};
+// Soonest/most-overdue first; employees with nothing scheduled last.
+employees.sort((a, b) => (a.latest.nextEvaluationDate || '9999').localeCompare(b.latest.nextEvaluationDate || '9999'));
+
+const overdueCount = employees.filter((e) => nextState(e.latest.nextEvaluationDate) === 'overdue').length;
+const dueSoonCount = employees.filter((e) => nextState(e.latest.nextEvaluationDate) === 'dueSoon').length;
+
+function fmt(date: string): string {
+  if (!date) return T('none');
+  return new Date(`${date.slice(0, 10)}T00:00:00Z`).toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+const typeLabel = (t: string) => (t ? T(`type.${t}` as keyof typeof frRhEvaluationSuivi) : T('none'));
+const ratingLabel = (r: string) => (r ? T(`rating.${r}` as keyof typeof frRhEvaluationSuivi) : T('none'));
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <div style="margin-bottom: 20px;">
+    <a href="/portail/rh" style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">{T('backLink')}</a>
+  </div>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:8px;">
+    <h1>{T('title')}</h1>
+    <a href="/portail/rh/evaluation" class="btn btn-primary">{T('newEvaluationBtn')}</a>
+  </div>
+  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('subtitle')}</p>
+
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px;">
+    <div class="card" style="min-width:180px;"><div style="font-size:1.6rem;font-weight:700;">{employees.length}</div><div class="hint">{T('summary.employees')}</div></div>
+    <div class="card" style="min-width:180px;"><div style="font-size:1.6rem;font-weight:700;color:var(--p-danger);">{overdueCount}</div><div class="hint">{T('summary.overdue')}</div></div>
+    <div class="card" style="min-width:180px;"><div style="font-size:1.6rem;font-weight:700;">{dueSoonCount}</div><div class="hint">{T('summary.dueSoon')}</div></div>
+  </div>
+
+  <div class="card" style="padding: 0;">
+    {employees.length === 0 ? (
+      <div class="empty-state"><p>{T('empty')}</p></div>
+    ) : (
+      <table class="data">
+        <thead>
+          <tr>
+            <th>{T('th.employee')}</th><th>{T('th.lastReview')}</th><th>{T('th.type')}</th>
+            <th>{T('th.rating')}</th><th>{T('th.next')}</th><th>{T('th.count')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {employees.map((e) => {
+            const state = nextState(e.latest.nextEvaluationDate);
+            return (
+              <>
+                <tr>
+                  <td><strong>{e.name}</strong></td>
+                  <td>{fmt(e.latest.reviewDate)}</td>
+                  <td>{typeLabel(e.latest.evaluationType)}</td>
+                  <td>{ratingLabel(e.latest.overallRating)}</td>
+                  <td>
+                    {fmt(e.latest.nextEvaluationDate)}
+                    {' '}<span class={`badge ${nextBadge[state]}`}>{T(`next.${state}` as keyof typeof frRhEvaluationSuivi)}</span>
+                  </td>
+                  <td>{e.all.length}</td>
+                </tr>
+                <tr>
+                  <td colspan="6" style="padding-top:0;border-top:none;">
+                    <details>
+                      <summary>{T('th.history')}</summary>
+                      <table class="data" style="margin-top:8px;">
+                        <tbody>
+                          {e.all.map((r) => (
+                            <tr>
+                              <td>{fmt(r.reviewDate)}</td>
+                              <td>{typeLabel(r.evaluationType)}</td>
+                              <td>{ratingLabel(r.overallRating)}</td>
+                              <td style="text-align:right;">
+                                <a href={`/api/portail/rh/documents/${r.id}/file`} class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('download')}</a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </details>
+                  </td>
+                </tr>
+              </>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </div>
+</PortailLayout>
