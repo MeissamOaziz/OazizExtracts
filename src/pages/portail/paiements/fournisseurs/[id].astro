@@ -1,0 +1,307 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import SupplierFields from '../../../../components/portail/PaiementsSupplierFields.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { loadAccounts, money, n, todayIso, PAYMENT_METHODS, type InvoiceBalance, type Supplier } from '../../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const fill = (s: string, vars: Record<string, string | number>) =>
+  Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
+const admin = getAdminClient();
+
+const id = String(Astro.params.id ?? '');
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/paiements/fournisseurs');
+const [{ data: sup }, accounts, { data: bal }, { data: invs }, { data: pays }, { data: allocs }, { data: events }, { data: staffRows }, { data: runLines }] = await Promise.all([
+  admin.from('ap_suppliers').select('*').eq('id', id).maybeSingle(),
+  loadAccounts(admin),
+  admin.from('ap_supplier_balances').select('*').eq('supplier_id', id).maybeSingle(),
+  admin.from('ap_invoice_balances').select('*').eq('supplier_id', id).order('invoice_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
+  admin.from('ap_payments').select('*').eq('supplier_id', id).order('paid_on', { ascending: false }).order('created_at', { ascending: false }),
+  admin.from('ap_payment_allocations').select('payment_id, invoice_id, amount, ap_payments!inner(supplier_id)').eq('ap_payments.supplier_id', id),
+  admin.from('ap_events').select('*').eq('supplier_id', id).order('created_at', { ascending: false }).limit(50),
+  admin.from('staff').select('id, full_name'),
+  admin.from('ap_run_lines').select('id, run_id, ap_runs(run_date)').eq('supplier_id', id),
+]);
+if (!sup) return Astro.redirect('/portail/paiements/fournisseurs');
+const s = sup as Supplier;
+const invoices = ((invs ?? []) as InvoiceBalance[]).map((i) => ({ ...i, amount: n(i.amount), allocated: n(i.allocated), open_amount: n(i.open_amount) }));
+const { data: voided } = await admin.from('ap_invoices').select('*').eq('supplier_id', id).not('voided_at', 'is', null).order('voided_at', { ascending: false });
+const staffName = new Map((staffRows ?? []).map((r) => [r.id, r.full_name as string]));
+const allocByPayment = new Map<string, number>();
+const invNumber = new Map(invoices.map((i) => [i.id, i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)]));
+const allocDetail = new Map<string, string[]>();
+for (const a of allocs ?? []) {
+  allocByPayment.set(a.payment_id, (allocByPayment.get(a.payment_id) ?? 0) + n(a.amount));
+  const list = allocDetail.get(a.payment_id) ?? [];
+  list.push(`${invNumber.get(a.invoice_id) ?? '?'} (${money(n(a.amount), locale)})`);
+  allocDetail.set(a.payment_id, list);
+}
+const runDateByLine = new Map((runLines ?? []).map((l) => [l.id, (l.ap_runs as unknown as { run_date: string } | null)?.run_date ?? '']));
+const today = todayIso();
+const owed = n(bal?.owed);
+const overdue = n(bal?.overdue);
+const openInvoices = invoices.filter((i) => Math.abs(i.open_amount) > 0.004);
+const accName = new Map(accounts.map((a) => [a.id, a.name]));
+const sp = Astro.url.searchParams;
+const okKey = sp.get('ok');
+const warnDup = sp.get('dup');
+const fmtDate = (iso: string) => new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' });
+const okText: Record<string, string> = {
+  created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'),
+};
+---
+<PortailLayout title={s.name} staffName={staff.full_name} wide>
+  <h1>{s.name} {!s.is_active && <span class="badge badge-cancelled">inactif</span>}</h1>
+  <PaiementsNav active="suppliers" />
+  {okKey && okText[okKey] && <div class="flash flash-success">{okText[okKey]}</div>}
+  {warnDup && <div class="warn-banner">{fill(T('inv.dupWarn'), { number: warnDup })}</div>}
+  {sp.get('error') === 'missing' && <div class="flash flash-error">{T('inv.missing')}</div>}
+  {sp.get('error') === 'duplicate' && <div class="flash flash-error">{T('sup.duplicate')}</div>}
+
+  <div class="top-grid">
+    <div class="card kpi"><span>{T('det.balance')}</span><strong class={owed < 0 ? 'neg' : ''}>{money(owed, locale)}</strong></div>
+    <div class="card kpi"><span>{T('col.overdue')}</span><strong class={overdue > 0 ? 'neg' : ''}>{money(overdue, locale)}</strong></div>
+    <div class="card kpi"><span>{T('sup.openCount')}</span><strong>{openInvoices.length}</strong></div>
+    <div class="card kpi"><span>{T('sup.lastPaid')}</span><strong>{bal?.last_paid_on ?? '—'}</strong></div>
+  </div>
+
+  <div class="card info-card">
+    <div><span class="lbl">{T('f.bank_account')}</span>{accName.get(s.bank_account_id ?? '') ?? '—'} · {T(`m.${s.payment_method}` as keyof typeof frPaiements)} · {s.currency}{s.terms_days !== null && <> · {s.terms_days} j</>}</div>
+    <div><span class="lbl">{T('col.payInfo')}</span><span class="pre">{s.payment_details || '—'}</span></div>
+    {s.notes && <div><span class="lbl">{T('f.notes')}</span>{s.notes}</div>}
+    {(s.contact_name || s.contact_email || s.remittance_email) && <div><span class="lbl">{T('f.contact_name')}</span>{[s.contact_name, s.contact_email, s.remittance_email && `${T('col.remittance')}: ${s.remittance_email}`].filter(Boolean).join(' · ')}</div>}
+    {s.sheet_tab && <div class="muted small">Onglet du classeur : {s.sheet_tab}</div>}
+  </div>
+
+  <div class="forms">
+    <details class="card" open={sp.has('addinv')}>
+      <summary>{T('det.addInvoice')}</summary>
+      <form class="details-body" method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} enctype="multipart/form-data">
+        <input type="hidden" name="_action" value="create" />
+        <div class="grid3">
+          <div class="form-row"><label>{T('inv.kind')}</label>
+            <select name="kind">
+              <option value="invoice">{T('inv.kind.invoice')}</option>
+              <option value="credit">{T('inv.kind.credit')}</option>
+              <option value="adjustment">{T('inv.kind.adjustment')}</option>
+            </select>
+          </div>
+          <div class="form-row"><label>{T('inv.number')}</label><input type="text" name="invoice_number" /></div>
+          <div class="form-row"><label>{T('inv.po')}</label><input type="text" name="po_number" /></div>
+          <div class="form-row"><label>{T('inv.date')}</label><input type="date" name="invoice_date" value={today} /></div>
+          <div class="form-row"><label>{T('inv.due')}</label><input type="date" name="due_date" />{s.terms_days !== null && <p class="hint">Vide = date + {s.terms_days} j</p>}</div>
+          <div class="form-row"><label>{T('inv.amount')} *</label><input type="text" inputmode="decimal" name="amount" required /></div>
+        </div>
+        <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" /></div>
+        <div class="grid3">
+          <div class="form-row"><label>{T('inv.file')}</label><input type="file" name="file" accept="application/pdf,image/*" /></div>
+          <div class="form-row"><label>&nbsp;</label><label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('inv.qbo.title')}</label></div>
+        </div>
+        <button class="btn btn-primary" type="submit">{T('det.addInvoice')}</button>
+      </form>
+    </details>
+
+    <details class="card">
+      <summary>{T('det.addPayment')}</summary>
+      <form class="details-body" method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`}>
+        <input type="hidden" name="_action" value="create" />
+        <div class="grid3">
+          <div class="form-row"><label>{T('pay.date')}</label><input type="date" name="paid_on" value={today} required /></div>
+          <div class="form-row"><label>{T('pay.amount')} *</label><input type="text" inputmode="decimal" name="amount" required /></div>
+          <div class="form-row"><label>{T('pay.method')}</label>
+            <select name="payment_method">{PAYMENT_METHODS.map((m) => <option value={m} selected={s.payment_method === m}>{T(`m.${m}` as keyof typeof frPaiements)}</option>)}</select>
+          </div>
+          <div class="form-row"><label>{T('pay.account')}</label>
+            <select name="bank_account_id">{accounts.map((a) => <option value={a.id} selected={s.bank_account_id === a.id}>{a.name}</option>)}</select>
+          </div>
+          <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" /></div>
+          <div class="form-row"><label>{T('pay.notes')}</label><input type="text" name="notes" /></div>
+        </div>
+        {openInvoices.filter((i) => i.open_amount > 0).length > 0 && (
+          <div class="form-row">
+            <label>{T('pay.applyTo')}</label>
+            <div class="apply-list">
+              {openInvoices.filter((i) => i.open_amount > 0).map((i) => (
+                <label class="check-inline"><input type="checkbox" name="invoice_ids" value={i.id} /> {i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)} — {money(i.open_amount, locale)}</label>
+              ))}
+            </div>
+            <p class="hint">{T('pay.applyTo.hint')}</p>
+          </div>
+        )}
+        <button class="btn btn-primary" type="submit">{T('det.addPayment')}</button>
+      </form>
+    </details>
+
+    <details class="card">
+      <summary>{T('sup.edit')}</summary>
+      <form class="details-body" method="POST" action="/api/portail/paiements/suppliers">
+        <input type="hidden" name="_action" value="update" />
+        <input type="hidden" name="id" value={s.id} />
+        <SupplierFields accounts={accounts} supplier={s} />
+        <button class="btn btn-primary" type="submit">{T('sup.save')}</button>
+      </form>
+    </details>
+  </div>
+
+  <div class="section-head">
+    <h2>{T('det.invoices')}</h2>
+    <label class="check-inline"><input type="checkbox" id="show-closed" /> {T('det.showClosed')}</label>
+  </div>
+  <div class="card tbl">
+    <table class="data">
+      <thead><tr>
+        <th>{T('inv.number')}</th><th>{T('inv.po')}</th><th>{T('inv.date')}</th><th>{T('inv.due')}</th>
+        <th class="num">{T('inv.amount')}</th><th class="num">{T('inv.paid')}</th><th class="num">{T('inv.open')}</th>
+        <th>{T('inv.description')}</th><th class="center" title={T('inv.qbo.title')}>{T('inv.qbo')}</th><th></th>
+      </tr></thead>
+      <tbody>
+        {invoices.map((i) => {
+          const isOpen = Math.abs(i.open_amount) > 0.004;
+          const late = isOpen && i.open_amount > 0 && i.due_date && i.due_date < today;
+          return (
+            <tr class={isOpen ? 'open' : 'closed-row'} hidden={!isOpen}>
+              <td>
+                {i.invoice_number ?? <em>{T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}</em>}
+                {i.kind !== 'invoice' && i.invoice_number && <span class="muted small"> · {T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}</span>}
+                {i.source === 'import' && <span class="muted small"> · {T('inv.import')}</span>}
+              </td>
+              <td>{i.po_number ?? ''}</td>
+              <td>{i.invoice_date ?? ''}</td>
+              <td class={late ? 'overdue' : ''}>{i.due_date ?? ''}</td>
+              <td class="num">{money(i.amount, locale)}</td>
+              <td class="num muted">{i.allocated ? money(i.allocated, locale) : ''}</td>
+              <td class="num"><strong>{isOpen ? money(i.open_amount, locale) : '✓'}</strong></td>
+              <td class="small">{i.description ?? ''}</td>
+              <td class="center">
+                <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} class="inline">
+                  <input type="hidden" name="_action" value="qbo" /><input type="hidden" name="invoice_id" value={i.id} />
+                  <input type="checkbox" class="autosubmit" name="in_quickbooks" checked={i.in_quickbooks} title={T('inv.qbo.title')} />
+                </form>
+              </td>
+              <td class="actions">
+                {i.file_path && <a href={`/api/portail/paiements/suppliers/${s.id}/file?invoice=${i.id}`} target="_blank" rel="noopener">PDF</a>}
+                {!i.origin_payment_id && (
+                  <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} class="inline void-form" data-confirm={T('inv.void.confirm')}>
+                    <input type="hidden" name="_action" value="void" /><input type="hidden" name="invoice_id" value={i.id} />
+                    <button type="submit" class="link-btn danger">{T('inv.void')}</button>
+                  </form>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+        {(voided ?? []).map((i) => (
+          <tr class="closed-row voided" hidden>
+            <td>{i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}</td><td>{i.po_number ?? ''}</td><td>{i.invoice_date ?? ''}</td><td></td>
+            <td class="num">{money(n(i.amount), locale)}</td><td></td><td></td>
+            <td class="small" colspan="3">{i.void_reason ?? ''} {i.voided_at && `(${fmtDate(i.voided_at)})`}</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot><tr><th colspan="6">{T('totals.row')}</th><th class="num">{money(owed, locale)}</th><th colspan="3"></th></tr></tfoot>
+    </table>
+  </div>
+
+  <h2 style="margin-top: 24px;">{T('det.payments')}</h2>
+  <div class="card tbl">
+    <table class="data">
+      <thead><tr>
+        <th>{T('pay.date')}</th><th class="num">{T('pay.amount')}</th><th>{T('pay.method')}</th><th>{T('pay.account')}</th>
+        <th>{T('pay.ref')}</th><th>{T('det.invoices')}</th><th class="center">{T('pay.remittance')}</th><th></th>
+      </tr></thead>
+      <tbody>
+        {(pays ?? []).map((p) => {
+          const unapplied = n(p.amount) - (allocByPayment.get(p.id) ?? 0);
+          return (
+            <tr class={p.voided_at ? 'voided' : ''}>
+              <td>{p.paid_on}{p.run_line_id && runDateByLine.get(p.run_line_id) && <div class="muted small">{fill(T('pay.run'), { date: runDateByLine.get(p.run_line_id)! })}</div>}</td>
+              <td class="num">{money(n(p.amount), locale)}</td>
+              <td>{p.payment_method ? T(`m.${p.payment_method}` as keyof typeof frPaiements) : ''}</td>
+              <td class="muted">{accName.get(p.bank_account_id ?? '') ?? ''}</td>
+              <td>{p.reference ?? ''}{p.source === 'import' && <span class="muted small"> · {T('pay.historical')}</span>}{p.notes && <div class="muted small">{p.notes}</div>}</td>
+              <td class="small muted">
+                {(allocDetail.get(p.id) ?? []).join(', ')}
+                {!p.voided_at && unapplied > 0.004 && <div>{money(unapplied, locale)} {T('pay.unapplied')}</div>}
+              </td>
+              <td class="center">
+                {!p.voided_at && (
+                  <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`} class="inline">
+                    <input type="hidden" name="_action" value="remittance" /><input type="hidden" name="payment_id" value={p.id} />
+                    <input type="checkbox" class="autosubmit" name="sent" checked={!!p.remittance_sent_at} />
+                  </form>
+                )}
+              </td>
+              <td class="actions">
+                {!p.voided_at && p.source !== 'import' && (
+                  <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`} class="inline void-form" data-confirm={T('pay.void.confirm')}>
+                    <input type="hidden" name="_action" value="void" /><input type="hidden" name="payment_id" value={p.id} />
+                    <button type="submit" class="link-btn danger">{T('inv.void')}</button>
+                  </form>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="card" style="margin-top: 20px;">
+    <summary>{T('det.history')}</summary>
+    <ul class="details-body events">
+      {(events ?? []).length === 0 && <li class="muted">{T('activity.empty')}</li>}
+      {(events ?? []).map((e) => (
+        <li><span class="muted">{fmtDate(e.created_at)}</span> — <strong>{e.actor_label ?? staffName.get(e.actor_staff_id) ?? ''}</strong> · {e.action} {Object.keys(e.details ?? {}).length > 0 && <code>{JSON.stringify(e.details)}</code>}</li>
+      ))}
+    </ul>
+  </details>
+</PortailLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>('input.autosubmit').forEach((cb) => cb.addEventListener('change', () => cb.form!.submit()));
+  document.querySelectorAll<HTMLFormElement>('form.void-form').forEach((f) => f.addEventListener('submit', (ev) => {
+    if (!confirm(f.dataset.confirm!)) ev.preventDefault();
+  }));
+  const sc = document.getElementById('show-closed') as HTMLInputElement;
+  sc.addEventListener('change', () => {
+    document.querySelectorAll<HTMLTableRowElement>('tr.closed-row').forEach((r) => { r.hidden = !sc.checked; });
+  });
+</script>
+<style>
+  .top-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .kpi { padding: 14px 18px; }
+  .kpi span { display: block; color: var(--p-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi strong { font-size: 1.25rem; }
+  .neg { color: var(--p-danger); }
+  .info-card { display: grid; gap: 6px; font-size: .9rem; margin-bottom: 14px; padding: 16px 20px; }
+  .lbl { display: inline-block; min-width: 170px; color: var(--p-muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; }
+  .pre { white-space: pre-wrap; }
+  .forms { display: grid; gap: 10px; margin-bottom: 22px; }
+  .forms .card { padding: 14px 20px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 14px; }
+  .apply-list { display: grid; gap: 4px; max-height: 180px; overflow-y: auto; border: 1px solid var(--p-border); border-radius: 6px; padding: 8px 12px; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .tbl { padding: 0; overflow-x: auto; }
+  table.data td, table.data th { padding: 8px 10px; font-size: .86rem; vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .center { text-align: center; }
+  .small { font-size: .78rem; }
+  .muted { color: var(--p-muted); }
+  .overdue { color: var(--p-danger); font-weight: 600; }
+  tr.closed-row td { color: var(--p-muted); }
+  tr.voided td { text-decoration: line-through; color: #9ca3af; }
+  form.inline { display: inline; margin: 0; }
+  .actions { white-space: nowrap; display: flex; gap: 10px; }
+  .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .8rem; padding: 0; }
+  .link-btn.danger { color: var(--p-danger); }
+  .events { list-style: none; font-size: .82rem; display: grid; gap: 4px; }
+  .events code { font-size: .72rem; color: var(--p-muted); }
+</style>

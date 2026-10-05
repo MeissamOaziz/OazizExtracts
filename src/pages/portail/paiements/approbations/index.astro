@@ -1,0 +1,88 @@
+---
+export const prerender = false;
+
+// Approver's list: the week waiting for approval (if any) and every past
+// approved week, with suggested / approved / paid totals.
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { money, n } from '../../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+
+const { data: runs } = await admin.from('ap_runs')
+  .select('id, run_date, status, approver_name, approver_email, submitted_at, approved_at, approved_via')
+  .neq('status', 'draft').order('run_date', { ascending: false }).limit(200);
+const ids = (runs ?? []).map((r) => r.id);
+const { data: lines } = ids.length
+  ? await admin.from('ap_run_lines').select('run_id, suggested_amount, approved_amount, ap_payments!ap_run_lines_payment_id_fkey(amount, voided_at)').in('run_id', ids)
+  : { data: [] };
+const agg = new Map<string, { suggested: number; approved: number; paid: number }>();
+for (const l of lines ?? []) {
+  const a = agg.get(l.run_id) ?? { suggested: 0, approved: 0, paid: 0 };
+  a.suggested += n(l.suggested_amount); a.approved += n(l.approved_amount);
+  const p = l.ap_payments as unknown as { amount: number; voided_at: string | null } | null;
+  if (p && !p.voided_at) a.paid += n(p.amount);
+  agg.set(l.run_id, a);
+}
+const me = staff.email.toLowerCase();
+const pending = (runs ?? []).filter((r) => r.status === 'submitted');
+const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+---
+<PortailLayout title={T('apprList.title')} staffName={staff.full_name} wide>
+  <h1>{T('apprList.title')}</h1>
+  <PaiementsNav active="approvals" />
+
+  {pending.map((r) => (
+    <a class="card pending" href={`/portail/paiements/approbations/${r.id}`}>
+      <div>
+        <strong>{T('apprList.pending').replace('{date}', r.run_date)}</strong>
+        <div class="muted small">{T('apprList.sentTo').replace('{name}', r.approver_name ?? '').replace('{date}', fmt(r.submitted_at))}</div>
+      </div>
+      <div class="num"><strong>{money(agg.get(r.id)?.suggested ?? 0, locale)}</strong>
+        {(r.approver_email ?? '').toLowerCase() === me && <span class="btn btn-primary" style="margin-left: 12px;">{T('apprList.open')}</span>}
+      </div>
+    </a>
+  ))}
+
+  {(runs ?? []).length === 0 ? <div class="card empty-state">{T('hist.empty')}</div> : (
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table class="data">
+        <thead><tr>
+          <th>{T('start.date')}</th><th>{T('col.status')}</th>
+          <th class="num">{T('hist.suggested')}</th><th class="num">{T('hist.approved')}</th><th class="num">{T('hist.paid')}</th>
+          <th>{T('apprList.approvedOn')}</th>
+        </tr></thead>
+        <tbody>
+          {(runs ?? []).map((r) => {
+            const a = agg.get(r.id) ?? { suggested: 0, approved: 0, paid: 0 };
+            return (
+              <tr>
+                <td><a href={`/portail/paiements/approbations/${r.id}`}>{r.run_date}</a></td>
+                <td>{T(`run.status.${r.status}` as keyof typeof frPaiements)}</td>
+                <td class="num">{money(a.suggested, locale)}</td>
+                <td class="num">{r.approved_at ? money(a.approved, locale) : '—'}</td>
+                <td class="num">{a.paid ? money(a.paid, locale) : '—'}</td>
+                <td class="muted">{r.approved_at ? `${fmt(r.approved_at)} · ${r.approver_name ?? ''}` : ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</PortailLayout>
+<style>
+  .pending { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px;
+    border-left: 3px solid var(--p-warn); text-decoration: none; color: inherit; }
+  .pending:hover { border-color: var(--p-accent); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+</style>

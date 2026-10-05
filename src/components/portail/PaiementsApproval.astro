@@ -1,0 +1,385 @@
+---
+// The approver's screen for one payment week — rendered by both the emailed
+// token link (/portail/approbation-paiements/<token>) and the logged-in
+// approvals page (/portail/paiements/approbations/<id>). Editable only while
+// the run is submitted AND the caller says so; afterwards it's a read-only
+// record that also shows what was actually paid.
+import { getAdminClient } from '../../lib/supabase';
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../i18n/portail/paiements';
+import {
+  loadAccounts, loadSuppliers, loadOpenInvoices, computeCash, paymentAmounts, money, n, todayIso,
+  type InvoiceBalance, type loadRun,
+} from '../../lib/payables';
+
+interface Props {
+  loaded: NonNullable<Awaited<ReturnType<typeof loadRun>>>;
+  editable: boolean;
+  submitUrl: string;
+  backHref?: string;
+}
+const { loaded, editable, submitUrl, backHref } = Astro.props;
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const fill = (s: string, vars: Record<string, string | number>) =>
+  Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
+const admin = getAdminClient();
+
+const { run, lines, cash } = loaded;
+const [accounts, suppliers, { data: prep }] = await Promise.all([
+  loadAccounts(admin), loadSuppliers(admin, { includeInactive: true }),
+  run.submitted_by ? admin.from('staff').select('full_name').eq('id', run.submitted_by).maybeSingle() : Promise.resolve({ data: null }),
+]);
+const supMap = new Map(suppliers.map((s) => [s.id, s]));
+const rows = lines
+  .filter((l) => n(l.suggested_amount) > 0 || n(l.approved_amount) > 0)
+  .map((l) => ({ s: supMap.get(l.supplier_id)!, l }))
+  .filter((r) => r.s)
+  .sort((a, b) => a.s.name.localeCompare(b.s.name, 'fr'));
+const readOnly = !(editable && run.status === 'submitted');
+const others = readOnly ? [] : suppliers.filter((s) => s.is_active && s.bal.owed > 0.004 && !rows.some((r) => r.s.id === s.id))
+  .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+const ids = rows.map((r) => r.s.id);
+const open = await loadOpenInvoices(admin, [...ids, ...others.map((o) => o.id)]);
+const closed = new Map<string, InvoiceBalance[]>();
+const pays = new Map<string, Array<{ paid_on: string; amount: number; reference: string | null }>>();
+if (ids.length) {
+  const [{ data: ci }, { data: ps }] = await Promise.all([
+    admin.from('ap_invoice_balances').select('*').in('supplier_id', ids).eq('open_amount', 0).eq('kind', 'invoice')
+      .order('invoice_date', { ascending: false, nullsFirst: false }).limit(400),
+    admin.from('ap_payments').select('supplier_id, paid_on, amount, reference').in('supplier_id', ids).is('voided_at', null)
+      .order('paid_on', { ascending: false }).limit(400),
+  ]);
+  for (const i of (ci ?? []) as InvoiceBalance[]) {
+    const list = closed.get(i.supplier_id) ?? [];
+    if (list.length < 5) list.push({ ...i, amount: n(i.amount) });
+    closed.set(i.supplier_id, list);
+  }
+  for (const p of ps ?? []) {
+    const list = pays.get(p.supplier_id) ?? [];
+    if (list.length < 5) list.push({ paid_on: p.paid_on, amount: n(p.amount), reference: p.reference });
+    pays.set(p.supplier_id, list);
+  }
+}
+const paidMap = await paymentAmounts(admin, lines.map((l) => l.payment_id).filter((x): x is string => !!x));
+const view = {
+  run, rows, others, open, closed, pays, preparedBy: prep?.full_name ?? 'Oaziz',
+  cash: computeCash(accounts, cash, lines, supMap, paidMap),
+  accountCode: new Map(accounts.map((a) => [a.id, a.code])),
+};
+const showPaid = run.status === 'approved' || run.status === 'closed';
+const today = todayIso();
+const dayLabel = new Date(view.run.run_date + 'T12:00:00').toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+const fmtDateTime = (iso: string | null) => iso ? new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'long', timeStyle: 'short' }) : '';
+const methodLabel = (m: string) => T(`m.${m}` as keyof typeof frPaiements);
+const totalSuggested = view.rows.reduce((s, r) => s + n(r.l?.suggested_amount), 0);
+const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.get(r.l.payment_id)) : 0), 0);
+---
+    <div class="appr">
+      {backHref && <p style="margin-bottom: 8px;"><a href={backHref}>← {T('appr.back')}</a></p>}
+      <h1>{fill(T('appr.heading'), { date: dayLabel })}</h1>
+      {view.run.approved_at
+        ? <div class="flash flash-success">{fill(T('appr.done'), { date: fmtDateTime(view.run.approved_at) })}</div>
+        : readOnly
+          ? <div class="flash flash-info">{T('appr.pendingView')}</div>
+          : <p class="intro">{fill(T('appr.intro'), { name: view.preparedBy })}</p>}
+
+      <section class="cash">
+        {view.cash.map((c) => (
+          <div class="card cash-card" data-account={c.account.id} data-base={c.base} data-funded-by={c.account.funded_by ?? ''}>
+            <h2>{c.account.name}</h2>
+            <dl>
+              <dt>{T('run.cash.base')}</dt><dd>{money(c.base, locale)}</dd>
+              {c.transferPeer && (
+                <>
+                  <dt>{fill(T(c.account.funded_by ? 'run.cash.transferIn' : 'run.cash.transferOut'), { account: c.transferPeer })}</dt>
+                  <dd data-transfer>{money(view.run.approved_at ? c.transferApproved : c.transferSuggested, locale)}</dd>
+                </>
+              )}
+              <dt>{T('run.cash.afterSuggested')}</dt><dd class={c.afterSuggested < 0 ? 'neg' : ''}>{money(c.afterSuggested, locale)}</dd>
+              <dt>{T('run.cash.afterApproved')}</dt><dd data-after-approved class={c.afterApproved < 0 ? 'neg' : ''}>{money(c.afterApproved, locale)}</dd>
+              {showPaid && <><dt>{T('run.cash.afterPaid')}</dt><dd class={c.afterPaid < 0 ? 'neg' : ''}>{money(c.afterPaid, locale)}</dd></>}
+            </dl>
+          </div>
+        ))}
+      </section>
+
+      <form id="appr-form">
+        {!readOnly && (
+          <div class="bulk">
+            <button type="button" class="btn btn-secondary" id="accept-all">{T('appr.acceptAll')}</button>
+            <button type="button" class="btn btn-secondary" id="clear-all">{T('appr.clearAll')}</button>
+          </div>
+        )}
+        <div class="card table-card">
+          <table class="data appr-table">
+            <thead>
+              <tr>
+                <th>{T('col.supplier')}</th>
+                <th class="num">{T('col.owed')}</th>
+                <th class="num">{T('col.overdue')}</th>
+                <th class="num">{T('col.suggested')}</th>
+                <th>{T('col.suggestNote')}</th>
+                <th class="num">{T('col.approved')}</th>
+                <th>{T('appr.lineNote')}</th>
+                {showPaid && <th class="num">{T('col.paid')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {view.rows.map(({ s, l }) => {
+                const invs = view!.open.get(s.id) ?? [];
+                const closedInvs = view!.closed.get(s.id) ?? [];
+                const pays = view!.pays.get(s.id) ?? [];
+                return (
+                  <>
+                    <tr class="line" data-supplier={s.id} data-suggested={n(l?.suggested_amount)} data-account={s.bank_account_id ?? ''}>
+                      <td data-label={T('col.supplier')}>
+                        <strong>{s.name}</strong>
+                        <div class="muted small">{view!.accountCode.get(s.bank_account_id ?? '') === 'td_mjlb' ? 'TD MJLB' : 'RBC'} · {methodLabel(s.payment_method)}</div>
+                        {s.notes && <div class="muted small">{s.notes}</div>}
+                        <button type="button" class="link-btn toggle">{T('appr.details')} ▸</button>
+                      </td>
+                      <td class="num" data-label={T('col.owed')}>{money(s.bal.owed, locale)}</td>
+                      <td class={`num ${s.bal.overdue > 0 ? 'overdue' : 'muted'}`} data-label={T('col.overdue')}>{s.bal.overdue > 0 ? money(s.bal.overdue, locale) : '—'}</td>
+                      <td class="num" data-label={T('col.suggested')}><strong>{money(n(l?.suggested_amount), locale)}</strong></td>
+                      <td class="small" data-label={T('col.suggestNote')}>{l?.suggested_note ?? ''}</td>
+                      <td class="num" data-label={T('col.approved')}>
+                        {readOnly
+                          ? <strong>{l?.approved_amount !== null && l?.approved_amount !== undefined ? money(l.approved_amount, locale) : '—'}</strong>
+                          : <input type="text" inputmode="decimal" class="in-approved" name={`a_${s.id}`} />}
+                      </td>
+                      <td data-label={T('appr.lineNote')}>
+                        {readOnly ? <span class="small">{l?.approver_note ?? ''}</span> : <input type="text" class="in-note" name={`n_${s.id}`} />}
+                      </td>
+                      {showPaid && (
+                        <td class="num" data-label={T('col.paid')}>
+                          {l?.payment_id ? money(n(paidMap.get(l.payment_id)), locale) : '—'}
+                          {l?.remittance_sent_at && <div class="muted small">{T('col.remittance')} ✓</div>}
+                        </td>
+                      )}
+                    </tr>
+                    <tr class="detail" data-for={s.id} hidden>
+                      <td colspan={showPaid ? 8 : 7}>
+                        <div class="detail-grid">
+                          <div>
+                            <h3>{T('line.openInvoices')}</h3>
+                            {invs.length === 0 ? <p class="muted small">{T('line.noOpen')}</p> : (
+                              <table class="inner">
+                                <thead><tr><th>{T('inv.number')}</th><th>{T('inv.date')}</th><th>{T('inv.due')}</th><th class="num">{T('inv.amount')}</th><th class="num">{T('inv.open')}</th></tr></thead>
+                                <tbody>{invs.map((i) => (
+                                  <tr>
+                                    <td>{i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}{i.description && <div class="muted small">{i.description}</div>}</td>
+                                    <td>{i.invoice_date ?? ''}</td>
+                                    <td class={i.due_date && i.due_date < today ? 'overdue' : ''}>{i.due_date ?? ''}</td>
+                                    <td class="num">{money(i.amount, locale)}</td>
+                                    <td class="num">{money(i.open_amount, locale)}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            )}
+                          </div>
+                          <div>
+                            <h3>{T('appr.closedInvoices')}</h3>
+                            {closedInvs.length === 0 ? <p class="muted small">—</p> : (
+                              <table class="inner"><tbody>{closedInvs.map((i) => (
+                                <tr><td>{i.invoice_number ?? ''}</td><td>{i.invoice_date ?? ''}</td><td class="num">{money(i.amount, locale)}</td></tr>
+                              ))}</tbody></table>
+                            )}
+                            <h3 style="margin-top:10px;">{T('appr.recentPayments')}</h3>
+                            {pays.length === 0 ? <p class="muted small">—</p> : (
+                              <table class="inner"><tbody>{pays.map((p) => (
+                                <tr><td>{p.paid_on}</td><td class="num">{money(p.amount, locale)}</td><td class="muted small">{p.reference ?? ''}</td></tr>
+                              ))}</tbody></table>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colspan="3">{T('totals.row')}</th>
+                <th class="num">{money(totalSuggested, locale)}</th>
+                <th></th>
+                <th class="num" id="total-approved">{readOnly ? money(view.rows.reduce((s, r) => s + n(r.l?.approved_amount), 0), locale) : money(0, locale)}</th>
+                <th></th>
+                {showPaid && <th class="num">{money(totalPaid, locale)}</th>}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {!readOnly && view.others.length > 0 && (
+          <details class="card others">
+            <summary>{fill(T('appr.others'), { count: view.others.length })}</summary>
+            <div class="details-body">
+              <p class="muted small" style="margin-bottom:8px;">{T('appr.others.hint')}</p>
+              <table class="data appr-table">
+                <tbody>
+                  {view.others.map((s) => (
+                    <tr class="line" data-supplier={s.id} data-suggested="0" data-account={s.bank_account_id ?? ''}>
+                      <td data-label={T('col.supplier')}><strong>{s.name}</strong>{s.notes && <div class="muted small">{s.notes}</div>}</td>
+                      <td class="num" data-label={T('col.owed')}>{money(s.bal.owed, locale)}</td>
+                      <td class={`num ${s.bal.overdue > 0 ? 'overdue' : 'muted'}`} data-label={T('col.overdue')}>{s.bal.overdue > 0 ? money(s.bal.overdue, locale) : '—'}</td>
+                      <td class="num" data-label={T('col.approved')}><input type="text" inputmode="decimal" class="in-approved" name={`a_${s.id}`} /></td>
+                      <td data-label={T('appr.lineNote')}><input type="text" class="in-note" name={`n_${s.id}`} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+
+        {readOnly ? (
+          view.run.approver_comment && <div class="card"><strong>{T('run.approverComment')}</strong><p>{view.run.approver_comment}</p></div>
+        ) : (
+          <div class="card submit-card">
+            <label for="comment">{T('appr.comment')}</label>
+            <textarea id="comment" rows="3"></textarea>
+            <div style="margin-top: 14px; display:flex; justify-content:flex-end;">
+              <button type="submit" class="btn btn-primary">{T('appr.submit')}</button>
+            </div>
+            <p class="flash flash-error" id="appr-error" hidden></p>
+          </div>
+        )}
+      </form>
+      <script is:inline define:vars={{ submitUrl, confirmTpl: T('appr.confirm'), locale }}>
+        window.__APPR = { submitUrl, confirmTpl, locale };
+      </script>
+    </div>
+
+<script>
+  const cfg = (window as unknown as { __APPR?: { submitUrl: string; confirmTpl: string; locale: string } }).__APPR;
+  // Read-only once approved: the server-rendered totals are final.
+  if (cfg && document.querySelector('.in-approved')) {
+    const fmt = new Intl.NumberFormat(cfg.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
+    const parse = (raw: string): number | null => {
+      let s = raw.replace(/[\s$ ]/g, '');
+      if (!s) return null;
+      if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+      else s = s.replace(/,/g, '');
+      const x = Number(s);
+      return Number.isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : NaN;
+    };
+    const rows = () => [...document.querySelectorAll<HTMLTableRowElement>('tr.line')];
+
+    function recompute() {
+      let total = 0;
+      const perAcc = new Map<string, number>();
+      for (const r of rows()) {
+        const input = r.querySelector<HTMLInputElement>('.in-approved');
+        if (!input) continue;
+        const v = parse(input.value);
+        input.classList.toggle('invalid', Number.isNaN(v));
+        if (v && !Number.isNaN(v)) {
+          total += v;
+          perAcc.set(r.dataset.account!, (perAcc.get(r.dataset.account!) ?? 0) + v);
+        }
+      }
+      const t = document.getElementById('total-approved');
+      if (t) t.textContent = fmt.format(total);
+      document.querySelectorAll<HTMLElement>('.cash-card').forEach((c) => {
+        // TD MJLB is funded by RBC: its payments leave RBC as one deposit and TD nets to zero.
+        const fundedTotal = [...document.querySelectorAll<HTMLElement>(`.cash-card[data-funded-by="${c.dataset.account}"]`)]
+          .reduce((s, f) => s + (perAcc.get(f.dataset.account!) ?? 0), 0);
+        const own = perAcc.get(c.dataset.account!) ?? 0;
+        const after = c.dataset.fundedBy ? Number(c.dataset.base) : Number(c.dataset.base) - own - fundedTotal;
+        const el = c.querySelector<HTMLElement>('[data-after-approved]')!;
+        el.textContent = fmt.format(after);
+        el.classList.toggle('neg', after < 0);
+      });
+      return total;
+    }
+    document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => i.addEventListener('input', recompute));
+    document.querySelectorAll<HTMLButtonElement>('.toggle').forEach((b) => b.addEventListener('click', () => {
+      const id = b.closest<HTMLTableRowElement>('tr.line')!.dataset.supplier;
+      const d = document.querySelector<HTMLTableRowElement>(`tr.detail[data-for="${id}"]`)!;
+      d.hidden = !d.hidden;
+      b.textContent = b.textContent!.replace(d.hidden ? '▾' : '▸', d.hidden ? '▸' : '▾');
+    }));
+    document.getElementById('accept-all')?.addEventListener('click', () => {
+      for (const r of rows()) {
+        const input = r.querySelector<HTMLInputElement>('.in-approved');
+        if (input && Number(r.dataset.suggested) > 0) input.value = Number(r.dataset.suggested).toFixed(2);
+      }
+      recompute();
+    });
+    document.getElementById('clear-all')?.addEventListener('click', () => {
+      for (const r of rows()) { const i = r.querySelector<HTMLInputElement>('.in-approved'); if (i) i.value = ''; }
+      recompute();
+    });
+
+    document.getElementById('appr-form')?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const total = recompute();
+      if (document.querySelector('.in-approved.invalid')) return;
+      if (!confirm(cfg.confirmTpl.replace('{total}', fmt.format(total)))) return;
+      const lines = rows().map((r) => ({
+        supplier_id: r.dataset.supplier,
+        approved: parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0,
+        note: r.querySelector<HTMLInputElement>('.in-note')?.value ?? '',
+        suggested: Number(r.dataset.suggested) > 0,
+      })).filter((l) => l.suggested || l.approved > 0 || l.note);
+      const btn = (ev.target as HTMLFormElement).querySelector<HTMLButtonElement>('button[type=submit]')!;
+      btn.disabled = true;
+      const r = await fetch(cfg.submitUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines, comment: (document.getElementById('comment') as HTMLTextAreaElement).value }),
+      });
+      if (r.ok) { location.reload(); return; }
+      btn.disabled = false;
+      const err = document.getElementById('appr-error')!;
+      err.textContent = (await r.json().catch(() => ({}))).error ?? 'Erreur';
+      err.hidden = false;
+    });
+    recompute();
+  }
+</script>
+
+<style>
+  .appr h1 { margin-bottom: 6px; }
+  .intro { color: var(--p-muted); margin-bottom: 18px; max-width: 75ch; }
+  .cash { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .cash-card { padding: 16px 18px; }
+  .cash-card dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .9rem; }
+  .cash-card dt { color: var(--p-muted); }
+  .cash-card dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .neg { color: var(--p-danger); }
+  .bulk { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .table-card { padding: 0; overflow-x: auto; margin-bottom: 16px; }
+  .appr-table th, .appr-table td { padding: 10px 12px; font-size: .9rem; vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .small { font-size: .8rem; }
+  .muted { color: var(--p-muted); }
+  .overdue { color: var(--p-danger); font-weight: 600; }
+  .in-approved { width: 120px; text-align: right; }
+  .in-note { min-width: 140px; }
+  input.invalid { border-color: var(--p-danger); background: #fef2f2; }
+  .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .8rem; padding: 0; margin-top: 4px; }
+  .detail td { background: #fafbfc; }
+  .detail-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .detail h3 { font-size: .8rem; text-transform: uppercase; color: var(--p-muted); letter-spacing: .4px; margin-bottom: 6px; }
+  table.inner { width: 100%; border-collapse: collapse; }
+  table.inner th, table.inner td { padding: 4px 6px; font-size: .8rem; border-bottom: 1px solid #eef0f3; text-align: left; }
+  table.inner .num { text-align: right; }
+  .others { margin-bottom: 16px; }
+  .submit-card textarea { resize: vertical; }
+  @media (max-width: 720px) {
+    .appr-table thead { display: none; }
+    .appr-table, .appr-table tbody, .appr-table tr, .appr-table td { display: block; width: 100%; }
+    .appr-table tr.line { border-bottom: 1px solid var(--p-border); padding: 8px 0; }
+    .appr-table td { border: none; padding: 4px 12px; text-align: left; }
+    .appr-table td[data-label]:not(:first-child)::before { content: attr(data-label); display: block; font-size: .7rem; color: var(--p-muted); text-transform: uppercase; }
+    .appr-table .num { text-align: left; }
+    .in-approved, .in-note { width: 100%; text-align: left; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .appr-table tfoot tr { display: flex; justify-content: space-between; }
+    .appr-table tfoot th { display: inline-block; width: auto; }
+    .appr-table tfoot th:empty { display: none; }
+  }
+</style>

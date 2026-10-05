@@ -1,0 +1,26 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import PaiementsApproval from '../../../../components/portail/PaiementsApproval.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { loadRun } from '../../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const T = makeT(getPortailLocale(Astro.cookies), frPaiements, enPaiements);
+
+const id = String(Astro.params.id ?? '');
+const loaded = /^[0-9a-f-]{36}$/i.test(id) ? await loadRun(getAdminClient(), id) : null;
+// Drafts are still being prepared — not visible on the approver side.
+if (!loaded || loaded.run.status === 'draft') return Astro.redirect('/portail/paiements/approbations');
+const isApprover = (loaded.run.approver_email ?? '').toLowerCase() === staff.email.toLowerCase();
+---
+<PortailLayout title={T('appr.title')} staffName={staff.full_name} wide>
+  <PaiementsNav active="approvals" />
+  <PaiementsApproval loaded={loaded} editable={isApprover} submitUrl={`/api/portail/paiements/approbations/${loaded.run.id}`}
+    backHref="/portail/paiements/approbations" />
+</PortailLayout>

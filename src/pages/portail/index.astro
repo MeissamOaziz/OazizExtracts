@@ -6,7 +6,7 @@ import { createServerClient, currentStaff, getAdminClient } from '../../lib/supa
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frHub, enHub } from '../../i18n/portail/hub';
 import { frCommon, enCommon } from '../../i18n/portail/common';
-import { effectivePermissions, can, vqHref } from '../../lib/access';
+import { effectivePermissions, can, vqHref, payablesHref } from '../../lib/access';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 
@@ -117,6 +117,13 @@ const allSections = [
     href: '/portail/atelier',
     title: Tc('nav.atelier'),
     desc: T('section.atelier.desc'),
+    tag: null,
+  },
+  {
+    show: can(perms, 'payables', 'payables_approve'),
+    href: payablesHref(perms),
+    title: Tc('nav.payables'),
+    desc: T('section.payables.desc'),
     tag: null,
   },
   {

@@ -3,7 +3,7 @@
 // Header, Footer, BottomBanner, AgeGate, or SEO. This is a private tool.
 import { getPortailLocale, makeT } from '../lib/portail-i18n';
 import { frCommon, enCommon } from '../i18n/portail/common';
-import { can, vqHref, type Permission } from '../lib/access';
+import { can, vqHref, payablesHref, type Permission } from '../lib/access';
 
 interface Props {
   title: string;
@@ -219,6 +219,7 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
                     }>{Tc('nav.forms')}</a>
                   )}
                   {perms.has('atelier') && <a href="/portail/atelier" class={Astro.url.pathname.startsWith('/portail/atelier') ? 'active' : ''}>{Tc('nav.atelier')}</a>}
+                  {can(perms, 'payables', 'payables_approve') && <a href={payablesHref(perms)} class={Astro.url.pathname.startsWith('/portail/paiements') ? 'active' : ''}>{Tc('nav.payables')}</a>}
                   {perms.has('calculators') && <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>}
                   {can(perms, 'vq', 'licenses') && <a href={vqHref(perms)} class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('nav.vendors')}</a>}
                   {can(perms, 'hr', 'hr_employees', 'hr_evaluations') && <a href="/portail/rh" class={Astro.url.pathname.startsWith('/portail/rh') ? 'active' : ''}>{Tc('nav.hr')}</a>}

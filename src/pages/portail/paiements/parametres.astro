@@ -1,0 +1,45 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { frCommon, enCommon } from '../../../i18n/portail/common';
+import { getSetting, loadAccounts, type ApproverSetting, type CashTemplateItem } from '../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const Tc = makeT(locale, frCommon, enCommon);
+const admin = getAdminClient();
+const [approver, notify, template, accounts] = await Promise.all([
+  getSetting<ApproverSetting | null>(admin, 'approver', null),
+  getSetting<string[]>(admin, 'notify_emails', []),
+  getSetting<CashTemplateItem[]>(admin, 'cash_template', []),
+  loadAccounts(admin),
+]);
+const templateText = template.map((t) => `${t.account}|${t.kind}|${t.label}`).join('\n');
+const saved = Astro.url.searchParams.get('ok') === 'saved';
+---
+<PortailLayout title={T('set.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="settings" />
+  {saved && <div class="flash flash-success">{T('set.saved')}</div>}
+  <form class="card" style="max-width: 820px;" method="POST" action="/api/portail/paiements/settings">
+    <h2>{T('set.approver')}</h2>
+    <div class="two-col">
+      <div class="form-row"><label>{T('set.approver.name')}</label><input type="text" name="approver_name" value={approver?.name ?? ''} required /></div>
+      <div class="form-row"><label>{T('set.approver.email')}</label><input type="email" name="approver_email" value={approver?.email ?? ''} required /></div>
+    </div>
+    <div class="form-row"><label>{T('set.notify')}</label><input type="text" name="notify_emails" value={notify.join(', ')} /></div>
+    <h2 style="margin-top: 12px;">{T('set.template')}</h2>
+    <div class="form-row">
+      <textarea name="cash_template" rows="7" style="font-family: monospace; font-size: .85rem;">{templateText}</textarea>
+      <p class="hint">{T('set.template.hint').replace('{accounts}', accounts.map((a) => a.code).join(', '))}</p>
+    </div>
+    <button class="btn btn-primary" type="submit">{Tc('btn.save')}</button>
+  </form>
+</PortailLayout>

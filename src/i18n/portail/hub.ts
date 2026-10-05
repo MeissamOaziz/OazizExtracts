@@ -11,6 +11,8 @@ export const frHub = {
   'section.atelier.desc':
     'Commandes, planification de la production par étapes, runs d’emballage et expéditions.',
 
+  'section.payables.desc': 'Factures fournisseurs, paiements de la semaine, approbation de Jorge et flux de trésorerie.',
+
   'section.vendors.desc': "Qualification des fournisseurs, approbations individuelles et licences d'Oaziz.",
   'section.vendors.tag': '{count} à approuver',
 
@@ -36,6 +38,8 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
 
   'section.atelier.desc':
     'Orders, stage-by-stage production planning, packaging runs and shipments.',
+
+  'section.payables.desc': "Supplier invoices, this week's payments, Jorge's approval and cash flow.",
 
   'section.vendors.desc': "Vendor qualification, individual approvals and Oaziz's own licenses.",
   'section.vendors.tag': '{count} to approve',

@@ -18,6 +18,8 @@ export default defineConfig({
   adapter: vercel({
     imageService: true,
     webAnalytics: { enabled: true },
+    // Reading an invoice PDF with Claude can take 10-30 s.
+    maxDuration: 60,
   }),
   integrations: [
     sitemap({

@@ -1,0 +1,662 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { frCommon, enCommon } from '../../../../i18n/portail/common';
+import {
+  loadAccounts, loadSuppliers, loadRun, loadOpenInvoices, paymentAmounts, previousRun, computeCash,
+  lineStatus, money, n, todayIso, getSetting, type ApproverSetting, type RunLine,
+} from '../../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const Tc = makeT(locale, frCommon, enCommon);
+const fill = (s: string, vars: Record<string, string | number>) =>
+  Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
+const admin = getAdminClient();
+
+const id = String(Astro.params.id ?? '');
+const loaded = /^[0-9a-f-]{36}$/i.test(id) ? await loadRun(admin, id) : null;
+if (!loaded) return Astro.redirect('/portail/paiements');
+const { run, cash, lines } = loaded;
+
+const [accounts, allSuppliers, prev, approver, { data: events }, { data: staffRows }] = await Promise.all([
+  loadAccounts(admin),
+  loadSuppliers(admin, { includeInactive: true }),
+  previousRun(admin, run),
+  getSetting<ApproverSetting | null>(admin, 'approver', null),
+  admin.from('ap_events').select('*').eq('run_id', run.id).order('created_at', { ascending: false }).limit(80),
+  admin.from('staff').select('id, full_name'),
+]);
+const staffName = new Map((staffRows ?? []).map((s) => [s.id, s.full_name as string]));
+const lineBySupplier = new Map<string, RunLine>(lines.map((l) => [l.supplier_id, l]));
+const suppliers = allSuppliers.filter((s) => s.is_active || lineBySupplier.has(s.id));
+const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
+const accountById = new Map(accounts.map((a) => [a.id, a]));
+const defaultAccount = accounts[0]?.id ?? '';
+
+const paidMap = await paymentAmounts(admin, lines.map((l) => l.payment_id).filter((x): x is string => !!x));
+const cashByAccount = computeCash(accounts, cash, lines, supplierMap, paidMap);
+const openInvoices = await loadOpenInvoices(admin, suppliers.filter((s) => s.bal.open_count > 0).map((s) => s.id));
+const prevCash = new Map((prev?.cash ?? []).map((c) => [`${c.bank_account_id}|${c.kind}|${c.label}`, c.amount]));
+
+// Suppliers in this week first, then by balance.
+suppliers.sort((a, b) => {
+  const la = lineBySupplier.has(a.id) && n(lineBySupplier.get(a.id)!.suggested_amount ?? lineBySupplier.get(a.id)!.approved_amount) > 0 ? 0 : 1;
+  const lb = lineBySupplier.has(b.id) && n(lineBySupplier.get(b.id)!.suggested_amount ?? lineBySupplier.get(b.id)!.approved_amount) > 0 ? 0 : 1;
+  if (la !== lb) return la - lb;
+  return a.name.localeCompare(b.name, 'fr');
+});
+
+const editableSuggest = run.status === 'draft';
+const editableApproved = run.status === 'approved';
+const editableCash = run.status !== 'closed';
+const today = todayIso();
+const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+const dayLabel = new Date(run.run_date + 'T12:00:00').toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const sp = Astro.url.searchParams;
+const flash = sp.get('ok') ? { cls: 'flash-success', text: sp.get('ok')! } : sp.get('error') ? { cls: 'flash-error', text: sp.get('error')! } : sp.get('info') ? { cls: 'flash-info', text: sp.get('info')! } : null;
+
+const methodLabel = (m: string) => T(`m.${m}` as keyof typeof frPaiements);
+const statusLabel = (s: string) => T(`line.status.${s}` as keyof typeof frPaiements);
+const totalSuggested = lines.reduce((s, l) => s + n(l.suggested_amount), 0);
+const suggestedCount = lines.filter((l) => n(l.suggested_amount) > 0).length;
+const i18n = {
+  saved: T('saved'), saveError: T('saveError'), undoPaid: T('line.undoPaid'),
+  submitConfirm: fill(T('submit.confirm'), { count: suggestedCount, total: money(totalSuggested, locale), name: approver?.name ?? '?', email: approver?.email ?? '?' }),
+  manualConfirm: T('action.manualApprove.confirm'), closeConfirm: T('action.close.confirm'),
+  payTitle: T('line.payModal.title'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
+};
+---
+<PortailLayout title={fill(T('run.title'), { date: dayLabel })} staffName={staff.full_name} wide>
+  <div class="run-head">
+    <div>
+      <h1>{fill(T('run.title'), { date: dayLabel })}</h1>
+      <span class={`badge run-${run.status}`}>{T(`run.status.${run.status}` as keyof typeof frPaiements)}</span>
+      {run.submitted_at && <span class="meta">{fill(T('run.submittedAt'), { name: run.approver_name ?? '', date: fmtDate(run.submitted_at) })}</span>}
+      {run.approved_at && <span class="meta">{fill(T('run.approvedAt'), { name: run.approver_name ?? '', date: fmtDate(run.approved_at) })} {run.approved_via === 'manual' && T('run.approvedManual')}</span>}
+    </div>
+    <div class="run-actions no-print">
+      <a class="btn btn-secondary" href={`/api/portail/paiements/runs/${run.id}/export`}>{T('action.export')}</a>
+      <button class="btn btn-secondary" type="button" onclick="window.print()">{T('action.print')}</button>
+    </div>
+  </div>
+  <PaiementsNav active="week" />
+  {flash && <div class={`flash ${flash.cls}`}>{flash.text}</div>}
+  {run.approver_comment && <div class="flash flash-info"><strong>{T('run.approverComment')} :</strong> {run.approver_comment}</div>}
+  {run.status === 'submitted' && <div class="warn-banner">{T('locked.submitted')}</div>}
+
+  <form method="POST" action={`/api/portail/paiements/runs/${run.id}/action`} class="action-bar no-print" id="action-form">
+    {run.status === 'draft' && (
+      <>
+        <button class="btn btn-primary" name="_action" value="submit" data-confirm={i18n.submitConfirm}>{T('action.submit')}</button>
+        {prev && <button class="btn btn-secondary" name="_action" value="copy_prev">{T('action.copyPrev')}</button>}
+      </>
+    )}
+    {run.status === 'submitted' && (
+      <>
+        <button class="btn btn-secondary" name="_action" value="resend">{T('action.resend')}</button>
+        <button class="btn btn-secondary" name="_action" value="recall">{T('action.recall')}</button>
+        <button class="btn btn-secondary" name="_action" value="manual_approve" data-confirm={i18n.manualConfirm}>{T('action.manualApprove')}</button>
+      </>
+    )}
+    {run.status === 'approved' && <button class="btn btn-secondary" name="_action" value="close" data-confirm={i18n.closeConfirm}>{T('action.close')}</button>}
+    {run.status === 'closed' && <button class="btn btn-secondary" name="_action" value="reopen">{T('action.reopen')}</button>}
+  </form>
+
+  <section class="cash-grid">
+    {cashByAccount.map((c) => (
+      <div class="card cash-card" data-account={c.account.id} data-funded-by={c.account.funded_by ?? ''}>
+        <h2>{c.account.name}</h2>
+        <table class="cash-lines">
+          <tbody>
+            {cash.filter((l) => l.bank_account_id === c.account.id).map((l) => {
+              const last = prevCash.get(`${l.bank_account_id}|${l.kind}|${l.label}`);
+              return (
+                <tr data-cash-id={l.id} data-kind={l.kind}>
+                  <td class="cl-label">
+                    <input type="text" class="cash-label" value={l.label} disabled={!editableCash} aria-label={T('run.cash.label')} />
+                    {l.kind === 'balance' && (
+                      <span class="asof">{T('run.cash.asOf')} <input type="date" class="cash-asof" value={l.as_of ?? ''} disabled={!editableCash} /></span>
+                    )}
+                  </td>
+                  <td class="cl-amount">
+                    <input type="text" inputmode="decimal" class={`cash-amount num ${l.kind === 'balance' && l.amount === null ? 'missing' : ''}`}
+                      value={l.amount === null ? '' : l.amount.toFixed(2)} disabled={!editableCash}
+                      placeholder={last !== undefined && last !== null ? fill(T('run.cash.last'), { amount: money(last, locale) }) : ''} />
+                  </td>
+                  <td class="cl-del">{editableCash && <button type="button" class="icon-btn cash-del" title={Tc('btn.delete')}>×</button>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {editableCash && <button type="button" class="link-btn cash-add no-print" data-account={c.account.id}>{T('run.cash.addLine')}</button>}
+        <dl class="cash-summary">
+          <dt>{T('run.cash.base')}</dt><dd data-out="base">{money(c.base, locale)}</dd>
+          {c.transferPeer && (
+            <>
+              <dt>{fill(T(c.account.funded_by ? 'run.cash.transferIn' : 'run.cash.transferOut'), { account: c.transferPeer })}</dt>
+              <dd data-out="transfer">{money((run.status === 'draft' || run.status === 'submitted') ? c.transferSuggested : c.transferApproved, locale)}</dd>
+            </>
+          )}
+          <dt>{T('run.cash.afterSuggested')}</dt><dd data-out="afterSuggested">{money(c.afterSuggested, locale)}</dd>
+          <dt>{T('run.cash.afterApproved')}</dt><dd data-out="afterApproved">{money(c.afterApproved, locale)}</dd>
+          <dt>{T('run.cash.afterPaid')}</dt><dd data-out="afterPaid">{money(c.afterPaid, locale)}</dd>
+        </dl>
+        <p class="cash-warn" data-out="warn" hidden></p>
+      </div>
+    ))}
+  </section>
+  <p class="hint no-print" style="margin: -8px 0 20px;">{T('run.cash.hint')}</p>
+
+  <div class="filter-bar no-print">
+    <input type="search" id="ap-search" placeholder={T('run.filter.search')} />
+    <div class="seg" role="group">
+      <button type="button" data-filter="owed" class="active">{T('run.filter.owed')}</button>
+      <button type="button" data-filter="lines">{T('run.filter.lines')}</button>
+      {run.status === 'approved' && <button type="button" data-filter="todo">{T('run.filter.todo')}</button>}
+      <button type="button" data-filter="all">{T('run.filter.all')}</button>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <table class="data ap-table" id="ap-table">
+      <thead>
+        <tr>
+          <th>{T('col.supplier')}</th>
+          <th>{T('col.account')}</th>
+          <th class="num">{T('col.owed')}</th>
+          <th class="num">{T('col.overdue')}</th>
+          <th class="num">{T('col.suggested')}</th>
+          <th>{T('col.suggestNote')}</th>
+          <th class="num">{T('col.approved')}</th>
+          <th class="center">{T('col.paid')}</th>
+          <th class="center">{T('col.remittance')}</th>
+          <th>{T('col.status')}</th>
+          <th>{T('col.payInfo')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {suppliers.map((s) => {
+          const l = lineBySupplier.get(s.id);
+          const st = lineStatus(l, run);
+          const acc = accountById.get(s.bank_account_id ?? defaultAccount);
+          const invs = openInvoices.get(s.id) ?? [];
+          const paidAmt = l?.payment_id ? paidMap.get(l.payment_id) ?? null : null;
+          const canPay = run.status === 'approved' && n(l?.approved_amount) > 0;
+          return (
+            <>
+              <tr class="ap-row" data-supplier={s.id} data-name={s.name.toLowerCase()} data-owed={s.bal.owed} data-overdue={s.bal.overdue}
+                  data-account={s.bank_account_id ?? defaultAccount} data-method={s.payment_method}
+                  data-suggested={l?.suggested_amount ?? ''} data-approved={l?.approved_amount ?? ''} data-paid={paidAmt ?? ''}
+                  data-has-line={l && (n(l.suggested_amount) > 0 || n(l.approved_amount) > 0) ? '1' : ''} data-status={st}>
+                <td class="sup-cell">
+                  {invs.length > 0 && <button type="button" class="toggle no-print" aria-label={T('line.openInvoices')}>▸</button>}
+                  <a href={`/portail/paiements/fournisseurs/${s.id}`} target="_blank" rel="noopener">{s.name}</a>
+                  {s.notes && <div class="sup-note">{s.notes}</div>}
+                </td>
+                <td class="small">{acc?.code === 'td_mjlb' ? 'TD MJLB' : 'RBC'} · {methodLabel(s.payment_method)}</td>
+                <td class="num">{money(s.bal.owed, locale)}</td>
+                <td class={`num ${s.bal.overdue > 0 ? 'overdue' : 'muted'}`}>{s.bal.overdue > 0 ? money(s.bal.overdue, locale) : '—'}</td>
+                <td class="num">
+                  {editableSuggest ? (
+                    <div class="sugg-wrap">
+                      <input type="text" inputmode="decimal" class="in-suggested num" value={l?.suggested_amount ? l.suggested_amount.toFixed(2) : ''} />
+                      <span class="quick no-print">
+                        <button type="button" data-quick="half">{T('quick.half')}</button>
+                        {s.bal.overdue > 0 && <button type="button" data-quick="overdue">{T('quick.overdue')}</button>}
+                        <button type="button" data-quick="all">{T('quick.all')}</button>
+                      </span>
+                    </div>
+                  ) : <span>{l?.suggested_amount ? money(l.suggested_amount, locale) : '—'}</span>}
+                </td>
+                <td>
+                  {editableSuggest
+                    ? <input type="text" class="in-note" value={l?.suggested_note ?? ''} />
+                    : <span class="small">{l?.suggested_note ?? ''}</span>}
+                </td>
+                <td class="num">
+                  {editableApproved && !l?.payment_id
+                    ? <input type="text" inputmode="decimal" class="in-approved num" value={l?.approved_amount !== null && l?.approved_amount !== undefined ? l.approved_amount.toFixed(2) : ''} />
+                    : <span class="approved-val">{l?.approved_amount !== null && l?.approved_amount !== undefined ? money(l.approved_amount, locale) : '—'}</span>}
+                  {l?.approver_note && <div class="small muted">{l.approver_note}</div>}
+                </td>
+                <td class="center">
+                  <input type="checkbox" class="cb-paid" checked={!!l?.payment_id} disabled={!canPay && !l?.payment_id} data-line={l?.id ?? ''} />
+                  {paidAmt !== null && paidAmt !== n(l?.approved_amount) && <div class="small muted">{money(paidAmt, locale)}</div>}
+                </td>
+                <td class="center"><input type="checkbox" class="cb-remit" checked={!!l?.remittance_sent_at} disabled={!l?.payment_id} data-line={l?.id ?? ''} /></td>
+                <td><span class={`chip chip-${st}`}>{st === 'none' && s.bal.owed > 0 ? T('line.notDue') : statusLabel(st)}</span></td>
+                <td class="small pay-info" title={s.payment_details ?? ''}>{s.payment_details ?? ''}</td>
+              </tr>
+              {invs.length > 0 && (
+                <tr class="detail-row" data-for={s.id} hidden>
+                  <td colspan="11">
+                    <table class="inner">
+                      <thead><tr><th>{T('inv.number')}</th><th>{T('inv.date')}</th><th>{T('inv.due')}</th><th class="num">{T('inv.amount')}</th><th class="num">{T('inv.open')}</th><th>{T('inv.description')}</th></tr></thead>
+                      <tbody>
+                        {invs.map((i) => (
+                          <tr>
+                            <td>{i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}</td>
+                            <td>{i.invoice_date ?? ''}</td>
+                            <td class={i.due_date && i.due_date < today ? 'overdue' : ''}>{i.due_date ?? ''}</td>
+                            <td class="num">{money(i.amount, locale)}</td>
+                            <td class="num">{money(i.open_amount, locale)}</td>
+                            <td class="small">{i.description ?? ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+            </>
+          );
+        })}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">{T('totals.row')}</th>
+          <th class="num" data-total="owed"></th>
+          <th class="num" data-total="overdue"></th>
+          <th class="num" data-total="suggested"></th>
+          <th></th>
+          <th class="num" data-total="approved"></th>
+          <th class="num" data-total="paid"></th>
+          <th colspan="3"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <details class="card activity no-print" style="margin-top: 20px;">
+    <summary>{T('activity')}</summary>
+    <div class="details-body">
+      {(events ?? []).length === 0 ? <p class="muted">{T('activity.empty')}</p> : (
+        <ul>
+          {(events ?? []).map((e) => (
+            <li>
+              <span class="muted">{fmtDate(e.created_at)}</span> — <strong>{e.actor_label ?? staffName.get(e.actor_staff_id) ?? ''}</strong> · {e.action}
+              {e.supplier_id && supplierMap.get(e.supplier_id) && <> · {supplierMap.get(e.supplier_id)!.name}</>}
+              {e.details && Object.keys(e.details).length > 0 && <code>{JSON.stringify(e.details)}</code>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </details>
+
+  <dialog id="pay-dialog">
+    <form method="dialog" id="pay-form">
+      <h2 id="pay-title"></h2>
+      <div class="form-row"><label>{T('line.payModal.amount')}</label><input type="text" inputmode="decimal" name="amount" required /></div>
+      <div class="form-row"><label>{T('line.payModal.date')}</label><input type="date" name="paid_on" value={today} required /></div>
+      <div class="form-row"><label>{T('line.payModal.ref')}</label><input type="text" name="reference" /></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" value="cancel" id="pay-cancel">{Tc('btn.cancel')}</button>
+        <button type="submit" class="btn btn-primary" value="ok">{T('line.payModal.confirm')}</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script is:inline define:vars={{ runId: run.id, status: run.status, i18n, cashAccounts: accounts.map((a) => a.id) }}>
+    window.__AP = { runId, status, i18n, cashAccounts };
+  </script>
+</PortailLayout>
+
+<script>
+  type APState = { runId: string; status: string; i18n: Record<string, string>; cashAccounts: string[] };
+  const AP = (window as unknown as { __AP: APState }).__AP;
+  const base = `/api/portail/paiements/runs/${AP.runId}`;
+  const fmt = new Intl.NumberFormat(AP.i18n.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
+  const money = (v: number) => fmt.format(v);
+
+  function parseAmount(raw: string): number | null {
+    let s = raw.replace(/[\s$ ]/g, '');
+    if (!s) return null;
+    if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+    const x = Number(s);
+    return Number.isFinite(x) ? Math.round(x * 100) / 100 : NaN;
+  }
+  const num = (v: string | undefined) => { const x = parseFloat(v ?? ''); return Number.isFinite(x) ? x : 0; };
+
+  const toast = document.getElementById('toast')!;
+  let toastTimer: number | undefined;
+  function say(text: string, bad = false) {
+    toast.textContent = text;
+    toast.classList.toggle('bad', bad);
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => { toast.hidden = true; }, bad ? 5000 : 1200);
+  }
+
+  async function post(path: string, body: unknown) {
+    const r = await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error ?? r.statusText);
+    return data;
+  }
+
+  // ---------------------------------------------------------------- totals
+  function recompute() {
+    const rows = [...document.querySelectorAll<HTMLTableRowElement>('tr.ap-row')];
+    const tot = { owed: 0, overdue: 0, suggested: 0, approved: 0, paid: 0 };
+    const perAcc = new Map<string, { suggested: number; approved: number; paid: number }>();
+    for (const r of rows) {
+      const d = r.dataset;
+      tot.owed += Math.max(0, num(d.owed)); tot.overdue += num(d.overdue);
+      tot.suggested += num(d.suggested); tot.approved += num(d.approved); tot.paid += num(d.paid);
+      const a = perAcc.get(d.account!) ?? { suggested: 0, approved: 0, paid: 0 };
+      a.suggested += num(d.suggested); a.approved += num(d.approved); a.paid += num(d.paid);
+      perAcc.set(d.account!, a);
+    }
+    for (const [k, v] of Object.entries(tot)) {
+      const el = document.querySelector(`[data-total="${k}"]`);
+      if (el) el.textContent = money(v);
+    }
+    document.querySelectorAll<HTMLElement>('.cash-card').forEach((card) => {
+      let baseAmt = 0; let missing = false;
+      card.querySelectorAll<HTMLTableRowElement>('tr[data-cash-id]').forEach((tr) => {
+        const input = tr.querySelector<HTMLInputElement>('.cash-amount')!;
+        const v = parseAmount(input.value);
+        if (v === null && tr.dataset.kind === 'balance') missing = true;
+        input.classList.toggle('missing', v === null && tr.dataset.kind === 'balance');
+        if (v !== null && !Number.isNaN(v)) baseAmt += v;
+      });
+      const zero = { suggested: 0, approved: 0, paid: 0 };
+      const a = perAcc.get(card.dataset.account!) ?? zero;
+      const out = (k: string, v: number) => {
+        const el = card.querySelector<HTMLElement>(`[data-out="${k}"]`);
+        if (!el) return;
+        el.textContent = money(v);
+        el.classList.toggle('neg', v < 0);
+      };
+      // Accounts funded by this one (TD MJLB ← RBC): their payments leave here as one deposit.
+      const funded = [...document.querySelectorAll<HTMLElement>(`.cash-card[data-funded-by="${card.dataset.account}"]`)]
+        .map((f) => perAcc.get(f.dataset.account!) ?? zero);
+      const tS = funded.reduce((s, f) => s + f.suggested, 0);
+      const tA = funded.reduce((s, f) => s + f.approved, 0);
+      const preApproval = AP.status === 'draft' || AP.status === 'submitted';
+      out('base', baseAmt);
+      if (card.dataset.fundedBy) {
+        out('transfer', preApproval ? a.suggested : a.approved);
+        out('afterSuggested', baseAmt); out('afterApproved', baseAmt);
+        out('afterPaid', baseAmt + a.approved - a.paid);
+      } else {
+        if (funded.length) out('transfer', preApproval ? tS : tA);
+        out('afterSuggested', baseAmt - a.suggested - tS);
+        out('afterApproved', baseAmt - a.approved - tA);
+        out('afterPaid', baseAmt - a.paid - tA);
+      }
+      const after = { suggested: card.dataset.fundedBy ? baseAmt : baseAmt - a.suggested - tS, approved: card.dataset.fundedBy ? baseAmt : baseAmt - a.approved - tA };
+      const warn = card.querySelector<HTMLElement>('[data-out="warn"]')!;
+      const worst = Math.min(after.suggested, after.approved);
+      warn.hidden = !missing && worst >= 0;
+      warn.textContent = missing ? AP.i18n.cashMissing : AP.i18n.cashNegative;
+    });
+  }
+
+  // ---------------------------------------------------------------- filters
+  let filter = sessionStorage.getItem('ap-filter') ?? 'owed';
+  const search = document.getElementById('ap-search') as HTMLInputElement;
+  function applyFilter() {
+    const q = search.value.trim().toLowerCase();
+    document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) => b.classList.toggle('active', b.dataset.filter === filter));
+    document.querySelectorAll<HTMLTableRowElement>('tr.ap-row').forEach((r) => {
+      const d = r.dataset;
+      let show = true;
+      if (filter === 'owed') show = Math.abs(num(d.owed)) > 0.004 || d.hasLine === '1';
+      else if (filter === 'lines') show = d.hasLine === '1';
+      else if (filter === 'todo') show = d.status === 'approved' || d.status === 'paid';
+      if (q) show = show && d.name!.includes(q);
+      r.hidden = !show;
+      const det = document.querySelector<HTMLTableRowElement>(`tr.detail-row[data-for="${d.supplier}"]`);
+      if (det && !show) det.hidden = true;
+    });
+  }
+  document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) => b.addEventListener('click', () => {
+    filter = b.dataset.filter!; sessionStorage.setItem('ap-filter', filter); applyFilter();
+  }));
+  search.addEventListener('input', applyFilter);
+  if (!document.querySelector(`.seg button[data-filter="${filter}"]`)) filter = 'owed';
+
+  // ---------------------------------------------------------------- rows
+  document.querySelectorAll<HTMLButtonElement>('.toggle').forEach((b) => b.addEventListener('click', () => {
+    const row = b.closest<HTMLTableRowElement>('tr.ap-row')!;
+    const det = document.querySelector<HTMLTableRowElement>(`tr.detail-row[data-for="${row.dataset.supplier}"]`)!;
+    det.hidden = !det.hidden;
+    b.textContent = det.hidden ? '▸' : '▾';
+  }));
+
+  async function saveLine(row: HTMLTableRowElement, patch: Record<string, unknown>) {
+    try {
+      const res = await post('/lines', { supplier_id: row.dataset.supplier, ...patch });
+      row.dataset.suggested = res.line?.suggested_amount ?? '';
+      row.dataset.approved = res.line?.approved_amount ?? '';
+      row.dataset.hasLine = res.line && (num(res.line.suggested_amount) > 0 || num(res.line.approved_amount) > 0) ? '1' : '';
+      row.querySelectorAll<HTMLInputElement>('.cb-paid, .cb-remit').forEach((cb) => { cb.dataset.line = res.line?.id ?? ''; });
+      say(AP.i18n.saved);
+      recompute();
+    } catch (e) {
+      say(`${AP.i18n.saveError} (${(e as Error).message})`, true);
+    }
+  }
+
+  function bindAmount(input: HTMLInputElement, field: string) {
+    input.addEventListener('change', () => {
+      const v = parseAmount(input.value);
+      if (Number.isNaN(v)) { input.classList.add('invalid'); return; }
+      input.classList.remove('invalid');
+      input.value = v === null ? '' : v.toFixed(2);
+      saveLine(input.closest('tr')!, { [field]: v });
+    });
+  }
+  document.querySelectorAll<HTMLInputElement>('.in-suggested').forEach((i) => bindAmount(i, 'suggested_amount'));
+  document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => bindAmount(i, 'approved_amount'));
+  document.querySelectorAll<HTMLInputElement>('.in-note').forEach((i) => i.addEventListener('change', () => {
+    saveLine(i.closest('tr')!, { suggested_note: i.value });
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-quick]').forEach((b) => b.addEventListener('click', () => {
+    const row = b.closest<HTMLTableRowElement>('tr.ap-row')!;
+    const owed = Math.max(0, num(row.dataset.owed)); const overdue = num(row.dataset.overdue);
+    const v = b.dataset.quick === 'half' ? Math.round(owed * 50) / 100 : b.dataset.quick === 'overdue' ? overdue : owed;
+    const input = row.querySelector<HTMLInputElement>('.in-suggested')!;
+    input.value = v ? v.toFixed(2) : '';
+    input.dispatchEvent(new Event('change'));
+  }));
+
+  // Paid: confirm amount/date/reference in a dialog, then record the payment.
+  const dialog = document.getElementById('pay-dialog') as HTMLDialogElement;
+  const payForm = document.getElementById('pay-form') as HTMLFormElement;
+  let payRow: HTMLTableRowElement | null = null;
+  let payCb: HTMLInputElement | null = null;
+  document.getElementById('pay-cancel')!.addEventListener('click', () => dialog.close('cancel'));
+  dialog.addEventListener('close', () => { if (dialog.returnValue !== 'ok' && payCb) payCb.checked = false; });
+  document.querySelectorAll<HTMLInputElement>('.cb-paid').forEach((cb) => cb.addEventListener('change', async () => {
+    const row = cb.closest<HTMLTableRowElement>('tr.ap-row')!;
+    if (!cb.checked) {
+      if (!confirm(AP.i18n.undoPaid)) { cb.checked = true; return; }
+      try {
+        await post('/pay', { undo: true, line_id: cb.dataset.line });
+        location.reload();
+      } catch (e) { cb.checked = true; say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+      return;
+    }
+    payRow = row; payCb = cb;
+    document.getElementById('pay-title')!.textContent = AP.i18n.payTitle.replace('{name}', row.querySelector('.sup-cell a')!.textContent ?? '');
+    (payForm.elements.namedItem('amount') as HTMLInputElement).value = num(row.dataset.approved).toFixed(2);
+    (payForm.elements.namedItem('reference') as HTMLInputElement).value = '';
+    dialog.showModal();
+  }));
+  payForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!payRow || !payCb) return;
+    const amount = parseAmount((payForm.elements.namedItem('amount') as HTMLInputElement).value);
+    if (!amount || Number.isNaN(amount) || amount <= 0) return;
+    try {
+      await post('/pay', {
+        line_id: payCb.dataset.line, amount,
+        paid_on: (payForm.elements.namedItem('paid_on') as HTMLInputElement).value,
+        reference: (payForm.elements.namedItem('reference') as HTMLInputElement).value,
+      });
+      dialog.close('ok');
+      location.reload();
+    } catch (e) { say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+  });
+
+  document.querySelectorAll<HTMLInputElement>('.cb-remit').forEach((cb) => cb.addEventListener('change', async () => {
+    try {
+      await post('/remittance', { line_id: cb.dataset.line, sent: cb.checked });
+      const row = cb.closest<HTMLTableRowElement>('tr.ap-row')!;
+      const chip = row.querySelector('.chip')!;
+      chip.className = `chip chip-${cb.checked ? 'remitted' : 'paid'}`;
+      say(AP.i18n.saved);
+    } catch (e) { cb.checked = !cb.checked; say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+  }));
+
+  // ---------------------------------------------------------------- cash lines
+  async function saveCash(tr: HTMLTableRowElement) {
+    const amountRaw = tr.querySelector<HTMLInputElement>('.cash-amount')!.value;
+    const amount = parseAmount(amountRaw);
+    if (Number.isNaN(amount)) { tr.querySelector('.cash-amount')!.classList.add('invalid'); return; }
+    tr.querySelector('.cash-amount')!.classList.remove('invalid');
+    try {
+      await post('/cash', {
+        id: tr.dataset.cashId,
+        label: tr.querySelector<HTMLInputElement>('.cash-label')!.value,
+        amount,
+        as_of: tr.querySelector<HTMLInputElement>('.cash-asof')?.value || null,
+      });
+      if (amount !== null) tr.querySelector<HTMLInputElement>('.cash-amount')!.value = amount.toFixed(2);
+      say(AP.i18n.saved); recompute();
+    } catch (e) { say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+  }
+  function bindCash(tr: HTMLTableRowElement) {
+    tr.querySelectorAll('input').forEach((i) => i.addEventListener('change', () => saveCash(tr)));
+    tr.querySelector('.cash-amount')?.addEventListener('input', recompute);
+    tr.querySelector('.cash-del')?.addEventListener('click', async () => {
+      try { await post('/cash', { delete: tr.dataset.cashId }); tr.remove(); recompute(); }
+      catch (e) { say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+    });
+  }
+  document.querySelectorAll<HTMLTableRowElement>('tr[data-cash-id]').forEach(bindCash);
+  document.querySelectorAll<HTMLButtonElement>('.cash-add').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      const res = await post('/cash', { bank_account_id: b.dataset.account, label: '—', kind: 'other' });
+      const tbody = b.closest('.cash-card')!.querySelector('tbody')!;
+      const tr = document.createElement('tr');
+      tr.dataset.cashId = res.line.id; tr.dataset.kind = 'other';
+      tr.innerHTML = `<td class="cl-label"><input type="text" class="cash-label" value="" /></td>
+        <td class="cl-amount"><input type="text" inputmode="decimal" class="cash-amount num" value="" /></td>
+        <td class="cl-del"><button type="button" class="icon-btn cash-del">×</button></td>`;
+      tbody.appendChild(tr); bindCash(tr);
+      tr.querySelector<HTMLInputElement>('.cash-label')!.focus();
+    } catch (e) { say(`${AP.i18n.saveError} (${(e as Error).message})`, true); }
+  }));
+
+  // ---------------------------------------------------------------- actions
+  document.querySelectorAll<HTMLButtonElement>('#action-form button[data-confirm]').forEach((b) => b.addEventListener('click', (ev) => {
+    if (!confirm(b.dataset.confirm!)) ev.preventDefault();
+  }));
+
+  applyFilter();
+  recompute();
+</script>
+
+<style>
+  .run-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .run-head h1 { margin-bottom: 4px; }
+  .run-head .meta { color: var(--p-muted); font-size: .85rem; margin-left: 10px; }
+  .run-actions { display: flex; gap: 8px; }
+  .badge.run-draft { background: #f3f4f6; color: #374151; }
+  .badge.run-submitted { background: #fef3c7; color: #92400e; }
+  .badge.run-approved { background: #dbeafe; color: #1e40af; }
+  .badge.run-closed { background: #dcfce7; color: #166534; }
+  .action-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .action-bar:empty { display: none; }
+
+  .cash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .cash-card { padding: 18px 20px; }
+  .cash-lines { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  .cash-lines td { padding: 3px 0; vertical-align: top; }
+  .cl-label { width: 62%; padding-right: 8px !important; }
+  .cl-label input.cash-label { font-size: .85rem; padding: 6px 8px; }
+  .asof { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: var(--p-muted); margin-top: 3px; }
+  .asof input { padding: 3px 6px; font-size: .78rem; width: auto; }
+  .cl-amount input { font-size: .9rem; padding: 6px 8px; }
+  .cl-del { width: 26px; text-align: right; }
+  input.num { text-align: right; font-variant-numeric: tabular-nums; }
+  input.missing { border-color: #f59e0b; background: #fffbeb; }
+  input.invalid { border-color: var(--p-danger); background: #fef2f2; }
+  .icon-btn { background: none; border: none; color: var(--p-muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 6px 4px; }
+  .icon-btn:hover { color: var(--p-danger); }
+  .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .85rem; padding: 0; }
+  .cash-summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin-top: 12px; border-top: 1px solid var(--p-border); padding-top: 10px; font-size: .9rem; }
+  .cash-summary dt { color: var(--p-muted); }
+  .cash-summary dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cash-summary dd.neg { color: var(--p-danger); }
+  .cash-warn { margin-top: 8px; color: var(--p-warn); font-size: .82rem; font-weight: 600; }
+
+  .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-bar input[type=search] { max-width: 320px; }
+  .seg { display: inline-flex; border: 1px solid var(--p-border); border-radius: 8px; overflow: hidden; background: #fff; }
+  .seg button { background: none; border: none; padding: 8px 14px; font: inherit; font-size: .85rem; cursor: pointer; color: var(--p-muted); }
+  .seg button + button { border-left: 1px solid var(--p-border); }
+  .seg button.active { background: rgba(208, 88, 38, .08); color: var(--p-accent); font-weight: 600; }
+
+  .table-card { padding: 0; overflow-x: auto; }
+  .ap-table th, .ap-table td { padding: 8px 10px; font-size: .86rem; vertical-align: top; }
+  .ap-table th { white-space: nowrap; position: sticky; top: 0; background: #fff; z-index: 1; }
+  .ap-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ap-table .center { text-align: center; }
+  .ap-table tfoot th { border-top: 2px solid var(--p-border); color: var(--p-text); font-size: .88rem; }
+  .sup-cell { min-width: 200px; }
+  .sup-note { font-size: .75rem; color: var(--p-muted); }
+  .toggle { background: none; border: none; cursor: pointer; color: var(--p-muted); margin-right: 4px; padding: 0 2px; }
+  .small { font-size: .8rem; }
+  .muted { color: var(--p-muted); }
+  .overdue { color: var(--p-danger); font-weight: 600; }
+  .sugg-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .in-suggested, .in-approved { width: 110px; padding: 5px 8px; font-size: .86rem; }
+  .in-note { min-width: 120px; padding: 5px 8px; font-size: .82rem; }
+  .quick { display: flex; gap: 4px; }
+  .quick button { background: none; border: none; color: var(--p-accent); font-size: .7rem; cursor: pointer; padding: 0; font-family: inherit; }
+  .pay-info { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p-muted); }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600; white-space: nowrap; background: #f3f4f6; color: #6b7280; }
+  .chip-suggested { background: #ffedd5; color: #9a3412; }
+  .chip-awaiting { background: #fef3c7; color: #92400e; }
+  .chip-approved { background: #dbeafe; color: #1e40af; }
+  .chip-declined { background: #fee2e2; color: #991b1b; }
+  .chip-paid { background: #dcfce7; color: #166534; }
+  .chip-remitted { background: #166534; color: #fff; }
+  input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; }
+  input[type=checkbox]:disabled { cursor: not-allowed; opacity: .4; }
+  .detail-row td { background: #fafbfc; }
+  table.inner { width: 100%; border-collapse: collapse; }
+  table.inner th, table.inner td { padding: 4px 8px; font-size: .8rem; border-bottom: 1px solid #eef0f3; text-align: left; }
+  table.inner .num { text-align: right; }
+  .activity ul { list-style: none; font-size: .82rem; display: grid; gap: 4px; }
+  .activity code { font-size: .72rem; color: var(--p-muted); margin-left: 6px; }
+  dialog { border: none; border-radius: 12px; padding: 24px; width: min(420px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  dialog::backdrop { background: rgba(16, 24, 40, .4); }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #1a1d24; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: .85rem; z-index: 50; }
+  .toast.bad { background: var(--p-danger); }
+  @media print {
+    .portail-header, .no-print, .quick, .toggle { display: none !important; }
+    .ap-row[hidden] { display: none; }
+    body { background: #fff; }
+    .card { box-shadow: none; }
+    input { border: none !important; background: none !important; padding: 0 !important; }
+  }
+</style>

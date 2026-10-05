@@ -1,0 +1,196 @@
+---
+export const prerender = false;
+
+// Drop a supplier invoice (PDF/photo): it's read automatically, the supplier
+// is matched, the fields are pre-filled for review, and a QuickBooks-ready
+// summary is shown so the same invoice can be keyed into QB in one pass.
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { loadSuppliers } from '../../../../lib/payables';
+import { extractionAvailable } from '../../../../lib/payables-extract';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const suppliers = await loadSuppliers(getAdminClient(), { includeInactive: false });
+const sp = Astro.url.searchParams;
+const errorKey = sp.get('error');
+const i18n = {
+  reading: T('pdf.reading'), noKey: T('pdf.noKey'), failed: T('pdf.failed'), dup: T('pdf.dup'),
+  matched: T('pdf.matched'), newSupplier: T('pdf.newSupplierOpt'), copied: T('pdf.copied'),
+  qbVendor: T('pdf.qb.vendor'), qbNumber: T('inv.number'), qbDate: T('inv.date'), qbDue: T('inv.due'),
+  qbSubtotal: T('pdf.subtotal'), qbGst: T('pdf.gst'), qbQst: T('pdf.qst'), qbOther: T('pdf.otherTaxes'),
+  qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), locale,
+};
+---
+<PortailLayout title={T('pdf.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="invoice" />
+  {sp.get('ok') && <div class="flash flash-success">{T('inv.saved')}</div>}
+  {errorKey && <div class="flash flash-error">{T(`pdf.error.${errorKey}` as keyof typeof frPaiements) ?? errorKey}</div>}
+  {!extractionAvailable() && <div class="warn-banner">{T('pdf.noKey')}</div>}
+
+  <label class="drop card" id="drop">
+    <input type="file" id="file" accept="application/pdf,image/jpeg,image/png,image/webp" hidden />
+    <strong>{T('pdf.drop')}</strong>
+    <span class="muted">{T('pdf.dropHint')}</span>
+  </label>
+  <p id="status" class="status" hidden></p>
+
+  <div class="grid">
+    <form class="card" method="POST" action="/api/portail/paiements/invoices/create" id="inv-form">
+      <input type="hidden" name="file_path" id="file_path" />
+      <div class="form-row">
+        <label>{T('col.supplier')} *</label>
+        <select name="supplier_id" id="supplier_id" required>
+          <option value="">—</option>
+          <option value="new">{T('pdf.newSupplierOpt')}</option>
+          {suppliers.map((s) => <option value={s.id}>{s.name}</option>)}
+        </select>
+        <p class="hint" id="match-hint"></p>
+      </div>
+      <div id="new-supplier" hidden>
+        <div class="two-col">
+          <div class="form-row"><label>{T('f.name')} *</label><input type="text" name="new_supplier_name" id="new_supplier_name" /></div>
+          <div class="form-row"><label>{T('f.legal_name')}</label><input type="text" name="new_supplier_legal_name" id="new_supplier_legal_name" /></div>
+          <div class="form-row"><label>{T('f.contact_email')}</label><input type="email" name="new_supplier_email" id="new_supplier_email" /></div>
+        </div>
+        <div class="form-row"><label>{T('f.payment_details')}</label><textarea name="new_supplier_payment_details" id="new_supplier_payment_details" rows="2"></textarea></div>
+      </div>
+      <div class="three">
+        <div class="form-row"><label>{T('inv.kind')}</label>
+          <select name="kind" id="kind"><option value="invoice">{T('inv.kind.invoice')}</option><option value="credit">{T('inv.kind.credit')}</option></select>
+        </div>
+        <div class="form-row"><label>{T('inv.number')}</label><input type="text" name="invoice_number" id="invoice_number" /></div>
+        <div class="form-row"><label>{T('inv.po')}</label><input type="text" name="po_number" id="po_number" /></div>
+        <div class="form-row"><label>{T('inv.date')}</label><input type="date" name="invoice_date" id="invoice_date" /></div>
+        <div class="form-row"><label>{T('inv.due')}</label><input type="date" name="due_date" id="due_date" /></div>
+        <div class="form-row"><label>{T('pdf.total')} *</label><input type="text" inputmode="decimal" name="amount" id="amount" required /></div>
+      </div>
+      <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" id="description" /></div>
+      <label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('pdf.enteredQb')}</label>
+      <p class="warn-banner" id="dup-warn" hidden></p>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit" name="next" value="supplier">{T('pdf.save')}</button>
+        <button class="btn btn-secondary" type="submit" name="next" value="another">{T('pdf.saveAnother')}</button>
+      </div>
+    </form>
+
+    <aside class="side">
+      <div class="card" id="qb-card" hidden>
+        <div class="qb-head"><h2>{T('pdf.qb.title')}</h2><button type="button" class="btn btn-secondary" id="copy-qb">{T('pdf.copy')}</button></div>
+        <p class="hint" style="margin-bottom:8px;">{T('pdf.qb.hint')}</p>
+        <dl id="qb-list"></dl>
+      </div>
+      <div class="card preview" id="preview-card" hidden>
+        <iframe id="preview" title="PDF"></iframe>
+        <img id="preview-img" alt="" hidden />
+      </div>
+    </aside>
+  </div>
+  <script is:inline define:vars={{ i18n }}>window.__PDF = i18n;</script>
+</PortailLayout>
+
+<script>
+  type X = Record<string, string | number | boolean | null>;
+  const L = (window as unknown as { __PDF: Record<string, string> }).__PDF;
+  const fmt = new Intl.NumberFormat(L.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const status = $('status');
+  const say = (t: string, bad = false) => { status.textContent = t; status.hidden = false; status.classList.toggle('bad', bad); };
+  const supSel = $<HTMLSelectElement>('supplier_id');
+  const toggleNew = () => { $('new-supplier').hidden = supSel.value !== 'new'; $<HTMLInputElement>('new_supplier_name').required = supSel.value === 'new'; };
+  supSel.addEventListener('change', toggleNew);
+
+  async function handle(file: File) {
+    say(L.reading);
+    const url = URL.createObjectURL(file);
+    $('preview-card').hidden = false;
+    const isPdf = file.type === 'application/pdf';
+    $<HTMLIFrameElement>('preview').hidden = !isPdf; $<HTMLImageElement>('preview-img').hidden = isPdf;
+    if (isPdf) $<HTMLIFrameElement>('preview').src = url; else $<HTMLImageElement>('preview-img').src = url;
+
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch('/api/portail/paiements/invoices/extract', { method: 'POST', body: fd });
+    const res = await r.json().catch(() => ({ error: 'Erreur' }));
+    if (!r.ok) { say(res.error ?? 'Erreur', true); return; }
+    $<HTMLInputElement>('file_path').value = res.file_path;
+    if (!res.extracted) { say(res.warning === 'no_key' ? L.noKey : `${L.failed} ${res.detail ?? ''}`, true); return; }
+    const x = res.extracted as X;
+    const set = (id: string, v: unknown) => { if (v !== null && v !== undefined && v !== '') $<HTMLInputElement>(id).value = String(v); };
+    set('invoice_number', x.invoice_number); set('po_number', x.po_number);
+    set('invoice_date', x.invoice_date); set('due_date', x.due_date);
+    set('amount', Math.abs(Number(x.total)).toFixed(2)); set('description', x.description);
+    $<HTMLSelectElement>('kind').value = x.is_credit_note ? 'credit' : 'invoice';
+
+    const m = res.matches as Array<{ id: string; name: string; score: number }>;
+    if (m.length && m[0].score >= 0.6) {
+      supSel.value = m[0].id;
+      $('match-hint').textContent = L.matched.replace('{name}', m[0].name) + (m.length > 1 ? ` (${m.slice(1).map((o) => o.name).join(', ')})` : '');
+    } else {
+      supSel.value = 'new';
+      set('new_supplier_name', x.vendor_name); set('new_supplier_legal_name', x.vendor_legal_name);
+      set('new_supplier_email', x.vendor_email); set('new_supplier_payment_details', x.payment_instructions);
+      $('match-hint').textContent = m.length ? `${L.newSupplier} — ${m.map((o) => o.name).join(', ')} ?` : '';
+    }
+    toggleNew();
+    $('dup-warn').hidden = !res.duplicate_of;
+    if (res.duplicate_of) $('dup-warn').textContent = L.dup.replace('{number}', String(x.invoice_number));
+
+    const money = (v: unknown) => (v === null || v === undefined ? null : fmt.format(Number(v)));
+    const rows: Array<[string, string | null]> = [
+      [L.qbVendor, [x.vendor_name, x.vendor_legal_name].filter(Boolean).join(' / ')],
+      [L.qbNumber, x.invoice_number as string | null], [L.qbDate, x.invoice_date as string | null],
+      [L.qbDue, x.due_date as string | null], [L.qbTerms, x.payment_terms as string | null],
+      [L.qbSubtotal, money(x.subtotal)], [L.qbGst, money(x.gst_hst)], [L.qbQst, money(x.qst)],
+      [L.qbOther, money(x.other_taxes)], [L.qbTotal, `${money(x.total)}${x.currency !== 'CAD' ? ` ${x.currency}` : ''}`],
+      [L.qbDesc, x.description as string | null],
+    ];
+    const dl = $('qb-list'); dl.innerHTML = '';
+    for (const [k, v] of rows) {
+      if (!v) continue;
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      dl.append(dt, dd);
+    }
+    $('qb-card').hidden = false;
+    $('copy-qb').onclick = async () => {
+      await navigator.clipboard.writeText(rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n'));
+      say(L.copied);
+    };
+    status.hidden = true;
+  }
+
+  const drop = $('drop');
+  const input = $<HTMLInputElement>('file');
+  input.addEventListener('change', () => { if (input.files?.[0]) handle(input.files[0]); });
+  ['dragenter', 'dragover'].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (ev) => { const f = (ev as DragEvent).dataTransfer?.files?.[0]; if (f) handle(f); });
+</script>
+
+<style>
+  .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 34px;
+    border: 2px dashed var(--p-border); cursor: pointer; margin-bottom: 14px; text-align: center; }
+  .drop.over, .drop:hover { border-color: var(--p-accent); background: #fdf6f1; }
+  .muted { color: var(--p-muted); font-size: .88rem; }
+  .status { margin-bottom: 12px; font-weight: 600; color: var(--p-text); }
+  .status.bad { color: var(--p-danger); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 12px; }
+  @media (max-width: 600px) { .three { grid-template-columns: 1fr 1fr; } }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0 0 12px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .side { display: grid; gap: 16px; }
+  .qb-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #qb-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .88rem; }
+  #qb-list dt { color: var(--p-muted); }
+  .preview { padding: 0; overflow: hidden; }
+  .preview iframe { width: 100%; height: 640px; border: 0; }
+  .preview img { width: 100%; display: block; }
+</style>

@@ -1,0 +1,44 @@
+---
+// Supplier form fields — shared by "new supplier" and the supplier detail edit form.
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../i18n/portail/paiements';
+import { CATEGORIES, PAYMENT_METHODS, type BankAccount, type Supplier } from '../../lib/payables';
+
+interface Props { accounts: BankAccount[]; supplier?: Supplier }
+const { accounts, supplier } = Astro.props;
+const T = makeT(getPortailLocale(Astro.cookies), frPaiements, enPaiements);
+const s = supplier;
+---
+<div class="sf-grid">
+  <div class="form-row"><label>{T('f.name')} *</label><input type="text" name="name" value={s?.name ?? ''} required /></div>
+  <div class="form-row"><label>{T('f.legal_name')}</label><input type="text" name="legal_name" value={s?.legal_name ?? ''} /></div>
+  <div class="form-row"><label>{T('f.category')}</label>
+    <select name="category">{CATEGORIES.map((c) => <option value={c} selected={(s?.category ?? 'supplier') === c}>{T(`cat.${c}` as keyof typeof frPaiements)}</option>)}</select>
+  </div>
+  <div class="form-row"><label>{T('f.payment_method')}</label>
+    <select name="payment_method">{PAYMENT_METHODS.map((m) => <option value={m} selected={(s?.payment_method ?? 'eft') === m}>{T(`m.${m}` as keyof typeof frPaiements)}</option>)}</select>
+  </div>
+  <div class="form-row"><label>{T('f.bank_account')}</label>
+    <select name="bank_account_id">{accounts.map((a) => <option value={a.id} selected={(s?.bank_account_id ?? accounts[0]?.id) === a.id}>{a.name}</option>)}</select>
+  </div>
+  <div class="form-row"><label>{T('f.currency')}</label>
+    <select name="currency">{['CAD', 'USD', 'EUR'].map((c) => <option value={c} selected={(s?.currency ?? 'CAD') === c}>{c}</option>)}</select>
+  </div>
+  <div class="form-row"><label>{T('f.terms_days')}</label><input type="number" min="0" name="terms_days" value={s?.terms_days ?? ''} /></div>
+  <div class="form-row"><label>{T('f.qbo_vendor_name')}</label><input type="text" name="qbo_vendor_name" value={s?.qbo_vendor_name ?? ''} /></div>
+  <div class="form-row"><label>{T('f.contact_name')}</label><input type="text" name="contact_name" value={s?.contact_name ?? ''} /></div>
+  <div class="form-row"><label>{T('f.contact_email')}</label><input type="email" name="contact_email" value={s?.contact_email ?? ''} /></div>
+  <div class="form-row"><label>{T('f.remittance_email')}</label><input type="email" name="remittance_email" value={s?.remittance_email ?? ''} /></div>
+  {s && (
+    <div class="form-row"><label>&nbsp;</label>
+      <label class="check-inline"><input type="checkbox" name="is_active" checked={s.is_active} /> {T('f.is_active')}</label>
+    </div>
+  )}
+  <div class="form-row wide"><label>{T('f.payment_details')}</label><textarea name="payment_details" rows="3">{s?.payment_details ?? ''}</textarea></div>
+  <div class="form-row wide"><label>{T('f.notes')}</label><textarea name="notes" rows="2">{s?.notes ?? ''}</textarea></div>
+</div>
+<style>
+  .sf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; }
+  .sf-grid .wide { grid-column: 1 / -1; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 8px 0 0; }
+</style>

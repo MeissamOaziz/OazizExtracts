@@ -12,6 +12,8 @@ export const PERMISSIONS = [
   'hr_employees',    // HR new-employee packages
   'hr_evaluations',  // HR employee evaluations + tracker
   'atelier',         // Atelier (production / orders)
+  'payables',        // Supplier payments: invoices, weekly payment run, approvals
+  'payables_approve', // Approve weekly supplier payments + see past approvals (Jorge)
   'admin',           // Admin panel: users and access
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -31,6 +33,14 @@ export type PermissionOverrides = Partial<Record<Permission, boolean>>;
 // Atelier isn't open to the team yet: only these accounts can ever get the
 // 'atelier' permission, no matter their role or overrides.
 export const ATELIER_ALLOWED_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
+
+// Supplier payments hold banking details and the company's cash position:
+// restricted to these accounts regardless of role (add Nathalie here once she
+// has a portal login).
+export const PAYABLES_ALLOWED_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
+// Who may open the approver screens (past approvals + the pending one) by
+// logging in. Add jorge@oaziz.ca when the module goes live for him.
+export const PAYABLES_APPROVER_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
 
 export interface AccessSubject {
   email: string;
@@ -58,6 +68,8 @@ export function cleanOverrides(raw: unknown): PermissionOverrides {
 export function effectivePermissions(s: AccessSubject): Set<Permission> {
   const perms = rolePermissions(s);
   if (!ATELIER_ALLOWED_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('atelier');
+  if (!PAYABLES_ALLOWED_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('payables');
+  if (!PAYABLES_APPROVER_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('payables_approve');
   return perms;
 }
 
@@ -101,6 +113,13 @@ export const ROUTE_RULES: RouteRule[] = [
   { test: under('/portail/atelier'), any: ['atelier'] },
   { test: under('/api/portail/atelier'), any: ['atelier'] },
 
+  { test: under('/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
+  { test: under('/api/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
+  { test: under('/portail/paiements'), any: ['payables'] },
+  { test: under('/api/portail/paiements'), any: ['payables'] },
+  // /portail/approbation-paiements/<token> is deliberately unruled: the
+  // approver opens it from an email, gated by the run's single-use token.
+
   { test: under('/portail/calculatrices'), any: ['calculators'] },
 
   { test: under('/portail/fournisseurs/licences'), any: ['licenses'] },
@@ -136,6 +155,7 @@ export interface ModuleLink { key: string; href: string; perms: Permission[] }
 export const MODULES: ModuleLink[] = [
   { key: 'rnd', href: '/portail/formulaires', perms: ['rnd'] },
   { key: 'atelier', href: '/portail/atelier', perms: ['atelier'] },
+  { key: 'payables', href: '/portail/paiements', perms: ['payables', 'payables_approve'] },
   { key: 'calculators', href: '/portail/calculatrices', perms: ['calculators'] },
   { key: 'vq', href: '/portail/fournisseurs', perms: ['vq', 'licenses'] },
   { key: 'hr', href: '/portail/rh', perms: ['hr', 'hr_employees', 'hr_evaluations'] },
@@ -143,6 +163,11 @@ export const MODULES: ModuleLink[] = [
 
 // The VQ module opens on the vendor list, or straight on the license page for
 // people who only have license access.
+// Approver-only users land on their approvals list, not the payment workspace.
+export function payablesHref(perms: ReadonlySet<Permission>): string {
+  return perms.has('payables') ? '/portail/paiements' : '/portail/paiements/approbations';
+}
+
 export function vqHref(perms: ReadonlySet<Permission>): string {
   return perms.has('vq') ? '/portail/fournisseurs' : '/portail/fournisseurs/licences';
 }

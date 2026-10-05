@@ -1,0 +1,34 @@
+---
+export const prerender = false;
+
+// The approver's page, opened from the weekly email. No portal login: access
+// is the run's token (hashed in ap_runs, 18-hour expiry, replaced on resend,
+// cleared on recall). After expiry the approver logs in instead
+// (/portail/paiements/approbations). Once approved the link is read-only.
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsApproval from '../../../components/portail/PaiementsApproval.astro';
+import { getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { loadRunByToken } from '../../../lib/payables';
+
+const T = makeT(getPortailLocale(Astro.cookies), frPaiements, enPaiements);
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+Astro.response.headers.set('Cache-Control', 'no-store');
+
+const token = String(Astro.params.token ?? '');
+const loaded = await loadRunByToken(getAdminClient(), token);
+const expired = !!loaded?.run.token_expires_at && new Date(loaded.run.token_expires_at) < new Date();
+const valid = !!loaded && !expired && ['submitted', 'approved', 'closed'].includes(loaded.run.status);
+---
+<PortailLayout title={T('appr.title')} minimal wide>
+  {valid && loaded ? (
+    <PaiementsApproval loaded={loaded} editable={true} submitUrl={`/api/portail/approbation-paiements/${token}`} />
+  ) : (
+    <div class="card" style="max-width: 560px; margin: 40px auto;">
+      <h1>{T('appr.title')}</h1>
+      <p style="color: var(--p-muted);">{expired ? T('appr.expired') : T('appr.invalid')}</p>
+      <p style="margin-top: 14px;"><a class="btn btn-primary" href="/portail/paiements/approbations">{T('appr.loginCta')}</a></p>
+    </div>
+  )}
+</PortailLayout>

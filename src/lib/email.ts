@@ -39,6 +39,7 @@ interface ShellOpts {
   ctaUrl: string;
   fallbackNote?: string; // small text under the button
   footerNote?: string;   // small footer text
+  brandLine?: string;    // header line under the logo (defaults to "Portail R&D")
 }
 
 function renderEmailShell(o: ShellOpts): string {
@@ -70,7 +71,7 @@ function renderEmailShell(o: ShellOpts): string {
           <td style="background:#ffffff;padding:26px 28px 18px;text-align:center;border-bottom:1px solid #eef0f3;">
             <img src="https://www.oaziz.ca/icon-192.png" width="56" height="56" alt="Oaziz Extracts" style="display:inline-block;height:56px;width:56px;border:0;"/>
             <div style="color:${OAZIZ_ORANGE_DEEP};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-top:10px;">
-              Oaziz Extracts &middot; Portail R&amp;D
+              Oaziz Extracts &middot; ${escapeHtml(o.brandLine ?? 'Portail R&D')}
             </div>
           </td>
         </tr>
@@ -1115,6 +1116,125 @@ export async function sendVendorLicenseExpiredNoticeVendor(
     return { status: 'sent', detail: data?.id };
   } catch (e) {
     console.error('[vendor-license-expired-vendor] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+// ============================================================
+// Supplier payments — weekly approval request to the approver (Jorge) and
+// the "approved" notice back to the people who prepare and pay.
+// ============================================================
+
+export interface PaymentApprovalRequestEmail {
+  toEmail: string;
+  approverName: string;
+  weekLabel: string;
+  preparedBy: string;
+  count: number;
+  totalSuggested: string;
+  cashRows: Array<{ label: string; value: string }>;
+  approvalUrl: string;
+  portalUrl: string;
+  resend?: boolean;
+}
+
+export async function sendPaymentApprovalRequest(
+  n: PaymentApprovalRequestEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[payment-approval-email] RESEND_API_KEY not set; would-have-sent to ${n.toEmail}: ${n.approvalUrl}`);
+    return { status: 'skipped_no_key' };
+  }
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const html = renderEmailShell({
+    brandLine: 'Paiements fournisseurs',
+    preheader: `${n.count} paiement(s) suggéré(s) — ${n.totalSuggested} — à approuver.`,
+    badge: n.resend ? 'Rappel — approbation requise' : 'Approbation requise',
+    greeting: `Bonjour ${n.approverName.split(' ')[0]},`,
+    intro: `${escapeHtml(n.preparedBy)} a préparé les paiements fournisseurs de la semaine du <strong>${escapeHtml(n.weekLabel)}</strong>. `
+      + 'Ouvrez le lien pour voir chaque fournisseur, le total dû et le détail des factures, puis entrer les montants approuvés.',
+    rows: [
+      { label: 'Paiements suggérés', value: String(n.count) },
+      { label: 'Total suggéré', value: n.totalSuggested },
+      ...n.cashRows,
+    ],
+    ctaLabel: 'Réviser et approuver',
+    ctaUrl: n.approvalUrl,
+    fallbackNote: `Ce lien personnel est valide 18 heures. Après ce délai, connectez-vous au portail (Paiements → Approbations) : <a href="${n.portalUrl}" style="color:${OAZIZ_ORANGE_DEEP};">${escapeHtml(n.portalUrl)}</a>. `
+      + 'Une fois l’approbation envoyée, elle ne peut plus être modifiée — demandez à Meissam ou Nathalie tout changement.',
+  });
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: [n.toEmail], replyTo,
+      subject: `${n.resend ? 'Rappel — ' : ''}Paiements fournisseurs à approuver — semaine du ${n.weekLabel}`,
+      html,
+    });
+    if (error) {
+      console.error('[payment-approval-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[payment-approval-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export interface PaymentsApprovedEmail {
+  toEmails: string[];
+  approverName: string;
+  weekLabel: string;
+  approvedCount: number;
+  totalApproved: string;
+  totalSuggested: string;
+  comment: string | null;
+  runUrl: string;
+}
+
+export async function sendPaymentsApprovedNotice(
+  n: PaymentsApprovedEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (n.toEmails.length === 0) return { status: 'skipped_no_key' };
+  if (!apiKey) {
+    console.warn(`[payments-approved-email] RESEND_API_KEY not set; would-have-sent to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_no_key' };
+  }
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const html = renderEmailShell({
+    brandLine: 'Paiements fournisseurs',
+    preheader: `${n.approverName} a approuvé ${n.totalApproved}.`,
+    badge: 'Paiements approuvés',
+    greeting: 'Paiements approuvés',
+    intro: `${escapeHtml(n.approverName)} a approuvé les paiements de la semaine du <strong>${escapeHtml(n.weekLabel)}</strong>. `
+      + 'Vous pouvez procéder aux paiements et cocher Payé / Remise au fur et à mesure.',
+    rows: [
+      { label: 'Paiements approuvés', value: String(n.approvedCount) },
+      { label: 'Total approuvé', value: n.totalApproved },
+      { label: 'Total suggéré', value: n.totalSuggested },
+      ...(n.comment ? [{ label: 'Commentaire', value: n.comment }] : []),
+    ],
+    ctaLabel: 'Ouvrir la semaine',
+    ctaUrl: n.runUrl,
+  });
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from, to: n.toEmails, replyTo,
+      subject: `Paiements approuvés — semaine du ${n.weekLabel} — ${n.totalApproved}`,
+      html,
+    });
+    if (error) {
+      console.error('[payments-approved-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[payments-approved-email] unexpected error:', e);
     return { status: 'error', detail: String(e) };
   }
 }

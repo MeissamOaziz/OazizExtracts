@@ -1,0 +1,61 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { loadSuppliers, money, upcomingFriday } from '../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+
+// Straight to the open week when there is one — that's where the work happens.
+const { data: open } = await admin.from('ap_runs').select('id').neq('status', 'closed')
+  .order('run_date', { ascending: false }).limit(1).maybeSingle();
+if (open && !Astro.url.searchParams.has('start')) return Astro.redirect(`/portail/paiements/semaine/${open.id}`);
+
+const suppliers = await loadSuppliers(admin);
+const owed = suppliers.reduce((s, x) => s + Math.max(0, x.bal.owed), 0);
+const overdue = suppliers.reduce((s, x) => s + x.bal.overdue, 0);
+const due7 = suppliers.reduce((s, x) => s + x.bal.due_7d, 0);
+const withBal = suppliers.filter((x) => x.bal.owed > 0.004).length;
+const notQbo = suppliers.reduce((s, x) => s + x.bal.not_in_qbo, 0);
+const error = Astro.url.searchParams.get('error');
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="week" />
+  {error && <div class="flash flash-error">{error}</div>}
+
+  <div class="kpis">
+    <div class="card kpi"><span>{T('kpi.owed')}</span><strong>{money(owed, locale)}</strong></div>
+    <div class="card kpi"><span>{T('kpi.overdue')}</span><strong>{money(overdue, locale)}</strong></div>
+    <div class="card kpi"><span>{T('kpi.due7')}</span><strong>{money(due7, locale)}</strong></div>
+    <div class="card kpi"><span>{T('kpi.suppliers')}</span><strong>{withBal}</strong></div>
+    <div class="card kpi"><span>{T('kpi.notQbo')}</span><strong>{notQbo}</strong></div>
+  </div>
+
+  <div class="card" style="max-width: 560px;">
+    <h2>{T('start.title')}</h2>
+    <p style="color: var(--p-muted); margin-bottom: 16px;">{T('start.body')}</p>
+    <form method="POST" action="/api/portail/paiements/runs">
+      <div class="form-row">
+        <label for="run_date">{T('start.date')}</label>
+        <input type="date" id="run_date" name="run_date" value={upcomingFriday()} required />
+      </div>
+      <button class="btn btn-primary" type="submit">{T('start.cta')}</button>
+    </form>
+  </div>
+</PortailLayout>
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { padding: 16px 18px; }
+  .kpi span { display: block; color: var(--p-muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi strong { font-size: 1.3rem; }
+</style>

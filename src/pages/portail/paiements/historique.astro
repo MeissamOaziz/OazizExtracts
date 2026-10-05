@@ -1,0 +1,66 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { money, n } from '../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+
+const { data: runs } = await admin.from('ap_runs').select('id, run_date, status, approver_name, approved_at, approved_via')
+  .order('run_date', { ascending: false }).limit(200);
+const ids = (runs ?? []).map((r) => r.id);
+const { data: lines } = ids.length
+  ? await admin.from('ap_run_lines').select('run_id, suggested_amount, approved_amount, payment_id, ap_payments!ap_run_lines_payment_id_fkey(amount, voided_at)').in('run_id', ids)
+  : { data: [] };
+const agg = new Map<string, { suggested: number; approved: number; paid: number; count: number }>();
+for (const l of lines ?? []) {
+  const a = agg.get(l.run_id) ?? { suggested: 0, approved: 0, paid: 0, count: 0 };
+  a.suggested += n(l.suggested_amount); a.approved += n(l.approved_amount);
+  const p = l.ap_payments as unknown as { amount: number; voided_at: string | null } | null;
+  if (p && !p.voided_at) { a.paid += n(p.amount); a.count += 1; }
+  agg.set(l.run_id, a);
+}
+---
+<PortailLayout title={T('hist.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="history" />
+  <div style="margin-bottom: 12px;"><a class="btn btn-secondary" href="/portail/paiements?start=1">{T('start.cta')}</a></div>
+  {(runs ?? []).length === 0 ? <div class="card empty-state">{T('hist.empty')}</div> : (
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table class="data">
+        <thead><tr>
+          <th>{T('start.date')}</th><th>{T('col.status')}</th>
+          <th class="num">{T('hist.suggested')}</th><th class="num">{T('hist.approved')}</th><th class="num">{T('hist.paid')}</th>
+          <th>{T('set.approver')}</th>
+        </tr></thead>
+        <tbody>
+          {(runs ?? []).map((r) => {
+            const a = agg.get(r.id) ?? { suggested: 0, approved: 0, paid: 0, count: 0 };
+            return (
+              <tr>
+                <td><a href={`/portail/paiements/semaine/${r.id}`}>{r.run_date}</a></td>
+                <td>{T(`run.status.${r.status}` as keyof typeof frPaiements)}</td>
+                <td class="num">{money(a.suggested, locale)}</td>
+                <td class="num">{r.approved_at ? money(a.approved, locale) : '—'}</td>
+                <td class="num">{a.count ? `${money(a.paid, locale)} (${a.count})` : '—'}</td>
+                <td class="muted">{r.approver_name ?? ''}{r.approved_via === 'manual' && ` ${T('run.approvedManual')}`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</PortailLayout>
+<style>
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--p-muted); }
+</style>

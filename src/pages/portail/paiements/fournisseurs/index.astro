@@ -1,0 +1,98 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
+import SupplierFields from '../../../../components/portail/PaiementsSupplierFields.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
+import { loadSuppliers, loadAccounts, money } from '../../../../lib/payables';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+const [suppliers, accounts] = await Promise.all([loadSuppliers(admin, { includeInactive: true }), loadAccounts(admin)]);
+const accName = new Map(accounts.map((a) => [a.id, a.code === 'td_mjlb' ? 'TD MJLB' : 'RBC']));
+const sp = Astro.url.searchParams;
+const errorKey = sp.get('error');
+const showNew = sp.has('new') || !!errorKey;
+---
+<PortailLayout title={T('sup.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="suppliers" />
+  {errorKey === 'duplicate' && <div class="flash flash-error">{T('sup.duplicate')}</div>}
+  {errorKey === 'missing' && <div class="flash flash-error">{T('sup.missing')}</div>}
+
+  <div class="toolbar">
+    <input type="search" id="q" placeholder={T('sup.search')} />
+    <label class="check-inline"><input type="checkbox" id="inactive" /> {T('sup.showInactive')}</label>
+    <button class="btn btn-primary" type="button" id="new-btn">{T('sup.new')}</button>
+  </div>
+
+  <div class="card" id="new-card" hidden={!showNew} style="margin-bottom: 16px;">
+    <h2>{T('sup.new').replace('+ ', '')}</h2>
+    <form method="POST" action="/api/portail/paiements/suppliers">
+      <input type="hidden" name="_action" value="create" />
+      <SupplierFields accounts={accounts} />
+      <button class="btn btn-primary" type="submit">{T('sup.save')}</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0; overflow-x:auto;">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>{T('col.supplier')}</th>
+          <th>{T('f.category')}</th>
+          <th>{T('col.account')}</th>
+          <th class="num">{T('col.owed')}</th>
+          <th class="num">{T('col.overdue')}</th>
+          <th class="num">{T('sup.openCount')}</th>
+          <th>{T('sup.lastPaid')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {suppliers.map((s) => (
+          <tr class="srow" data-name={s.name.toLowerCase()} data-active={s.is_active ? '1' : ''} hidden={!s.is_active}>
+            <td><a href={`/portail/paiements/fournisseurs/${s.id}`}>{s.name}</a>{!s.is_active && <span class="muted"> · inactif</span>}</td>
+            <td class="muted">{T(`cat.${s.category}` as keyof typeof frPaiements)}</td>
+            <td class="muted">{accName.get(s.bank_account_id ?? '') ?? ''} · {T(`m.${s.payment_method}` as keyof typeof frPaiements)}</td>
+            <td class="num">{money(s.bal.owed, locale)}</td>
+            <td class={`num ${s.bal.overdue > 0 ? 'overdue' : 'muted'}`}>{s.bal.overdue > 0 ? money(s.bal.overdue, locale) : '—'}</td>
+            <td class="num">{s.bal.open_count || ''}</td>
+            <td class="muted">{s.bal.last_paid_on ?? ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</PortailLayout>
+<script>
+  const q = document.getElementById('q') as HTMLInputElement;
+  const inactive = document.getElementById('inactive') as HTMLInputElement;
+  function apply() {
+    const term = q.value.trim().toLowerCase();
+    document.querySelectorAll<HTMLTableRowElement>('tr.srow').forEach((r) => {
+      r.hidden = !(inactive.checked || r.dataset.active === '1') || (!!term && !r.dataset.name!.includes(term));
+    });
+  }
+  q.addEventListener('input', apply);
+  inactive.addEventListener('change', apply);
+  document.getElementById('new-btn')!.addEventListener('click', () => {
+    const c = document.getElementById('new-card')!;
+    c.hidden = !c.hidden;
+    if (!c.hidden) c.querySelector<HTMLInputElement>('input[name=name]')?.focus();
+  });
+</script>
+<style>
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar input[type=search] { max-width: 320px; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .muted { color: var(--p-muted); }
+  .overdue { color: var(--p-danger); font-weight: 600; }
+  table.data td, table.data th { padding: 9px 12px; font-size: .88rem; }
+</style>

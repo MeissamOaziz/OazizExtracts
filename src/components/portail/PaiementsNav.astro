@@ -1,0 +1,32 @@
+---
+// Sub-navigation shared by every /portail/paiements page. Approver-only users
+// (payables_approve without payables) only see their approvals tab.
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../i18n/portail/paiements';
+import type { Permission } from '../../lib/access';
+
+type Key = 'week' | 'invoice' | 'suppliers' | 'approvals' | 'history' | 'settings';
+interface Props { active: Key }
+const { active } = Astro.props;
+const T = makeT(getPortailLocale(Astro.cookies), frPaiements, enPaiements);
+const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Permission>();
+const full = perms.has('payables');
+const items: Array<{ key: Key; href: string; label: string; show: boolean }> = [
+  { key: 'week', href: '/portail/paiements', label: T('nav.week'), show: full },
+  { key: 'invoice', href: '/portail/paiements/factures/nouvelle', label: T('nav.invoice'), show: full },
+  { key: 'suppliers', href: '/portail/paiements/fournisseurs', label: T('nav.suppliers'), show: full },
+  { key: 'approvals', href: '/portail/paiements/approbations', label: T('nav.approvals'), show: true },
+  { key: 'history', href: '/portail/paiements/historique', label: T('nav.history'), show: full },
+  { key: 'settings', href: '/portail/paiements/parametres', label: T('nav.settings'), show: full },
+];
+---
+<nav class="ap-subnav no-print">
+  {items.filter((i) => i.show).map((i) => <a href={i.href} class={i.key === active ? 'active' : ''}>{i.label}</a>)}
+</nav>
+<style>
+  .ap-subnav { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--p-border); flex-wrap: wrap; }
+  .ap-subnav a { padding: 8px 14px; color: var(--p-muted); text-decoration: none; font-weight: 500; font-size: .92rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .ap-subnav a:hover { color: var(--p-text); }
+  .ap-subnav a.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  @media print { .no-print { display: none !important; } }
+</style>
