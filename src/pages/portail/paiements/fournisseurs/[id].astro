@@ -8,6 +8,7 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../../li
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { loadAccounts, money, n, todayIso, PAYMENT_METHODS, type InvoiceBalance, type Supplier } from '../../../../lib/payables';
+import { connectionInfo } from '../../../../lib/qbo';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -54,6 +55,8 @@ const sp = Astro.url.searchParams;
 const okKey = sp.get('ok');
 const warnDup = sp.get('dup');
 const fmtDate = (iso: string) => new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' });
+const qboOn = !!(await connectionInfo(admin));
+const here = `/portail/paiements/fournisseurs/${id}`;
 const okText: Record<string, string> = {
   created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'),
 };
@@ -65,6 +68,8 @@ const okText: Record<string, string> = {
   {warnDup && <div class="warn-banner">{fill(T('inv.dupWarn'), { number: warnDup })}</div>}
   {sp.get('error') === 'missing' && <div class="flash flash-error">{T('inv.missing')}</div>}
   {sp.get('error') === 'duplicate' && <div class="flash flash-error">{T('sup.duplicate')}</div>}
+  {sp.get('ok') && !okText[sp.get('ok')!] && <div class="flash flash-success">{sp.get('ok')}</div>}
+  {sp.get('error') && !['missing', 'duplicate'].includes(sp.get('error')!) && <div class="flash flash-error">{sp.get('error')}</div>}
 
   <div class="top-grid">
     <div class="card kpi"><span>{T('det.balance')}</span><strong class={owed < 0 ? 'neg' : ''}>{money(owed, locale)}</strong></div>
@@ -125,6 +130,7 @@ const okText: Record<string, string> = {
           <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" /></div>
           <div class="form-row"><label>{T('pay.notes')}</label><input type="text" name="notes" /></div>
         </div>
+        {qboOn && <label class="check-inline" style="margin-bottom:12px;"><input type="checkbox" name="already_in_qbo" /> {T('pay.alreadyQbo')}</label>}
         {openInvoices.filter((i) => i.open_amount > 0).length > 0 && (
           <div class="form-row">
             <label>{T('pay.applyTo')}</label>
@@ -185,6 +191,15 @@ const okText: Record<string, string> = {
                   <input type="hidden" name="_action" value="qbo" /><input type="hidden" name="invoice_id" value={i.id} />
                   <input type="checkbox" class="autosubmit" name="in_quickbooks" checked={i.in_quickbooks} title={T('inv.qbo.title')} />
                 </form>
+                {i.qbo_bill_id && <div class="small ok-txt" title={`QuickBooks #${i.qbo_bill_id}`}>{T('inv.qbo.linked')}</div>}
+                {i.qbo_error && <div class="small err-txt" title={i.qbo_error}>⚠</div>}
+                {qboOn && !i.qbo_bill_id && i.source !== 'qbo' && ['invoice', 'credit'].includes(i.kind) && (i.source === 'portal' || isOpen) && (
+                  <form method="POST" action="/api/portail/paiements/qbo/action" class="inline">
+                    <input type="hidden" name="_action" value="push_invoice" /><input type="hidden" name="invoice_id" value={i.id} />
+                    <input type="hidden" name="_back" value={here} />{i.source === 'import' && <input type="hidden" name="force" value="1" />}
+                    <button class="link-btn small" type="submit" title={i.qbo_error ?? ''}>{i.qbo_error ? T('inv.qbo.retry') : T('inv.qbo.send')}</button>
+                  </form>
+                )}
               </td>
               <td class="actions">
                 {i.file_path && <a href={`/api/portail/paiements/suppliers/${s.id}/file?invoice=${i.id}`} target="_blank" rel="noopener">PDF</a>}
@@ -226,7 +241,19 @@ const okText: Record<string, string> = {
               <td class="num">{money(n(p.amount), locale)}</td>
               <td>{p.payment_method ? T(`m.${p.payment_method}` as keyof typeof frPaiements) : ''}</td>
               <td class="muted">{accName.get(p.bank_account_id ?? '') ?? ''}</td>
-              <td>{p.reference ?? ''}{p.source === 'import' && <span class="muted small"> · {T('pay.historical')}</span>}{p.notes && <div class="muted small">{p.notes}</div>}</td>
+              <td>
+                {p.reference ?? ''}{p.source === 'import' && <span class="muted small"> · {T('pay.historical')}</span>}{p.source === 'qbo' && <span class="muted small"> · QuickBooks</span>}
+                {p.notes && <div class="muted small">{p.notes}</div>}
+                {p.qbo_billpayment_id && <div class="small ok-txt">{T('inv.qbo.linked')}</div>}
+                {p.qbo_error && <div class="small err-txt">⚠ {p.qbo_error}</div>}
+                {qboOn && !p.voided_at && !p.qbo_billpayment_id && p.source === 'portal' && (
+                  <form method="POST" action="/api/portail/paiements/qbo/action" class="inline">
+                    <input type="hidden" name="_action" value="push_payment" /><input type="hidden" name="payment_id" value={p.id} />
+                    <input type="hidden" name="_back" value={here} />
+                    <button class="link-btn small" type="submit">{p.qbo_error ? T('inv.qbo.retry') : T('inv.qbo.send')}</button>
+                  </form>
+                )}
+              </td>
               <td class="small muted">
                 {(allocDetail.get(p.id) ?? []).join(', ')}
                 {!p.voided_at && unapplied > 0.004 && <div>{money(unapplied, locale)} {T('pay.unapplied')}</div>}
@@ -304,4 +331,6 @@ const okText: Record<string, string> = {
   .link-btn.danger { color: var(--p-danger); }
   .events { list-style: none; font-size: .82rem; display: grid; gap: 4px; }
   .events code { font-size: .72rem; color: var(--p-muted); }
+  .ok-txt { color: var(--p-success); }
+  .err-txt { color: var(--p-danger); }
 </style>

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount, uploadInvoiceFile } from '../../../../../../lib/payables';
+import { autoPushInvoice } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -93,5 +94,6 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`${back}?error=missing&addinv=1`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, kind } });
+  if (form.get('in_quickbooks') !== 'on') await autoPushInvoice(admin, created.id);
   return redirect(`${back}?ok=inv${dup ? `&dup=${encodeURIComponent(number!)}` : ''}`, 303);
 };

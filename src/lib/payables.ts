@@ -60,6 +60,7 @@ export interface InvoiceBalance {
   id: string; supplier_id: string; kind: string; invoice_number: string | null; po_number: string | null;
   invoice_date: string | null; due_date: string | null; amount: number; description: string | null;
   in_quickbooks: boolean; file_path: string | null; source: string; origin_payment_id: string | null;
+  qbo_bill_id: string | null; qbo_error: string | null; subtotal: number | null;
   allocated: number; open_amount: number;
   created_at: string;
 }

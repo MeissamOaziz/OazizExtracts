@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount } from '../../../../../lib/payables';
+import { autoPushInvoice } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -50,16 +51,22 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     }
   }
 
-  const { error } = await admin.from('ap_invoices').insert({
+  const subtotal = parseAmount(form.get('subtotal'));
+  const alreadyInQb = form.get('in_quickbooks') === 'on';
+  const { data: created, error } = await admin.from('ap_invoices').insert({
     supplier_id: supplierId, kind, invoice_number: number, po_number: str(form, 'po_number'),
     invoice_date: invoiceDate, due_date: dueDate, amount, description: str(form, 'description'),
-    in_quickbooks: form.get('in_quickbooks') === 'on', file_path: safePath, created_by: staff.id,
-  });
-  if (error) {
+    subtotal: subtotal && subtotal > 0 ? subtotal : null,
+    tax_gst: parseAmount(form.get('tax_gst')), tax_qst: parseAmount(form.get('tax_qst')),
+    in_quickbooks: alreadyInQb, file_path: safePath, created_by: staff.id,
+  }).select('id').single();
+  if (error || !created) {
     console.error('[paiements] invoice create failed:', error);
     return redirect(`${back}?error=save`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, via: 'pdf' } });
+  // Already keyed into QB by hand? Then don't create a second Bill.
+  if (!alreadyInQb) await autoPushInvoice(admin, created.id);
   if (form.get('next') === 'another') return redirect(`${back}?ok=1`, 303);
   return redirect(`/portail/paiements/fournisseurs/${supplierId}?ok=inv`, 303);
 };

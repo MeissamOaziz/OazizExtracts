@@ -44,6 +44,9 @@ const i18n = {
   <div class="grid">
     <form class="card" method="POST" action="/api/portail/paiements/invoices/create" id="inv-form">
       <input type="hidden" name="file_path" id="file_path" />
+      <input type="hidden" name="subtotal" id="subtotal" />
+      <input type="hidden" name="tax_gst" id="tax_gst" />
+      <input type="hidden" name="tax_qst" id="tax_qst" />
       <div class="form-row">
         <label>{T('col.supplier')} *</label>
         <select name="supplier_id" id="supplier_id" required>
@@ -73,6 +76,7 @@ const i18n = {
       </div>
       <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" id="description" /></div>
       <label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('pdf.enteredQb')}</label>
+      <p class="hint" style="margin:-6px 0 12px;">{T('pdf.qbAuto')}</p>
       <p class="warn-banner" id="dup-warn" hidden></p>
       <div class="actions">
         <button class="btn btn-primary" type="submit" name="next" value="supplier">{T('pdf.save')}</button>
@@ -125,6 +129,7 @@ const i18n = {
     set('invoice_number', x.invoice_number); set('po_number', x.po_number);
     set('invoice_date', x.invoice_date); set('due_date', x.due_date);
     set('amount', Math.abs(Number(x.total)).toFixed(2)); set('description', x.description);
+    set('subtotal', x.subtotal); set('tax_gst', x.gst_hst); set('tax_qst', x.qst);
     $<HTMLSelectElement>('kind').value = x.is_credit_note ? 'credit' : 'invoice';
 
     const m = res.matches as Array<{ id: string; name: string; score: number }>;

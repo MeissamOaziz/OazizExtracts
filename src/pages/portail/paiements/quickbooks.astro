@@ -1,0 +1,216 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { loadAccounts, loadSuppliers, money, round2 } from '../../../lib/payables';
+import { qboConfig, connectionInfo } from '../../../lib/qbo';
+import { qboDefaults, qboLists } from '../../../lib/qbo-sync';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+const cfg = qboConfig();
+const conn = await connectionInfo(admin);
+
+let lists: Awaited<ReturnType<typeof qboLists>> = null;
+let listError: string | null = null;
+if (conn) {
+  try { lists = await qboLists(admin); } catch (e) { listError = e instanceof Error ? e.message : String(e); }
+}
+const [defaults, accounts, suppliers, { data: logRows }] = await Promise.all([
+  qboDefaults(admin), loadAccounts(admin), loadSuppliers(admin, { includeInactive: false }),
+  admin.from('qbo_sync_log').select('*').order('created_at', { ascending: false }).limit(60),
+]);
+const { data: qboFields } = await admin.from('ap_suppliers').select('id, qbo_vendor_id, qbo_expense_account_id, qbo_tax_code_id');
+const qf = new Map((qboFields ?? []).map((r) => [r.id, r]));
+const { data: bankQbo } = await admin.from('ap_bank_accounts').select('id, qbo_account_id');
+const bankMap = new Map((bankQbo ?? []).map((b) => [b.id, b.qbo_account_id as string | null]));
+
+const vendorById = new Map((lists?.vendors ?? []).map((v) => [v.id, v]));
+const rows = suppliers.map((s) => {
+  const f = qf.get(s.id);
+  const v = f?.qbo_vendor_id ? vendorById.get(f.qbo_vendor_id) : undefined;
+  return { s, f, v, diff: v ? round2(s.bal.owed - v.balance) : null };
+}).sort((a, b) => {
+  const ua = a.f?.qbo_vendor_id ? 1 : 0, ub = b.f?.qbo_vendor_id ? 1 : 0;
+  if (ua !== ub) return ua - ub;
+  return Math.abs(b.diff ?? b.s.bal.owed) - Math.abs(a.diff ?? a.s.bal.owed);
+});
+const linkedCount = rows.filter((r) => r.f?.qbo_vendor_id).length;
+const mismatches = rows.filter((r) => r.diff !== null && Math.abs(r.diff) >= 0.01).length;
+const sp = Astro.url.searchParams;
+const errKey = sp.get('error');
+const errText: Record<string, string> = {
+  not_configured: T('qbo.err.notConfigured'), denied: T('qbo.err.denied'), state: T('qbo.err.state'), token: T('qbo.err.token'),
+};
+const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const opt = (list: Array<{ id: string; name: string }>, sel: string | null | undefined) => list.map((o) => ({ ...o, selected: o.id === sel }));
+---
+<PortailLayout title="QuickBooks" staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="quickbooks" />
+  {sp.get('ok') && <div class="flash flash-success">{sp.get('ok') === 'connected' ? T('qbo.connected') : sp.get('ok')}</div>}
+  {errKey && <div class="flash flash-error">{errText[errKey] ?? errKey}</div>}
+
+  <section class="card status">
+    <div>
+      <h2>QuickBooks Online</h2>
+      {!cfg.configured ? (
+        <p class="muted">{T('qbo.notConfigured')}</p>
+      ) : !conn ? (
+        <p class="muted">{T('qbo.notConnected').replace('{env}', cfg.environment === 'production' ? 'production' : 'sandbox (test)')}</p>
+      ) : (
+        <dl class="kv">
+          <dt>{T('qbo.company')}</dt><dd>{conn.company_name ?? conn.realm_id} <span class={`badge ${conn.environment === 'production' ? 'badge-complete' : 'badge-signing'}`}>{conn.environment}</span></dd>
+          <dt>{T('qbo.connectedOn')}</dt><dd>{fmt(conn.connected_at)}</dd>
+          <dt>{T('qbo.lastSync')}</dt><dd>{fmt(conn.last_sync_at)} {conn.last_sync_status && <span class="muted">— {conn.last_sync_status}</span>}</dd>
+          <dt>{T('qbo.linked')}</dt><dd>{linkedCount} / {suppliers.length} · {mismatches} {T('qbo.mismatches')}</dd>
+          {conn.refresh_expires_at && <dt>{T('qbo.reauth')}</dt>}{conn.refresh_expires_at && <dd>{fmt(conn.refresh_expires_at)}</dd>}
+        </dl>
+      )}
+      {listError && <p class="flash flash-error" style="margin-top:10px;">{listError}</p>}
+    </div>
+    <div class="status-actions">
+      {cfg.configured && !conn && <a class="btn btn-primary" href="/api/portail/paiements/qbo/connect">{T('qbo.connect')}</a>}
+      {conn && (
+        <form method="POST" action="/api/portail/paiements/qbo/action" class="stack">
+          <button class="btn btn-primary" name="_action" value="sync">{T('qbo.syncNow')}</button>
+          <button class="btn btn-secondary" name="_action" value="link_vendors">{T('qbo.autoLink')}</button>
+          <button class="btn btn-danger" name="_action" value="disconnect" onclick={`return confirm(${JSON.stringify(T('qbo.disconnectConfirm'))})`}>{T('qbo.disconnect')}</button>
+        </form>
+      )}
+    </div>
+  </section>
+
+  {conn && lists && (
+    <form class="card" method="POST" action="/api/portail/paiements/qbo/action">
+      <input type="hidden" name="_action" value="save_settings" />
+      <h2>{T('qbo.settings')}</h2>
+      <div class="two-col">
+        <div class="form-row"><label>{T('qbo.defaultAccount')}</label>
+          <select name="expense_account_id"><option value="">—</option>{opt(lists.expenseAccounts, defaults.expense_account_id).map((o) => <option value={o.id} selected={o.selected}>{o.name}</option>)}</select>
+        </div>
+        <div class="form-row"><label>{T('qbo.defaultTax')}</label>
+          <select name="tax_code_id"><option value="">{T('qbo.noTax')}</option>{opt(lists.taxCodes, defaults.tax_code_id).map((o) => <option value={o.id} selected={o.selected}>{o.name}</option>)}</select>
+          <p class="hint">{T('qbo.taxHint')}</p>
+        </div>
+        {accounts.map((a) => (
+          <div class="form-row"><label>{T('qbo.bankFor').replace('{account}', a.name)}</label>
+            <select name={`bank_${a.id}`}><option value="">{T('qbo.bankNone')}</option>{opt(lists.bankAccounts, bankMap.get(a.id)).map((o) => <option value={o.id} selected={o.selected}>{o.name}</option>)}</select>
+          </div>
+        ))}
+      </div>
+      <div class="checks">
+        <label class="check-inline"><input type="checkbox" name="push_bills" checked={defaults.push_bills} /> {T('qbo.pushBills')}</label>
+        <label class="check-inline"><input type="checkbox" name="push_payments" checked={defaults.push_payments} /> {T('qbo.pushPayments')}</label>
+        <label class="check-inline"><input type="checkbox" name="pull" checked={defaults.pull} /> {T('qbo.pull')}</label>
+      </div>
+      <button class="btn btn-primary" type="submit">{T('qbo.save')}</button>
+    </form>
+  )}
+
+  {conn && lists && (
+    <section class="card tbl-card">
+      <div class="tbl-head">
+        <h2>{T('qbo.vendors')}</h2>
+        <input type="search" id="vq" placeholder={T('sup.search')} />
+      </div>
+      <table class="data">
+        <thead><tr><th>{T('col.supplier')}</th><th>{T('qbo.qbVendor')}</th><th class="num">{T('qbo.portal')}</th><th class="num">QuickBooks</th><th class="num">{T('qbo.diff')}</th><th></th></tr></thead>
+        <tbody>
+          {rows.map(({ s, f, v, diff }) => (
+            <tr class="vrow" data-name={s.name.toLowerCase()} data-id={s.id} data-vendor={f?.qbo_vendor_id ?? ''}
+                data-account={f?.qbo_expense_account_id ?? ''} data-tax={f?.qbo_tax_code_id ?? ''}>
+              <td><a href={`/portail/paiements/fournisseurs/${s.id}`}>{s.name}</a></td>
+              <td class={v ? '' : 'muted'}>{v?.name ?? (f?.qbo_vendor_id ? `#${f.qbo_vendor_id}` : T('qbo.notLinked'))}</td>
+              <td class="num">{money(s.bal.owed, locale)}</td>
+              <td class="num">{v ? money(v.balance, locale) : '—'}</td>
+              <td class={`num ${diff && Math.abs(diff) >= 0.01 ? 'bad' : 'muted'}`}>{diff === null ? '' : Math.abs(diff) < 0.01 ? '✓' : money(diff, locale)}</td>
+              <td><button type="button" class="link-btn edit-map">{T('qbo.edit')}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )}
+
+  {conn && lists && (
+    <dialog id="map-dialog">
+      <form method="POST" action="/api/portail/paiements/qbo/action">
+        <input type="hidden" name="_action" value="map_vendor" />
+        <input type="hidden" name="supplier_id" id="map-supplier" />
+        <h2 id="map-title"></h2>
+        <div class="form-row"><label>{T('qbo.qbVendor')}</label>
+          <select name="qbo_vendor_id" id="map-vendor"><option value="">{T('qbo.createOnPush')}</option>{lists.vendors.map((o) => <option value={o.id}>{o.name}</option>)}</select>
+        </div>
+        <div class="form-row"><label>{T('qbo.accountOverride')}</label>
+          <select name="qbo_expense_account_id" id="map-account"><option value="">{T('qbo.useDefault')}</option>{lists.expenseAccounts.map((o) => <option value={o.id}>{o.name}</option>)}</select>
+        </div>
+        <div class="form-row"><label>{T('qbo.taxOverride')}</label>
+          <select name="qbo_tax_code_id" id="map-tax"><option value="">{T('qbo.useDefault')}</option>{lists.taxCodes.map((o) => <option value={o.id}>{o.name}</option>)}</select>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="map-cancel">{T('qbo.cancel')}</button>
+          <button type="submit" class="btn btn-primary">{T('qbo.save')}</button>
+        </div>
+      </form>
+    </dialog>
+  )}
+
+  <details class="card" open={!conn}>
+    <summary>{T('qbo.log')}</summary>
+    <ul class="details-body log">
+      {(logRows ?? []).length === 0 && <li class="muted">—</li>}
+      {(logRows ?? []).map((l) => (
+        <li class={`st-${l.status}`}><span class="muted">{fmt(l.created_at)}</span> · {l.direction} · {l.entity} · <strong>{l.status}</strong> — {l.message}</li>
+      ))}
+    </ul>
+  </details>
+</PortailLayout>
+<script>
+  const dlg = document.getElementById('map-dialog') as HTMLDialogElement | null;
+  document.querySelectorAll<HTMLButtonElement>('.edit-map').forEach((b) => b.addEventListener('click', () => {
+    if (!dlg) return;
+    const r = b.closest<HTMLTableRowElement>('tr')!;
+    (document.getElementById('map-supplier') as HTMLInputElement).value = r.dataset.id!;
+    document.getElementById('map-title')!.textContent = r.querySelector('a')!.textContent;
+    (document.getElementById('map-vendor') as HTMLSelectElement).value = r.dataset.vendor ?? '';
+    (document.getElementById('map-account') as HTMLSelectElement).value = r.dataset.account ?? '';
+    (document.getElementById('map-tax') as HTMLSelectElement).value = r.dataset.tax ?? '';
+    dlg.showModal();
+  }));
+  document.getElementById('map-cancel')?.addEventListener('click', () => dlg?.close());
+  const q = document.getElementById('vq') as HTMLInputElement | null;
+  q?.addEventListener('input', () => {
+    const t = q.value.trim().toLowerCase();
+    document.querySelectorAll<HTMLTableRowElement>('tr.vrow').forEach((r) => { r.hidden = !!t && !r.dataset.name!.includes(t); });
+  });
+</script>
+<style>
+  .status { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .status-actions .stack { display: flex; flex-direction: column; gap: 8px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: .9rem; }
+  .kv dt { color: var(--p-muted); }
+  .muted { color: var(--p-muted); }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 4px 0 16px; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+  form.card, .tbl-card { margin-bottom: 16px; }
+  .tbl-card { padding: 0; overflow-x: auto; }
+  .tbl-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  .tbl-head input { max-width: 280px; }
+  table.data td, table.data th { padding: 8px 12px; font-size: .86rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--p-danger); font-weight: 600; }
+  .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .82rem; padding: 0; }
+  dialog { border: none; border-radius: 12px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  dialog::backdrop { background: rgba(16, 24, 40, .4); }
+  .log { list-style: none; font-size: .8rem; display: grid; gap: 4px; }
+  .log .st-error strong { color: var(--p-danger); }
+  .log .st-warning strong { color: var(--p-warn); }
+</style>

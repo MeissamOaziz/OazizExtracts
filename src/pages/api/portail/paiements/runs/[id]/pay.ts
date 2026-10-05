@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { json, isUuid, parseAmount, logEvent, todayIso } from '../../../../../../lib/payables';
+import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -20,6 +21,7 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
 
   if (body.undo) {
     if (!line.payment_id) return json({ ok: true });
+    await deleteQboPayment(admin, line.payment_id);
     const { error } = await admin.rpc('ap_void_payment', { p_payment_id: line.payment_id, p_staff_id: staff.id });
     if (error) return json({ error: error.message }, 500);
     await admin.from('ap_run_lines').update({ remittance_sent_at: null, remittance_sent_by: null }).eq('id', line.id);
@@ -51,5 +53,6 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
     run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'paid',
     details: { amount, paid_on: paidOn, reference: body.reference || null },
   });
+  await autoPushPayment(admin, paymentId as string);
   return json({ ok: true, payment_id: paymentId });
 };
