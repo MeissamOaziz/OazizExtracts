@@ -25,6 +25,7 @@ const i18n = {
   qbVendor: T('pdf.qb.vendor'), qbNumber: T('inv.number'), qbDate: T('inv.date'), qbDue: T('inv.due'),
   qbSubtotal: T('pdf.subtotal'), qbGst: T('pdf.gst'), qbQst: T('pdf.qst'), qbOther: T('pdf.otherTaxes'),
   qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), locale,
+  codingFrom: T('pdf.qbFromHistory'), codingNone: T('pdf.qbNoHistory'), codingNew: T('pdf.qbNewSupplier'),
 };
 ---
 <PortailLayout title={T('pdf.title')} staffName={staff.full_name} wide>
@@ -75,6 +76,19 @@ const i18n = {
         <div class="form-row"><label>{T('pdf.total')} *</label><input type="text" inputmode="decimal" name="amount" id="amount" required /></div>
       </div>
       <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" id="description" /></div>
+      <fieldset class="qb-coding" id="qb-coding" hidden>
+        <legend>{T('pdf.qbCoding')}</legend>
+        <div class="two-col">
+          <div class="form-row"><label>{T('pdf.qbAccount')}</label>
+            <select name="qbo_account_id" id="qbo_account_id"><option value="">{T('pdf.qbAccountNone')}</option></select>
+          </div>
+          <div class="form-row"><label>{T('pdf.qbTax')}</label>
+            <select name="qbo_tax_code_id" id="qbo_tax_code_id"><option value="">{T('qbo.noTax')}</option></select>
+          </div>
+        </div>
+        <p class="hint" id="qb-coding-hint"></p>
+        <label class="check-inline"><input type="checkbox" name="qbo_remember" /> {T('pdf.qbRemember')}</label>
+      </fieldset>
       <label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('pdf.enteredQb')}</label>
       <p class="hint" style="margin:-6px 0 12px;">{T('pdf.qbAuto')}</p>
       <p class="warn-banner" id="dup-warn" hidden></p>
@@ -108,7 +122,30 @@ const i18n = {
   const say = (t: string, bad = false) => { status.textContent = t; status.hidden = false; status.classList.toggle('bad', bad); };
   const supSel = $<HTMLSelectElement>('supplier_id');
   const toggleNew = () => { $('new-supplier').hidden = supSel.value !== 'new'; $<HTMLInputElement>('new_supplier_name').required = supSel.value === 'new'; };
-  supSel.addEventListener('change', toggleNew);
+
+  // QuickBooks coding: suggested from how this supplier's previous QB bills were coded.
+  let listsLoaded = false;
+  async function loadCoding() {
+    const sid = supSel.value;
+    const r = await fetch(`/api/portail/paiements/qbo/suggest${sid && sid !== 'new' ? `?supplier_id=${sid}` : ''}`);
+    const res = await r.json().catch(() => ({}));
+    if (!res.connected) return;
+    $('qb-coding').hidden = false;
+    const accSel = $<HTMLSelectElement>('qbo_account_id');
+    const taxSel = $<HTMLSelectElement>('qbo_tax_code_id');
+    if (!listsLoaded && res.accounts) {
+      for (const a of res.accounts) accSel.add(new Option(a.name, a.id));
+      for (const t of res.taxCodes) taxSel.add(new Option(t.name, t.id));
+      listsLoaded = true;
+    }
+    const s = res.suggestion;
+    const hint = $('qb-coding-hint');
+    if (sid === 'new' || !sid) { accSel.value = ''; hint.textContent = L.codingNew; return; }
+    if (s?.accountId) accSel.value = s.accountId; else accSel.value = '';
+    if (s?.taxCodeId) taxSel.value = s.taxCodeId;
+    hint.textContent = s?.basedOn ? L.codingFrom.replace('{n}', String(s.basedOn)).replace('{pct}', String(Math.round((s.share ?? 0) * 100))) : L.codingNone;
+  }
+  supSel.addEventListener('change', () => { toggleNew(); loadCoding(); });
 
   async function handle(file: File) {
     say(L.reading);
@@ -143,6 +180,7 @@ const i18n = {
       $('match-hint').textContent = m.length ? `${L.newSupplier} — ${m.map((o) => o.name).join(', ')} ?` : '';
     }
     toggleNew();
+    loadCoding();
     $('dup-warn').hidden = !res.duplicate_of;
     if (res.duplicate_of) $('dup-warn').textContent = L.dup.replace('{number}', String(x.invoice_number));
 
@@ -190,6 +228,8 @@ const i18n = {
   .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 12px; }
   @media (max-width: 600px) { .three { grid-template-columns: 1fr 1fr; } }
   .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0 0 12px; }
+  .qb-coding { border: 1px solid var(--p-border); border-radius: 8px; padding: 12px 14px 4px; margin-bottom: 12px; }
+  .qb-coding legend { font-weight: 600; font-size: .85rem; padding: 0 6px; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .side { display: grid; gap: 16px; }
   .qb-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

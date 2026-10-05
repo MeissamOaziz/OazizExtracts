@@ -8,7 +8,7 @@ import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
 import { loadAccounts, loadSuppliers, money, round2 } from '../../../lib/payables';
 import { qboConfig, connectionInfo } from '../../../lib/qbo';
-import { qboDefaults, qboLists } from '../../../lib/qbo-sync';
+import { qboDefaults, qboLists, suggestCoding, TO_CLASSIFY, type CodingSuggestion } from '../../../lib/qbo-sync';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -33,6 +33,23 @@ const { data: bankQbo } = await admin.from('ap_bank_accounts').select('id, qbo_a
 const bankMap = new Map((bankQbo ?? []).map((b) => [b.id, b.qbo_account_id as string | null]));
 
 const vendorById = new Map((lists?.vendors ?? []).map((v) => [v.id, v]));
+
+// Invoices waiting for a QB coding choice, with the history-based suggestion.
+const queue: Array<{ id: string; supplier: string; supplierId: string; number: string | null; date: string | null; amount: number; s: CodingSuggestion | null }> = [];
+if (conn && lists) {
+  const { data: pending } = await admin.from('ap_invoices')
+    .select('id, supplier_id, invoice_number, invoice_date, amount, qbo_error, ap_suppliers(name)')
+    .is('qbo_bill_id', null).is('voided_at', null).eq('qbo_error', TO_CLASSIFY)
+    .order('created_at', { ascending: false }).limit(25);
+  for (const i of pending ?? []) {
+    let sug: CodingSuggestion | null = null;
+    try { sug = await suggestCoding(admin, i.supplier_id); } catch { /* suggestion is optional */ }
+    queue.push({
+      id: i.id, supplierId: i.supplier_id, supplier: (i.ap_suppliers as unknown as { name: string } | null)?.name ?? '?',
+      number: i.invoice_number, date: i.invoice_date, amount: Number(i.amount), s: sug,
+    });
+  }
+}
 const rows = suppliers.map((s) => {
   const f = qf.get(s.id);
   const v = f?.qbo_vendor_id ? vendorById.get(f.qbo_vendor_id) : undefined;
@@ -89,11 +106,48 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
   </section>
 
   {conn && lists && (
+    <section class="card tbl-card">
+      <div class="tbl-head"><h2>{T('qbo.queue')}</h2></div>
+      {queue.length === 0 ? <p class="muted" style="padding: 8px 20px 18px;">{T('qbo.queueEmpty')}</p> : (
+        <table class="data">
+          <thead><tr><th>{T('col.supplier')}</th><th>{T('inv.number')}</th><th>{T('inv.date')}</th><th class="num">{T('inv.amount')}</th><th>{T('pdf.qbAccount')}</th><th>{T('pdf.qbTax')}</th><th></th></tr></thead>
+          <tbody>
+            {queue.map((q) => (
+              <tr>
+                <td><a href={`/portail/paiements/fournisseurs/${q.supplierId}`}>{q.supplier}</a></td>
+                <td>{q.number ?? '—'}</td>
+                <td>{q.date ?? ''}</td>
+                <td class="num">{money(q.amount, locale)}</td>
+                <td colspan="3">
+                  <form method="POST" action="/api/portail/paiements/qbo/action" class="queue-form">
+                    <input type="hidden" name="_action" value="code_and_push" /><input type="hidden" name="invoice_id" value={q.id} />
+                    <select name="qbo_account_id" required>
+                      <option value="">—</option>
+                      {lists.expenseAccounts.map((o) => <option value={o.id} selected={o.id === q.s?.accountId}>{o.name}</option>)}
+                    </select>
+                    <select name="qbo_tax_code_id">
+                      <option value="">{T('qbo.noTax')}</option>
+                      {lists.taxCodes.map((o) => <option value={o.id} selected={o.id === q.s?.taxCodeId}>{o.name}</option>)}
+                    </select>
+                    <label class="check-inline small"><input type="checkbox" name="remember" /> {T('qbo.queueRemember')}</label>
+                    <button class="btn btn-primary" type="submit">{T('qbo.queueSend')}</button>
+                    {q.s?.basedOn ? <span class="muted small">{T('pdf.qbFromHistory').replace('{n}', String(q.s.basedOn)).replace('{pct}', String(Math.round(q.s.share * 100))).split('.')[0]}.</span> : null}
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  )}
+
+  {conn && lists && (
     <form class="card" method="POST" action="/api/portail/paiements/qbo/action">
       <input type="hidden" name="_action" value="save_settings" />
       <h2>{T('qbo.settings')}</h2>
       <div class="two-col">
-        <div class="form-row"><label>{T('qbo.defaultAccount')}</label>
+        <div class="form-row"><label>{T('qbo.defaultAccountOptional')}</label>
           <select name="expense_account_id"><option value="">—</option>{opt(lists.expenseAccounts, defaults.expense_account_id).map((o) => <option value={o.id} selected={o.selected}>{o.name}</option>)}</select>
         </div>
         <div class="form-row"><label>{T('qbo.defaultTax')}</label>
@@ -211,6 +265,9 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
   dialog { border: none; border-radius: 12px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
   dialog::backdrop { background: rgba(16, 24, 40, .4); }
   .log { list-style: none; font-size: .8rem; display: grid; gap: 4px; }
+  .queue-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .queue-form select { width: auto; max-width: 260px; padding: 6px 8px; font-size: .85rem; }
+  .small { font-size: .78rem; }
   .log .st-error strong { color: var(--p-danger); }
   .log .st-warning strong { color: var(--p-warn); }
 </style>

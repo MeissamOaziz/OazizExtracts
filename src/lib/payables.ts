@@ -61,6 +61,7 @@ export interface InvoiceBalance {
   invoice_date: string | null; due_date: string | null; amount: number; description: string | null;
   in_quickbooks: boolean; file_path: string | null; source: string; origin_payment_id: string | null;
   qbo_bill_id: string | null; qbo_error: string | null; subtotal: number | null;
+  qbo_account_id: string | null; qbo_tax_code_id: string | null;
   allocated: number; open_amount: number;
   created_at: string;
 }

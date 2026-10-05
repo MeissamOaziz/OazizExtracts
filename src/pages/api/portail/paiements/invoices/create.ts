@@ -58,6 +58,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     invoice_date: invoiceDate, due_date: dueDate, amount, description: str(form, 'description'),
     subtotal: subtotal && subtotal > 0 ? subtotal : null,
     tax_gst: parseAmount(form.get('tax_gst')), tax_qst: parseAmount(form.get('tax_qst')),
+    qbo_account_id: str(form, 'qbo_account_id'), qbo_tax_code_id: str(form, 'qbo_tax_code_id'),
     in_quickbooks: alreadyInQb, file_path: safePath, created_by: staff.id,
   }).select('id').single();
   if (error || !created) {
@@ -65,6 +66,9 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     return redirect(`${back}?error=save`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, via: 'pdf' } });
+  if (form.get('qbo_remember') === 'on' && str(form, 'qbo_account_id')) {
+    await admin.from('ap_suppliers').update({ qbo_expense_account_id: str(form, 'qbo_account_id'), qbo_tax_code_id: str(form, 'qbo_tax_code_id') }).eq('id', supplierId);
+  }
   // Already keyed into QB by hand? Then don't create a second Bill.
   if (!alreadyInQb) await autoPushInvoice(admin, created.id);
   if (form.get('next') === 'another') return redirect(`${back}?ok=1`, 303);

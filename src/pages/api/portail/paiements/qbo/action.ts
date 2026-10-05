@@ -59,6 +59,19 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const r = await pushInvoice(admin, id, { force: form.get('force') === '1' });
         return go(r.ok ? 'ok' : 'error', r.message);
       }
+      case 'code_and_push': {
+        const id = String(form.get('invoice_id') ?? '');
+        const account = str('qbo_account_id');
+        if (!isUuid(id) || !account) return go('error', 'Choisissez un compte de dépense.');
+        const tax = str('qbo_tax_code_id');
+        const { data: inv } = await admin.from('ap_invoices').update({ qbo_account_id: account, qbo_tax_code_id: tax, qbo_error: null })
+          .eq('id', id).select('supplier_id').single();
+        if (inv && form.get('remember') === 'on') {
+          await admin.from('ap_suppliers').update({ qbo_expense_account_id: account, qbo_tax_code_id: tax }).eq('id', inv.supplier_id);
+        }
+        const r = await pushInvoice(admin, id, { force: true });
+        return go(r.ok ? 'ok' : 'error', r.message);
+      }
       case 'push_payment': {
         const id = String(form.get('payment_id') ?? '');
         if (!isUuid(id)) return go('error', 'Paiement invalide');

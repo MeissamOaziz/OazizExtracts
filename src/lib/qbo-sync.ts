@@ -94,6 +94,71 @@ async function matchOpenBills(admin: SupabaseClient, qbo: Qbo): Promise<number> 
   return count;
 }
 
+export const TO_CLASSIFY = 'À classer : choisissez le compte de dépense QuickBooks (Paiements → QuickBooks → Factures à classer)';
+
+// ------------------------------------------------------------------ coding suggestion
+export interface CodingSuggestion {
+  accountId: string | null;
+  taxCodeId: string | null;
+  basedOn: number;          // number of previous QB bills looked at
+  share: number;            // fraction of those using the suggested account
+  vendorName: string | null;
+}
+
+/**
+ * How this supplier's previous QB bills were coded: the most used expense
+ * account and tax code over its last 25 bills. Links the supplier to its QB
+ * vendor first (exact normalized name) if it isn't yet. Never creates anything.
+ */
+export async function suggestCoding(admin: SupabaseClient, supplierId: string): Promise<CodingSuggestion> {
+  const none: CodingSuggestion = { accountId: null, taxCodeId: null, basedOn: 0, share: 0, vendorName: null };
+  const qbo = await getQbo(admin);
+  if (!qbo) return none;
+  const { data: s } = await admin.from('ap_suppliers')
+    .select('id, name, legal_name, qbo_vendor_name, qbo_vendor_id, qbo_expense_account_id, qbo_tax_code_id').eq('id', supplierId).maybeSingle();
+  if (!s) return none;
+  let vendorId = s.qbo_vendor_id as string | null;
+  let vendorName: string | null = null;
+  if (!vendorId) {
+    const keys = [s.qbo_vendor_name, s.name, s.legal_name].map(norm).filter(Boolean);
+    const vendors = await qbo.query('Vendor', 'Active = true');
+    const v = vendors.find((x) => [x.DisplayName, x.CompanyName].map(norm).some((k) => k && keys.includes(k)));
+    if (v) {
+      vendorId = v.Id;
+      vendorName = v.DisplayName;
+      const { error } = await admin.from('ap_suppliers').update({ qbo_vendor_id: v.Id }).eq('id', s.id);
+      if (error) vendorId = v.Id; // already linked elsewhere — still usable for the suggestion
+    }
+  }
+  if (!vendorId) {
+    return { ...none, accountId: s.qbo_expense_account_id, taxCodeId: s.qbo_tax_code_id };
+  }
+  const q = `select * from Bill where VendorRef = ${qstr(vendorId)} orderby TxnDate desc maxresults 25`;
+  const res = await qbo.get(`/query?query=${encodeURIComponent(q)}`);
+  const bills: any[] = res?.QueryResponse?.Bill ?? [];
+  const acc = new Map<string, number>();
+  const tax = new Map<string, number>();
+  for (const b of bills) {
+    for (const l of b.Line ?? []) {
+      const d = l.AccountBasedExpenseLineDetail;
+      if (!d) continue;
+      const w = Math.abs(n(l.Amount)) || 1;
+      if (d.AccountRef?.value) acc.set(d.AccountRef.value, (acc.get(d.AccountRef.value) ?? 0) + w);
+      if (d.TaxCodeRef?.value) tax.set(d.TaxCodeRef.value, (tax.get(d.TaxCodeRef.value) ?? 0) + w);
+    }
+  }
+  const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1])[0];
+  const a = top(acc), t = top(tax);
+  const totalW = [...acc.values()].reduce((x, y) => x + y, 0) || 1;
+  return {
+    accountId: s.qbo_expense_account_id ?? a?.[0] ?? null,
+    taxCodeId: s.qbo_tax_code_id ?? t?.[0] ?? null,
+    basedOn: bills.length,
+    share: a ? Math.round((a[1] / totalW) * 100) / 100 : 0,
+    vendorName,
+  };
+}
+
 // ------------------------------------------------------------------ push: invoice → Bill
 export async function pushInvoice(admin: SupabaseClient, invoiceId: string, opts: { force?: boolean } = {}): Promise<{ ok: boolean; message: string }> {
   const qbo = await getQbo(admin);
@@ -108,14 +173,17 @@ export async function pushInvoice(admin: SupabaseClient, invoiceId: string, opts
 
   const defaults = await qboDefaults(admin);
   const sup = inv.ap_suppliers as SupplierRowLite & { qbo_expense_account_id: string | null; qbo_tax_code_id: string | null };
-  const account = sup.qbo_expense_account_id ?? defaults.expense_account_id;
-  const taxCode = sup.qbo_tax_code_id ?? defaults.tax_code_id;
-  const fail = async (message: string) => {
+  // Only an explicit choice is pushed: the coding reviewed on the invoice, a
+  // per-supplier override, or the (optional) default. History is a suggestion
+  // shown at review time, never applied silently.
+  const account = inv.qbo_account_id ?? sup.qbo_expense_account_id ?? defaults.expense_account_id;
+  const taxCode = inv.qbo_tax_code_id ?? sup.qbo_tax_code_id ?? defaults.tax_code_id;
+  const fail = async (message: string, status: 'error' | 'skipped' = 'error') => {
     await admin.from('ap_invoices').update({ qbo_error: message }).eq('id', invoiceId);
-    await log(admin, { direction: 'push', entity: 'bill', portal_id: invoiceId, status: 'error', message });
+    await log(admin, { direction: 'push', entity: 'bill', portal_id: invoiceId, status, message });
     return { ok: false, message };
   };
-  if (!account) return fail('Aucun compte de dépense par défaut — voir Paiements → QuickBooks');
+  if (!account) return fail(TO_CLASSIFY, 'skipped');
 
   try {
     const vendorId = await ensureVendor(admin, qbo, sup);
@@ -340,9 +408,10 @@ export async function syncAll(admin: SupabaseClient) {
   const summary = { bills: 0, billErrors: 0, payments: 0, paymentErrors: 0, pulled: { bills: 0, payments: 0, skipped: 0 } };
 
   if (defaults.push_bills) {
-    const { data } = await admin.from('ap_invoices').select('id').is('qbo_bill_id', null).is('voided_at', null)
+    const { data } = await admin.from('ap_invoices').select('id, qbo_error').is('qbo_bill_id', null).is('voided_at', null)
       .eq('source', 'portal').in('kind', ['invoice', 'credit']).gte('created_at', conn.connected_at);
-    for (const i of data ?? []) (await pushInvoice(admin, i.id)).ok ? summary.bills++ : summary.billErrors++;
+    // Invoices waiting for a coding choice stay in the review queue.
+    for (const i of (data ?? []).filter((x) => x.qbo_error !== TO_CLASSIFY)) (await pushInvoice(admin, i.id)).ok ? summary.bills++ : summary.billErrors++;
   }
   if (defaults.push_payments) {
     const { data } = await admin.from('ap_payments').select('id').is('qbo_billpayment_id', null).is('voided_at', null)
@@ -376,7 +445,16 @@ export async function reconcile(admin: SupabaseClient) {
 }
 
 /** Lists for the settings screen: expense accounts, bank accounts, tax codes, vendors. */
-export async function qboLists(admin: SupabaseClient) {
+let listsCache: { at: number; value: Awaited<ReturnType<typeof loadLists>> } | null = null;
+
+export async function qboLists(admin: SupabaseClient, opts: { fresh?: boolean } = {}) {
+  if (!opts.fresh && listsCache && Date.now() - listsCache.at < 10 * 60_000) return listsCache.value;
+  const value = await loadLists(admin);
+  if (value) listsCache = { at: Date.now(), value };
+  return value;
+}
+
+async function loadLists(admin: SupabaseClient) {
   const qbo = await getQbo(admin);
   if (!qbo) return null;
   const [accounts, taxCodes, vendors] = await Promise.all([
