@@ -93,7 +93,7 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
           <dt>{T('qbo.company')}</dt><dd>{conn.company_name ?? conn.realm_id} <span class={`badge ${conn.environment === 'production' ? 'badge-complete' : 'badge-signing'}`}>{conn.environment}</span></dd>
           <dt>{T('qbo.connectedOn')}</dt><dd>{fmt(conn.connected_at)}</dd>
           <dt>{T('qbo.lastSync')}</dt><dd>{fmt(conn.last_sync_at)} {conn.last_sync_status && <span class="muted">— {conn.last_sync_status}</span>}</dd>
-          <dt>{T('qbo.linked')}</dt><dd>{linkedCount} / {suppliers.length} · {mismatches} {T('qbo.mismatches')}</dd>
+          <dt>{T('qbo.linked')}</dt><dd>{linkedCount} / {suppliers.length} · {mismatches > 0 ? <a class="bad" href="/portail/paiements/quickbooks/ecarts">{mismatches} {T('qbo.mismatches')} →</a> : <span>0 {T('qbo.mismatches')}</span>}</dd>
           {conn.refresh_expires_at && <dt>{T('qbo.reauth')}</dt>}{conn.refresh_expires_at && <dd>{fmt(conn.refresh_expires_at)}</dd>}
         </dl>
         </>
@@ -192,7 +192,7 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
               <td class={v ? '' : 'muted'}>{v?.name ?? (f?.qbo_vendor_id ? `#${f.qbo_vendor_id}` : T('qbo.notLinked'))}</td>
               <td class="num">{money(s.bal.owed, locale)}</td>
               <td class="num">{v ? money(v.balance, locale) : '—'}</td>
-              <td class={`num ${diff && Math.abs(diff) >= 0.01 ? 'bad' : 'muted'}`}>{diff === null ? '' : Math.abs(diff) < 0.01 ? '✓' : money(diff, locale)}</td>
+              <td class={`num ${diff && Math.abs(diff) >= 0.01 ? 'bad' : 'muted'}`}>{diff === null ? '' : Math.abs(diff) < 0.01 ? '✓' : <a class="bad" href={`/portail/paiements/quickbooks/ecarts/${s.id}`}>{money(diff, locale)} →</a>}</td>
               <td><button type="button" class="link-btn edit-map">{T('qbo.edit')}</button></td>
             </tr>
           ))}

@@ -1,0 +1,81 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../../i18n/portail/paiements';
+import { loadSuppliers, money, round2 } from '../../../../../lib/payables';
+import { connectionInfo } from '../../../../../lib/qbo';
+import { qboLists } from '../../../../../lib/qbo-sync';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+if (!(await connectionInfo(admin))) return Astro.redirect('/portail/paiements/quickbooks');
+
+let listError: string | null = null;
+// Fresh vendor balances: this page is opened to check corrections.
+const lists = await qboLists(admin, { fresh: true }).catch((e) => { listError = e instanceof Error ? e.message : String(e); return null; });
+const suppliers = await loadSuppliers(admin, { includeInactive: false });
+const { data: links } = await admin.from('ap_suppliers').select('id, qbo_vendor_id').not('qbo_vendor_id', 'is', null);
+const vendorOf = new Map((links ?? []).map((l) => [l.id, l.qbo_vendor_id as string]));
+const vendorById = new Map((lists?.vendors ?? []).map((v) => [v.id, v]));
+
+const rows = suppliers.flatMap((s) => {
+  const v = vendorById.get(vendorOf.get(s.id) ?? '');
+  if (!v) return [];
+  const diff = round2(s.bal.owed - v.balance);
+  return Math.abs(diff) >= 0.01 ? [{ s, v, diff }] : [];
+}).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+const totalDiff = round2(rows.reduce((t, r) => t + r.diff, 0));
+---
+<PortailLayout title={T('rec.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="quickbooks" />
+  <p><a href="/portail/paiements/quickbooks">← QuickBooks</a></p>
+  <section class="card tbl-card">
+    <div class="tbl-head"><h2>{T('rec.title')} ({rows.length})</h2></div>
+    <p class="muted small" style="padding: 4px 20px 8px;">{T('rec.intro')}</p>
+    {listError && <p class="flash flash-error" style="margin: 0 20px 12px;">{listError}</p>}
+    {rows.length === 0 ? <p class="muted" style="padding: 0 20px 18px;">✓ {T('rec.none')}</p> : (
+      <table class="data">
+        <thead><tr><th>{T('col.supplier')}</th><th>{T('qbo.qbVendor')}</th><th class="num">{T('rec.portal')}</th><th class="num">{T('rec.qb')}</th><th class="num">{T('rec.diff')}</th><th></th></tr></thead>
+        <tbody>
+          {rows.map(({ s, v, diff }) => (
+            <tr class="clickable" data-href={`/portail/paiements/quickbooks/ecarts/${s.id}`}>
+              <td><a href={`/portail/paiements/quickbooks/ecarts/${s.id}`}>{s.name}</a></td>
+              <td>{v.name}</td>
+              <td class="num">{money(s.bal.owed, locale)}</td>
+              <td class="num">{money(v.balance, locale)}</td>
+              <td class="num bad">{money(diff, locale)}</td>
+              <td><a class="btn btn-secondary btn-sm" href={`/portail/paiements/quickbooks/ecarts/${s.id}`}>{T('rec.compare')} →</a></td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot><tr><td colspan="4"><strong>Total</strong></td><td class="num bad"><strong>{money(totalDiff, locale)}</strong></td><td></td></tr></tfoot>
+      </table>
+    )}
+  </section>
+</PortailLayout>
+<script>
+  document.querySelectorAll<HTMLTableRowElement>('tr.clickable').forEach((r) => r.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('a')) return;
+    location.href = r.dataset.href!;
+  }));
+</script>
+<style>
+  .tbl-card { padding: 0; overflow-x: auto; }
+  .tbl-head { padding: 16px 20px 0; }
+  table.data td, table.data th { padding: 8px 12px; font-size: .86rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--p-danger); font-weight: 600; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .8rem; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--p-hover, rgba(0,0,0,.03)); }
+  .btn-sm { padding: 4px 10px; font-size: .8rem; }
+</style>

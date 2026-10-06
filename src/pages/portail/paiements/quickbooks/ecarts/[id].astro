@@ -1,0 +1,233 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../../../i18n/portail/paiements';
+import { isUuid, money } from '../../../../../lib/payables';
+import { connectionInfo } from '../../../../../lib/qbo';
+import { compareSupplier, qbAppUrl, type RecLine } from '../../../../../lib/qbo-reconcile';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+const admin = getAdminClient();
+const id = String(Astro.params.id ?? '');
+const conn = await connectionInfo(admin);
+if (!isUuid(id) || !conn) return Astro.redirect('/portail/paiements/quickbooks/ecarts');
+
+let error: string | null = null;
+const r = await compareSupplier(admin, id).catch((e) => { error = e instanceof Error ? e.message : String(e); return null; });
+if (!r && !error) return Astro.redirect('/portail/paiements/quickbooks/ecarts');
+
+const { data: history } = await admin.from('ap_events').select('action, details, created_at, staff:actor_staff_id(full_name)')
+  .eq('supplier_id', id).like('action', 'qbo_reconcile_%').order('created_at', { ascending: false }).limit(30);
+
+const env = conn.environment;
+const sp = Astro.url.searchParams;
+const lines = r?.lines ?? [];
+const problems = lines.filter((l) => l.status !== 'ok');
+const qbUnlinked = lines.filter((l) => l.status === 'qb_only');
+const portalOnly = (l: RecLine) => l.status === 'portal_only';
+const fmtDate = (d: string | null) => d ?? '—';
+const fmtTs = (iso: string) => new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' });
+const actLabel: Record<string, string> = {
+  qbo_reconcile_align: T('rec.alignTitle'), qbo_reconcile_line: T('rec.act.adjustLine'), qbo_reconcile_settle: T('rec.act.settle'),
+  qbo_reconcile_import: T('rec.act.import'), qbo_reconcile_link: T('rec.act.link'), qbo_reconcile_push: T('rec.act.push'),
+};
+const endpoint = '/api/portail/paiements/qbo/reconcile';
+const histRows = (history ?? []).map((h) => {
+  const d = (h.details ?? {}) as Record<string, unknown>;
+  return {
+    at: h.created_at as string,
+    who: (h.staff as unknown as { full_name: string } | null)?.full_name ?? '—',
+    label: actLabel[h.action] ?? h.action,
+    extra: `${d.invoice ? ` · ${d.invoice}` : ''}${typeof d.amount === 'number' ? ` · ${money(d.amount, locale)}` : ''}`,
+    reason: d.reason ? String(d.reason) : null,
+  };
+});
+---
+<PortailLayout title={`${T('rec.title')} — ${r?.supplier.name ?? ''}`} staffName={staff.full_name} wide>
+  <h1>{r?.supplier.name ?? T('rec.title')}</h1>
+  <PaiementsNav active="quickbooks" />
+  <p class="crumbs"><a href="/portail/paiements/quickbooks/ecarts">{T('rec.back')}</a>
+    {r && <> · <a href={`/portail/paiements/fournisseurs/${r.supplier.id}`}>{T('col.supplier')}</a></>}
+    {r?.vendor && <> · <a href={qbAppUrl('Vendor', r.vendor.id, env)} target="_blank" rel="noopener">{T('rec.act.openQb')} ↗</a></>}
+  </p>
+  {sp.get('ok') && <div class="flash flash-success">{sp.get('ok')}</div>}
+  {sp.get('error') && <div class="flash flash-error">{sp.get('error')}</div>}
+  {error && <div class="flash flash-error">{error}</div>}
+
+  {r && !r.vendor && <div class="card"><p class="muted">{T('rec.notLinked')}</p></div>}
+
+  {r && r.vendor && (
+    <>
+      <div class="cards">
+        <div class="card stat"><div class="lbl">{T('rec.portal')}</div><div class="val">{money(r.portalOwed, locale)}</div></div>
+        <div class="card stat"><div class="lbl">{T('rec.qb')} · {r.vendor.name}</div><div class="val">{money(r.qbBalance, locale)}</div></div>
+        <div class="card stat"><div class="lbl">{T('rec.diff')}</div><div class={`val ${r.diff && Math.abs(r.diff) >= 0.01 ? 'bad' : 'good'}`}>{r.diff !== null && Math.abs(r.diff) < 0.01 ? '✓' : money(r.diff, locale)}</div></div>
+      </div>
+
+      <section class="card tbl-card">
+        <div class="tbl-head">
+          <h2>{T('rec.compare')} ({problems.length} / {lines.length})</h2>
+          <label class="check-inline small"><input type="checkbox" id="hide-ok" checked /> {T('rec.hideOk')}</label>
+        </div>
+        <table class="data">
+          <thead><tr><th>{T('rec.number')}</th><th>{T('rec.date')}</th><th class="num">{T('rec.portal')}</th><th class="num">{T('rec.qb')}</th><th class="num">{T('rec.diff')}</th><th>{T('rec.status')}</th><th>{T('rec.fix')}</th></tr></thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr class={`st-${l.status}`} data-ok={l.status === 'ok' ? '1' : ''}>
+                <td>
+                  {l.number ?? <span class="muted">{l.invoice?.kind === 'opening_balance' ? 'Opening balance' : '—'}</span>}
+                  {l.invoice?.description && <div class="small muted desc" title={l.invoice.description}>{l.invoice.description}</div>}
+                  {!l.invoice && l.qbDoc?.note && <div class="small muted desc" title={l.qbDoc.note}>{l.qbDoc.note}</div>}
+                </td>
+                <td>{fmtDate(l.date)}</td>
+                <td class="num">{l.portal === null ? '—' : money(l.portal, locale)}</td>
+                <td class="num">{l.qb === null ? '—' : money(l.qb, locale)}{l.qbDoc && l.qbDoc.type === 'VendorCredit' && <span class="small muted"> (crédit)</span>}</td>
+                <td class={`num ${Math.abs(l.diff) >= 0.01 ? 'bad' : 'muted'}`}>{Math.abs(l.diff) < 0.01 ? '✓' : money(l.diff, locale)}</td>
+                <td><span class={`pill pill-${l.status}`}>{T(`rec.st.${l.status}`)}</span></td>
+                <td class="fix">
+                  {l.qbDoc && <a class="small" href={qbAppUrl(l.qbDoc.type, l.qbDoc.id, env)} target="_blank" rel="noopener">{T('rec.act.openQb')} ↗</a>}
+                  {(l.status === 'amount' || l.status === 'qb_closed') && l.invoice && (
+                    <form method="POST" action={endpoint} class="inline-fix">
+                      <input type="hidden" name="supplier_id" value={r.supplier.id} />
+                      <input type="hidden" name="invoice_id" value={l.invoice.id} />
+                      <input type="hidden" name="_action" value={l.status === 'qb_closed' ? 'settle' : 'adjust_line'} />
+                      <input type="hidden" name="qb_balance" value={String(l.qb ?? 0)} />
+                      <input name="reason" required placeholder={T('rec.reason')} />
+                      <button class="btn btn-secondary btn-sm" type="submit">{l.status === 'qb_closed' ? T('rec.act.settle') : T('rec.act.adjustLine')}</button>
+                    </form>
+                  )}
+                  {portalOnly(l) && l.invoice && (
+                    <>
+                      {['invoice', 'credit'].includes(l.invoice.kind) && !l.invoice.qbo_bill_id && (
+                        <form method="POST" action={endpoint} class="inline-fix">
+                          <input type="hidden" name="supplier_id" value={r.supplier.id} />
+                          <input type="hidden" name="invoice_id" value={l.invoice.id} />
+                          <input type="hidden" name="_action" value="push" />
+                          <button class="btn btn-secondary btn-sm" type="submit">{T('rec.act.push')}</button>
+                        </form>
+                      )}
+                      {qbUnlinked.length > 0 && (
+                        <form method="POST" action={endpoint} class="inline-fix">
+                          <input type="hidden" name="supplier_id" value={r.supplier.id} />
+                          <input type="hidden" name="invoice_id" value={l.invoice.id} />
+                          <input type="hidden" name="_action" value="link" />
+                          <select name="qb_id" required>
+                            <option value="">{T('rec.linkTo')}</option>
+                            {qbUnlinked.map((q) => <option value={q.qbDoc!.id}>{q.number ?? `#${q.qbDoc!.id}`} · {money(q.qb, locale)}</option>)}
+                          </select>
+                          <button class="btn btn-secondary btn-sm" type="submit">{T('rec.act.link')}</button>
+                        </form>
+                      )}
+                      <form method="POST" action={endpoint} class="inline-fix">
+                        <input type="hidden" name="supplier_id" value={r.supplier.id} />
+                        <input type="hidden" name="invoice_id" value={l.invoice.id} />
+                        <input type="hidden" name="_action" value="settle" />
+                        <input name="reason" required placeholder={T('rec.reason')} />
+                        <button class="btn btn-secondary btn-sm" type="submit">{T('rec.act.settle')}</button>
+                      </form>
+                    </>
+                  )}
+                  {l.status === 'qb_only' && l.qbDoc && (
+                    <form method="POST" action={endpoint} class="inline-fix">
+                      <input type="hidden" name="supplier_id" value={r.supplier.id} />
+                      <input type="hidden" name="qb_id" value={l.qbDoc.id} />
+                      <input type="hidden" name="qb_type" value={l.qbDoc.type} />
+                      <input type="hidden" name="_action" value="import" />
+                      <button class="btn btn-secondary btn-sm" type="submit">{T('rec.act.import')}</button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {Math.abs(r.qbOther) >= 0.01 && (
+              <tr class="st-other">
+                <td colspan="3">{T('rec.other')}<div class="small muted">{T('rec.otherHint')}</div></td>
+                <td class="num">{money(r.qbOther, locale)}</td>
+                <td class="num bad">{money(-r.qbOther, locale)}</td>
+                <td colspan="2"><a class="small" href={qbAppUrl('Vendor', r.vendor.id, env)} target="_blank" rel="noopener">{T('rec.act.openQb')} ↗</a></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <p class="muted small" style="padding: 10px 20px 16px;">{T('rec.qbSideHint')}</p>
+      </section>
+
+      {r.diff !== null && Math.abs(r.diff) >= 0.01 && (
+        <form class="card" method="POST" action={endpoint}>
+          <input type="hidden" name="supplier_id" value={r.supplier.id} />
+          <input type="hidden" name="_action" value="align_total" />
+          <h2>{T('rec.alignTitle')}</h2>
+          <p class="muted small">{T('rec.alignHint')}</p>
+          <div class="align-row">
+            <input name="reason" required placeholder={T('rec.reason')} />
+            <button class="btn btn-primary" type="submit"
+              onclick={`return confirm(${JSON.stringify(T('rec.alignBtn').replace('{amount}', money(-r.diff, locale)))} + ' ?')`}>
+              {T('rec.alignBtn').replace('{amount}', money(-r.diff, locale))}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {histRows.length > 0 && (
+        <details class="card" open>
+          <summary>{T('rec.history')}</summary>
+          <ul class="hist">
+            {histRows.map((h) => (
+              <li>
+                <span class="muted">{fmtTs(h.at)}</span> · {h.who} · <strong>{h.label}</strong>{h.extra}
+                {h.reason && <span class="muted"> — {h.reason}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
+  )}
+</PortailLayout>
+<script>
+  const box = document.getElementById('hide-ok') as HTMLInputElement | null;
+  const apply = () => document.querySelectorAll<HTMLTableRowElement>('tr[data-ok="1"]').forEach((r) => { r.hidden = !!box?.checked; });
+  box?.addEventListener('change', apply);
+  apply();
+  // One submit per click: avoid double adjustments.
+  document.querySelectorAll<HTMLFormElement>('form[method="POST"]').forEach((f) => f.addEventListener('submit', () => {
+    f.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach((b) => { b.disabled = true; });
+  }));
+</script>
+<style>
+  .crumbs { margin-bottom: 12px; font-size: .88rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat .lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--p-muted); }
+  .stat .val { font-size: 1.35rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tbl-card { padding: 0; overflow-x: auto; margin-bottom: 16px; }
+  .tbl-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px 0; }
+  table.data td, table.data th { padding: 8px 12px; font-size: .85rem; vertical-align: top; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--p-danger); font-weight: 600; }
+  .good { color: var(--p-success, #15803d); }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .78rem; }
+  .desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .74rem; white-space: nowrap; background: #eef2f6; }
+  .pill-ok { background: #e7f6ec; color: #166534; }
+  .pill-amount { background: #fff4e5; color: #9a3412; }
+  .pill-portal_only { background: #eef2ff; color: #3730a3; }
+  .pill-qb_only { background: #fdf2f8; color: #9d174d; }
+  .pill-qb_closed { background: #f0f9ff; color: #075985; }
+  .fix { min-width: 280px; }
+  .inline-fix { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .inline-fix input, .inline-fix select { width: auto; flex: 1 1 140px; padding: 5px 8px; font-size: .8rem; }
+  .btn-sm { padding: 4px 10px; font-size: .78rem; }
+  .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+  .align-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .align-row input { flex: 1 1 260px; }
+  .hist { list-style: none; padding: 10px 0 0; display: grid; gap: 4px; font-size: .82rem; }
+  tr.st-other td { background: #fafafa; }
+</style>
