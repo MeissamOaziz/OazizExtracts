@@ -60,6 +60,10 @@ const rows = suppliers.map((s) => {
   return Math.abs(b.diff ?? b.s.bal.owed) - Math.abs(a.diff ?? a.s.bal.owed);
 });
 const linkedCount = rows.filter((r) => r.f?.qbo_vendor_id).length;
+// QB vendors that carry a balance but no portal supplier is linked to them.
+const linkedIds = new Set((qboFields ?? []).map((r) => r.qbo_vendor_id).filter(Boolean));
+const orphanVendors = (lists?.vendors ?? []).filter((v) => !linkedIds.has(v.id) && Math.abs(v.balance) >= 0.01)
+  .sort((x, y) => Math.abs(y.balance) - Math.abs(x.balance));
 const mismatches = rows.filter((r) => r.diff !== null && Math.abs(r.diff) >= 0.01).length;
 const sp = Astro.url.searchParams;
 const errKey = sp.get('error');
@@ -191,6 +195,19 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
           ))}
         </tbody>
       </table>
+    </section>
+  )}
+
+  {conn && lists && (
+    <section class="card tbl-card">
+      <div class="tbl-head"><h2>{T('qbo.orphans')} ({orphanVendors.length})</h2></div>
+      <p class="muted small" style="padding: 4px 20px 8px;">{T('qbo.orphansHint')}</p>
+      {orphanVendors.length === 0 ? <p class="muted" style="padding: 0 20px 16px;">✓</p> : (
+        <table class="data">
+          <thead><tr><th>{T('qbo.qbVendor')}</th><th class="num">QuickBooks</th></tr></thead>
+          <tbody>{orphanVendors.map((v) => <tr><td>{v.name}</td><td class="num">{money(v.balance, locale)}</td></tr>)}</tbody>
+        </table>
+      )}
     </section>
   )}
 
