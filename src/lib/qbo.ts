@@ -96,6 +96,11 @@ async function saveTokens(admin: SupabaseClient, t: TokenResponse, extra: Record
 export async function completeConnection(admin: SupabaseClient, code: string, realmId: string, staffId: string) {
   const cfg = qboConfig();
   const t = await tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: cfg.redirectUri });
+  // A different company (e.g. sandbox → real books): every stored QB id
+  // (vendors, bills, payments, accounts, tax codes) belongs to the old one.
+  const { data: last } = await admin.from('ap_settings').select('value').eq('key', 'qbo_last_realm').maybeSingle();
+  if (last?.value && last.value !== realmId) await resetQboLinks(admin);
+  await admin.from('ap_settings').upsert({ key: 'qbo_last_realm', value: realmId, updated_at: new Date().toISOString() });
   await saveTokens(admin, t, {
     environment: cfg.environment, realm_id: realmId, connected_by: staffId, connected_at: new Date().toISOString(),
     last_pull_cursor: new Date().toISOString(),
@@ -107,6 +112,22 @@ export async function completeConnection(admin: SupabaseClient, code: string, re
       await admin.from('qbo_connection').update({ company_name: info?.CompanyInfo?.CompanyName ?? null }).eq('id', 1);
     } catch { /* name is cosmetic */ }
   }
+}
+
+/** Forget every link to the previously connected QB company. Portal data itself is untouched. */
+async function resetQboLinks(admin: SupabaseClient) {
+  await admin.from('ap_suppliers').update({ qbo_vendor_id: null, qbo_expense_account_id: null, qbo_tax_code_id: null })
+    .or('qbo_vendor_id.not.is.null,qbo_expense_account_id.not.is.null,qbo_tax_code_id.not.is.null');
+  await admin.from('ap_invoices').update({ qbo_bill_id: null, qbo_synced_at: null, qbo_error: null, qbo_account_id: null, qbo_tax_code_id: null })
+    .or('qbo_bill_id.not.is.null,qbo_account_id.not.is.null,qbo_tax_code_id.not.is.null,qbo_error.not.is.null');
+  await admin.from('ap_payments').update({ qbo_billpayment_id: null, qbo_synced_at: null, qbo_error: null })
+    .or('qbo_billpayment_id.not.is.null,qbo_error.not.is.null');
+  await admin.from('ap_bank_accounts').update({ qbo_account_id: null }).not('qbo_account_id', 'is', null);
+  const { data: d } = await admin.from('ap_settings').select('value').eq('key', 'qbo_defaults').maybeSingle();
+  if (d?.value) {
+    await admin.from('ap_settings').update({ value: { ...d.value, expense_account_id: null, tax_code_id: null } }).eq('key', 'qbo_defaults');
+  }
+  await admin.from('qbo_sync_log').insert({ direction: 'system', entity: 'connection', status: 'ok', message: 'Nouvelle compagnie QuickBooks : liens de l’ancienne compagnie effacés' });
 }
 
 export async function disconnect(admin: SupabaseClient) {
