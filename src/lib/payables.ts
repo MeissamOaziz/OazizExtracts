@@ -193,6 +193,13 @@ export async function loadRunByToken(admin: SupabaseClient, rawToken: string) {
   return loadRun(admin, data.id);
 }
 
+/** Outflow lines (payroll, credit card, loan) always reduce the balance, whatever sign was typed. */
+export const OUTFLOW_KINDS = ['payroll', 'credit_card', 'loan'];
+export function cashEffect(kind: string, amount: number | null | undefined): number {
+  const v = n(amount);
+  return OUTFLOW_KINDS.includes(kind) ? -Math.abs(v) : v;
+}
+
 export interface AccountCash {
   account: BankAccount;
   base: number;          // balance + fixed lines (signed)
@@ -231,7 +238,7 @@ export function computeCash(
   const name = new Map(accounts.map((a) => [a.id, a.name]));
   return accounts.map((account) => {
     const lns = cash.filter((c) => c.bank_account_id === account.id);
-    const base = round2(lns.reduce((s, c) => s + n(c.amount), 0));
+    const base = round2(lns.reduce((s, c) => s + cashEffect(c.kind, c.amount), 0));
     const balanceMissing = lns.some((c) => c.kind === 'balance' && (c.amount === null || c.amount === undefined));
     const o = own.get(account.id)!;
     if (account.funded_by) {

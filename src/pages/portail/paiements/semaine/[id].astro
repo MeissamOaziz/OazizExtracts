@@ -71,9 +71,9 @@ const totalSuggested = lines.reduce((s, l) => s + n(l.suggested_amount), 0);
 const suggestedCount = lines.filter((l) => n(l.suggested_amount) > 0).length;
 const i18n = {
   saved: T('saved'), saveError: T('saveError'), undoPaid: T('line.undoPaid'),
-  submitConfirm: fill(T('submit.confirm'), { count: suggestedCount, total: money(totalSuggested, locale), name: approver?.name ?? '?', email: approver?.email ?? '?' }),
+  submitConfirm: fill(T('submit.confirm'), { name: approver?.name ?? '?', email: approver?.email ?? '?' }),
   manualConfirm: T('action.manualApprove.confirm'), closeConfirm: T('action.close.confirm'),
-  payTitle: T('line.payModal.title'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
+  noLines: T('submit.noLines'), payTitle: T('line.payModal.title'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
 };
 ---
 <PortailLayout title={fill(T('run.title'), { date: dayLabel })} staffName={staff.full_name} wide>
@@ -97,7 +97,7 @@ const i18n = {
   <form method="POST" action={`/api/portail/paiements/runs/${run.id}/action`} class="action-bar no-print" id="action-form">
     {run.status === 'draft' && (
       <>
-        <button class="btn btn-primary" name="_action" value="submit" data-confirm={i18n.submitConfirm}>{T('action.submit')}</button>
+        <button class="btn btn-primary" name="_action" value="submit" data-confirm={i18n.submitConfirm} data-live-totals="1">{T('action.submit')}</button>
         {prev && <button class="btn btn-secondary" name="_action" value="copy_prev">{T('action.copyPrev')}</button>}
       </>
     )}
@@ -372,7 +372,7 @@ const i18n = {
         const v = parseAmount(input.value);
         if (v === null && tr.dataset.kind === 'balance') missing = true;
         input.classList.toggle('missing', v === null && tr.dataset.kind === 'balance');
-        if (v !== null && !Number.isNaN(v)) baseAmt += v;
+        if (v !== null && !Number.isNaN(v)) baseAmt += ['payroll', 'credit_card', 'loan'].includes(tr.dataset.kind ?? '') ? -Math.abs(v) : v;
       });
       const zero = { suggested: 0, approved: 0, paid: 0 };
       const a = perAcc.get(card.dataset.account!) ?? zero;
@@ -567,7 +567,15 @@ const i18n = {
 
   // ---------------------------------------------------------------- actions
   document.querySelectorAll<HTMLButtonElement>('#action-form button[data-confirm]').forEach((b) => b.addEventListener('click', (ev) => {
-    if (!confirm(b.dataset.confirm!)) ev.preventDefault();
+    let msg = b.dataset.confirm!;
+    if (b.dataset.liveTotals) {
+      // Count what's on screen now, not what was there when the page loaded.
+      const rows = [...document.querySelectorAll<HTMLTableRowElement>('tr.ap-row')].filter((r) => num(r.dataset.suggested) > 0);
+      const total = rows.reduce((s, r) => s + num(r.dataset.suggested), 0);
+      if (!rows.length) { alert(AP.i18n.noLines); ev.preventDefault(); return; }
+      msg = msg.replace('{count}', String(rows.length)).replace('{total}', money(total));
+    }
+    if (!confirm(msg)) ev.preventDefault();
   }));
 
   applyFilter();
