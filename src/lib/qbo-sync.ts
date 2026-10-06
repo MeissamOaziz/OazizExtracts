@@ -481,6 +481,8 @@ export async function syncAll(admin: SupabaseClient) {
   const defaults = await qboDefaults(admin);
   const { data: conn } = await admin.from('qbo_connection').select('connected_at').eq('id', 1).maybeSingle();
   if (!conn) throw new Error('QuickBooks non connecté');
+  // Fails fast (and flags the connection) when the authorization is no longer valid.
+  await getQbo(admin);
   const summary = { bills: 0, billErrors: 0, payments: 0, paymentErrors: 0, pulled: { bills: 0, payments: 0, skipped: 0 } };
 
   if (defaults.push_bills) {

@@ -7,7 +7,7 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
 import { loadAccounts, loadSuppliers, money, round2 } from '../../../lib/payables';
-import { qboConfig, connectionInfo } from '../../../lib/qbo';
+import { qboConfig, connectionInfo, RECONNECT_STATUS } from '../../../lib/qbo';
 import { qboDefaults, qboLists, suggestCoding, TO_CLASSIFY, type CodingSuggestion } from '../../../lib/qbo-sync';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
@@ -87,6 +87,8 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
       ) : !conn ? (
         <p class="muted">{T('qbo.notConnected').replace('{env}', cfg.environment === 'production' ? 'production' : 'sandbox (test)')}</p>
       ) : (
+        <>
+        {conn.last_sync_status === RECONNECT_STATUS && <p class="flash flash-error">{T('qbo.reconnectNeeded')}</p>}
         <dl class="kv">
           <dt>{T('qbo.company')}</dt><dd>{conn.company_name ?? conn.realm_id} <span class={`badge ${conn.environment === 'production' ? 'badge-complete' : 'badge-signing'}`}>{conn.environment}</span></dd>
           <dt>{T('qbo.connectedOn')}</dt><dd>{fmt(conn.connected_at)}</dd>
@@ -94,6 +96,7 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
           <dt>{T('qbo.linked')}</dt><dd>{linkedCount} / {suppliers.length} · {mismatches} {T('qbo.mismatches')}</dd>
           {conn.refresh_expires_at && <dt>{T('qbo.reauth')}</dt>}{conn.refresh_expires_at && <dd>{fmt(conn.refresh_expires_at)}</dd>}
         </dl>
+        </>
       )}
       {listError && <p class="flash flash-error" style="margin-top:10px;">{listError}</p>}
     </div>

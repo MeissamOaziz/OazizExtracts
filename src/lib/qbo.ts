@@ -103,7 +103,7 @@ export async function completeConnection(admin: SupabaseClient, code: string, re
   await admin.from('ap_settings').upsert({ key: 'qbo_last_realm', value: realmId, updated_at: new Date().toISOString() });
   await saveTokens(admin, t, {
     environment: cfg.environment, realm_id: realmId, connected_by: staffId, connected_at: new Date().toISOString(),
-    last_pull_cursor: new Date().toISOString(),
+    last_pull_cursor: new Date().toISOString(), last_sync_status: null,
   });
   const qbo = await getQbo(admin);
   if (qbo) {
@@ -161,8 +161,10 @@ export async function connectionInfo(admin: SupabaseClient): Promise<QboConnecti
 }
 
 // ------------------------------------------------------------- API client
+export const RECONNECT_STATUS = 'reconnect_required';
+
 export class QboError extends Error {
-  constructor(message: string, public status: number, public code?: string) { super(message); }
+  constructor(message: string, public status: number, public code?: string, public tid?: string) { super(message); }
 }
 
 export interface Qbo {
@@ -180,28 +182,50 @@ export async function getQbo(admin: SupabaseClient): Promise<Qbo | null> {
   const { data: conn } = await admin.from('qbo_connection').select('*').eq('id', 1).maybeSingle();
   if (!conn) return null;
 
-  let accessToken: string;
-  if (new Date(conn.access_expires_at).getTime() > Date.now()) {
-    accessToken = decrypt(conn.access_token_enc);
-  } else {
-    const t = await tokenRequest({ grant_type: 'refresh_token', refresh_token: decrypt(conn.refresh_token_enc) });
-    await saveTokens(admin, t);
-    accessToken = t.access_token;
+  // Refresh tokens rotate: always refresh from the latest stored one. An
+  // invalid_grant means the authorization was revoked or expired — flag the
+  // connection so the QuickBooks page asks to reconnect.
+  let refreshToken = decrypt(conn.refresh_token_enc);
+  async function refresh() {
+    try {
+      const t = await tokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken });
+      await saveTokens(admin, t);
+      refreshToken = t.refresh_token;
+      return t.access_token;
+    } catch (e) {
+      if (/invalid_grant/i.test(String((e as Error)?.message))) {
+        await admin.from('qbo_connection').update({ last_sync_status: RECONNECT_STATUS }).eq('id', 1);
+        throw new QboError('Connexion QuickBooks expirée — reconnectez QuickBooks.', 401, 'reconnect');
+      }
+      throw e;
+    }
   }
+  let accessToken = new Date(conn.access_expires_at).getTime() > Date.now()
+    ? decrypt(conn.access_token_enc)
+    : await refresh();
   const realm = conn.realm_id as string;
   const root = `${cfg.apiBase}/v3/company/${realm}`;
   const withMinor = (p: string) => `${root}${p}${p.includes('?') ? '&' : '?'}minorversion=${MINOR}`;
 
-  async function call(url: string, init: RequestInit = {}) {
+  async function call(url: string, init: RequestInit = {}, retried = false): Promise<any> {
     const r = await fetch(url, {
       ...init,
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', ...(init.headers ?? {}) },
     });
+    // Access token expired/revoked early: refresh once and retry.
+    if (r.status === 401 && !retried) {
+      accessToken = await refresh();
+      return call(url, init, true);
+    }
     const text = await r.text();
-    const body = text ? JSON.parse(text) : null;
+    let body: any = null;
+    try { body = text ? JSON.parse(text) : null; } catch { /* non-JSON error page */ }
     if (!r.ok || body?.Fault) {
       const err = body?.Fault?.Error?.[0];
-      throw new QboError(err ? `${err.Message}${err.Detail ? ` — ${err.Detail}` : ''}` : `QuickBooks ${r.status}`, r.status, err?.code);
+      // intuit_tid identifies the request for Intuit support; kept in every logged error.
+      const tid = r.headers.get('intuit_tid');
+      const msg = err ? `${err.Message}${err.Detail ? ` — ${err.Detail}` : ''}` : `QuickBooks ${r.status}`;
+      throw new QboError(tid ? `${msg} (intuit_tid ${tid})` : msg, r.status, err?.code, tid ?? undefined);
     }
     return body;
   }
