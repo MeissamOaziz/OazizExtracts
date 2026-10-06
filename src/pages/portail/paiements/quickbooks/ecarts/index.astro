@@ -55,17 +55,21 @@ const totalDiff = round2(rows.reduce((t, r) => t + r.diff, 0));
               <td><a class="btn btn-secondary btn-sm" href={`/portail/paiements/quickbooks/ecarts/${s.id}`}>{T('rec.compare')} →</a></td>
             </tr>
           ))}
+          <tr class="total-row"><td colspan="4">Total</td><td class="num bad">{money(totalDiff, locale)}</td><td></td></tr>
         </tbody>
-        <tfoot><tr><td colspan="4"><strong>Total</strong></td><td class="num bad"><strong>{money(totalDiff, locale)}</strong></td><td></td></tr></tfoot>
       </table>
     )}
   </section>
 </PortailLayout>
 <script>
-  document.querySelectorAll<HTMLTableRowElement>('tr.clickable').forEach((r) => r.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).closest('a')) return;
-    location.href = r.dataset.href!;
-  }));
+  for (const r of document.querySelectorAll('tr.clickable')) {
+    r.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest('a')) return;
+      const href = r.getAttribute('data-href');
+      if (href) location.href = href;
+    });
+  }
 </script>
 <style>
   .tbl-card { padding: 0; overflow-x: auto; }
@@ -77,5 +81,6 @@ const totalDiff = round2(rows.reduce((t, r) => t + r.diff, 0));
   .small { font-size: .8rem; }
   tr.clickable { cursor: pointer; }
   tr.clickable:hover td { background: var(--p-hover, rgba(0,0,0,.03)); }
+  .total-row td { font-weight: 700; border-top: 2px solid var(--p-border, #e5e7eb); }
   .btn-sm { padding: 4px 10px; font-size: .8rem; }
 </style>
