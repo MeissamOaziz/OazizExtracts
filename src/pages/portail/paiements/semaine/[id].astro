@@ -73,7 +73,8 @@ const i18n = {
   saved: T('saved'), saveError: T('saveError'), undoPaid: T('line.undoPaid'),
   submitConfirm: fill(T('submit.confirm'), { name: approver?.name ?? '?', email: approver?.email ?? '?' }),
   manualConfirm: T('action.manualApprove.confirm'), closeConfirm: T('action.close.confirm'),
-  noLines: T('submit.noLines'), payTitle: T('line.payModal.title'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
+  noLines: T('submit.noLines'), payTitle: T('line.payModal.title'),
+  bulkConfirm: T('bulk.confirm'), bulkNone: T('bulk.none'), bulkTotal: T('bulk.total'), bulkDone: T('bulk.done'), bulkQbPending: T('bulk.qbPending'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
 };
 ---
 <PortailLayout title={fill(T('run.title'), { date: dayLabel })} staffName={staff.full_name} wide>
@@ -108,6 +109,7 @@ const i18n = {
         <button class="btn btn-secondary" name="_action" value="manual_approve" data-confirm={i18n.manualConfirm}>{T('action.manualApprove')}</button>
       </>
     )}
+    {run.status === 'approved' && <button type="button" class="btn btn-primary" id="bulk-open">{T('bulk.open')}</button>}
     {run.status === 'approved' && <button class="btn btn-secondary" name="_action" value="close" data-confirm={i18n.closeConfirm}>{T('action.close')}</button>}
     {run.status === 'closed' && <button class="btn btn-secondary" name="_action" value="reopen">{T('action.reopen')}</button>}
   </form>
@@ -308,14 +310,37 @@ const i18n = {
     </form>
   </dialog>
 
+  <dialog id="bulk-dialog" class="bulk-dialog">
+    <form method="dialog" id="bulk-form">
+      <h2>{T('bulk.title')}</h2>
+      <p class="hint" style="margin-bottom:10px;">{T('bulk.hint')}</p>
+      <div class="bulk-top">
+        <div class="form-row"><label>{T('line.payModal.date')}</label><input type="date" name="paid_on" value={today} required /></div>
+        <div class="form-row"><label>{T('line.payModal.ref')}</label><input type="text" name="reference" /></div>
+      </div>
+      <div class="bulk-list-wrap">
+        <table class="inner bulk-list">
+          <thead><tr><th><input type="checkbox" id="bulk-all" checked /></th><th>{T('col.supplier')}</th><th>{T('col.account')}</th><th class="num">{T('line.payModal.amount')}</th></tr></thead>
+          <tbody id="bulk-rows"></tbody>
+        </table>
+      </div>
+      <div class="bulk-summary" id="bulk-summary"></div>
+      <p class="flash flash-error" id="bulk-error" hidden></p>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button type="button" class="btn btn-secondary" id="bulk-cancel">{Tc('btn.cancel')}</button>
+        <button type="submit" class="btn btn-primary" id="bulk-confirm"></button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" hidden></div>
-  <script is:inline define:vars={{ runId: run.id, status: run.status, i18n, cashAccounts: accounts.map((a) => a.id) }}>
-    window.__AP = { runId, status, i18n, cashAccounts };
+  <script is:inline define:vars={{ runId: run.id, status: run.status, i18n, cashAccounts: accounts.map((a) => a.id), accountNames: Object.fromEntries(accounts.map((a) => [a.id, a.name])) }}>
+    window.__AP = { runId, status, i18n, cashAccounts, accountNames };
   </script>
 </PortailLayout>
 
 <script>
-  type APState = { runId: string; status: string; i18n: Record<string, string>; cashAccounts: string[] };
+  type APState = { runId: string; status: string; i18n: Record<string, string>; cashAccounts: string[]; accountNames: Record<string, string> };
   const AP = (window as unknown as { __AP: APState }).__AP;
   const base = `/api/portail/paiements/runs/${AP.runId}`;
   const fmt = new Intl.NumberFormat(AP.i18n.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
@@ -578,6 +603,85 @@ const i18n = {
     if (!confirm(msg)) ev.preventDefault();
   }));
 
+  // ---------------------------------------------------------------- bulk pay
+  const bulkDlg = document.getElementById('bulk-dialog') as HTMLDialogElement;
+  const bulkForm = document.getElementById('bulk-form') as HTMLFormElement;
+  const bulkRows = document.getElementById('bulk-rows')!;
+  function bulkRecompute() {
+    const per = new Map<string, { n: number; t: number }>();
+    let n = 0, t = 0;
+    bulkRows.querySelectorAll<HTMLTableRowElement>('tr').forEach((tr) => {
+      const on = tr.querySelector<HTMLInputElement>('.b-on')!.checked;
+      const v = parseAmount(tr.querySelector<HTMLInputElement>('.b-amt')!.value);
+      tr.querySelector('.b-amt')!.classList.toggle('invalid', on && (!v || Number.isNaN(v) || v <= 0));
+      if (!on || !v || Number.isNaN(v)) return;
+      n++; t += v;
+      const acc = AP.accountNames[tr.dataset.account!] ?? '?';
+      const a = per.get(acc) ?? { n: 0, t: 0 };
+      a.n++; a.t += v; per.set(acc, a);
+    });
+    document.getElementById('bulk-summary')!.innerHTML = [...per.entries()]
+      .map(([acc, a]) => `<div><span>${acc} — ${a.n}</span><strong>${money(a.t)}</strong></div>`).join('')
+      + `<div class="grand"><span>${AP.i18n.bulkTotal}</span><strong>${money(t)}</strong></div>`;
+    const btn = document.getElementById('bulk-confirm') as HTMLButtonElement;
+    btn.textContent = AP.i18n.bulkConfirm.replace('{count}', String(n)).replace('{total}', money(t));
+    btn.disabled = n === 0 || !!bulkRows.querySelector('.b-amt.invalid');
+  }
+  document.getElementById('bulk-open')?.addEventListener('click', () => {
+    const toPay = [...document.querySelectorAll<HTMLTableRowElement>('tr.ap-row')].filter((r) => r.dataset.status === 'approved');
+    if (!toPay.length) { alert(AP.i18n.bulkNone); return; }
+    bulkRows.innerHTML = '';
+    for (const r of toPay) {
+      const tr = document.createElement('tr');
+      tr.dataset.line = r.querySelector<HTMLInputElement>('.cb-paid')!.dataset.line!;
+      tr.dataset.account = r.dataset.account!;
+      const name = r.querySelector('.sup-cell a')!.textContent ?? '';
+      tr.innerHTML = `<td><input type="checkbox" class="b-on" checked /></td><td></td><td class="small"></td>
+        <td class="num"><input type="text" inputmode="decimal" class="b-amt num" /></td>`;
+      tr.children[1].textContent = name;
+      tr.children[2].textContent = AP.accountNames[r.dataset.account!] ?? '';
+      tr.querySelector<HTMLInputElement>('.b-amt')!.value = num(r.dataset.approved).toFixed(2);
+      bulkRows.appendChild(tr);
+    }
+    (document.getElementById('bulk-all') as HTMLInputElement).checked = true;
+    document.getElementById('bulk-error')!.hidden = true;
+    bulkRecompute();
+    bulkDlg.showModal();
+  });
+  bulkRows.addEventListener('input', bulkRecompute);
+  bulkRows.addEventListener('change', bulkRecompute);
+  document.getElementById('bulk-all')!.addEventListener('change', (e) => {
+    const on = (e.target as HTMLInputElement).checked;
+    bulkRows.querySelectorAll<HTMLInputElement>('.b-on').forEach((c) => { c.checked = on; });
+    bulkRecompute();
+  });
+  document.getElementById('bulk-cancel')!.addEventListener('click', () => bulkDlg.close());
+  bulkForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = document.getElementById('bulk-confirm') as HTMLButtonElement;
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const lines = [...bulkRows.querySelectorAll<HTMLTableRowElement>('tr')]
+      .filter((tr) => tr.querySelector<HTMLInputElement>('.b-on')!.checked)
+      .map((tr) => ({ line_id: tr.dataset.line, amount: parseAmount(tr.querySelector<HTMLInputElement>('.b-amt')!.value) }));
+    try {
+      const res = await post('/pay-bulk', {
+        lines,
+        paid_on: (bulkForm.elements.namedItem('paid_on') as HTMLInputElement).value,
+        reference: (bulkForm.elements.namedItem('reference') as HTMLInputElement).value,
+      });
+      const failed = (res.results as Array<{ ok: boolean; error?: string }>).filter((r) => !r.ok);
+      let msg = AP.i18n.bulkDone.replace('{count}', String(res.paid)).replace('{total}', money(res.total));
+      if (res.qbPending) msg += ' ' + AP.i18n.bulkQbPending.replace('{count}', String(res.qbPending));
+      if (failed.length) msg += ` — ${failed.length} ✗ (${failed.map((f) => f.error).join(', ')})`;
+      alert(msg);
+      location.reload();
+    } catch (e) {
+      const err = document.getElementById('bulk-error')!;
+      err.textContent = (e as Error).message; err.hidden = false; btn.disabled = false;
+    }
+  });
+
   applyFilter();
   recompute();
 </script>
@@ -658,6 +762,14 @@ const i18n = {
   .activity code { font-size: .72rem; color: var(--p-muted); margin-left: 6px; }
   dialog { border: none; border-radius: 12px; padding: 24px; width: min(420px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
   dialog::backdrop { background: rgba(16, 24, 40, .4); }
+  .bulk-dialog { width: min(720px, 94vw); }
+  .bulk-top { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .bulk-list-wrap { max-height: 46vh; overflow-y: auto; border: 1px solid var(--p-border); border-radius: 8px; }
+  .bulk-list td, .bulk-list th { padding: 6px 10px; }
+  .bulk-list .b-amt { width: 120px; padding: 5px 8px; text-align: right; }
+  .bulk-summary { display: grid; gap: 4px; margin-top: 12px; font-size: .92rem; }
+  .bulk-summary div { display: flex; justify-content: space-between; }
+  .bulk-summary .grand { border-top: 1px solid var(--p-border); padding-top: 6px; font-size: 1rem; }
   .toast { position: fixed; bottom: 20px; right: 20px; background: #1a1d24; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: .85rem; z-index: 50; }
   .toast.bad { background: var(--p-danger); }
   @media print {
