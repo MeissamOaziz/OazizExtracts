@@ -14,6 +14,11 @@ export const frCommon = {
   'nav.admin': 'Administration',
   'nav.hr': 'Ressources humaines',
   'nav.logout': 'Déconnexion',
+  // Short labels for the top bar (full names stay on the home page cards).
+  'navShort.forms': 'R&D',
+  'navShort.vendors': 'VQ & licences',
+  'navShort.hr': 'RH',
+  'navShort.admin': 'Admin',
 
   'btn.save': 'Enregistrer',
   'btn.cancel': 'Annuler',
@@ -57,6 +62,10 @@ export const enCommon: Partial<Record<keyof CommonDict, string>> = {
   'nav.admin': 'Administration',
   'nav.hr': 'Human Resources',
   'nav.logout': 'Log out',
+  'navShort.forms': 'R&D',
+  'navShort.vendors': 'VQ & Licenses',
+  'navShort.hr': 'HR',
+  'navShort.admin': 'Admin',
 
   'btn.save': 'Save',
   'btn.cancel': 'Cancel',

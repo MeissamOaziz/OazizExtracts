@@ -67,24 +67,35 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
       .portail-header-inner {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 24px;
+        gap: 20px;
+        max-width: 1440px;
       }
       .portail-brand {
-        display: flex; align-items: center; gap: 12px;
+        display: flex; align-items: center; gap: 10px; flex-shrink: 0;
         font-weight: 700; font-size: 1rem; color: var(--p-text);
-        text-decoration: none;
+        text-decoration: none; white-space: nowrap;
       }
       .portail-brand img { height: 32px; width: auto; }
       .portail-brand small { color: var(--p-muted); font-weight: 500; font-size: .82rem; }
-      .portail-nav { display: flex; gap: 20px; align-items: center; font-size: .92rem; }
-      .portail-nav a { color: var(--p-muted); text-decoration: none; font-weight: 500; }
-      .portail-nav a:hover, .portail-nav a.active { color: var(--p-text); }
-      .portail-user { color: var(--p-muted); font-size: .88rem; }
+      /* Nav takes the middle; one line always — scrolls sideways on narrow screens. */
+      .portail-nav {
+        display: flex; gap: 2px; align-items: center; font-size: .9rem;
+        flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none;
+      }
+      .portail-nav::-webkit-scrollbar { display: none; }
+      .portail-nav a {
+        color: var(--p-muted); text-decoration: none; font-weight: 500; white-space: nowrap;
+        padding: 6px 10px; border-radius: 6px;
+      }
+      .portail-nav a:hover { color: var(--p-text); background: var(--p-bg); }
+      .portail-nav a.active { color: var(--p-accent); background: rgba(208, 88, 38, .08); }
+      .portail-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; margin-left: auto; }
+      .portail-user { color: var(--p-muted); font-size: .88rem; white-space: nowrap; }
+      @media (max-width: 900px) { .portail-user { display: none; } .portail-brand span { display: none; } }
       .portail-logout {
         background: none; border: 1px solid var(--p-border); color: var(--p-text);
         padding: 6px 12px; border-radius: 6px; font-size: .85rem; cursor: pointer;
-        font-family: inherit;
+        font-family: inherit; white-space: nowrap;
       }
       .portail-logout:hover { background: var(--p-bg); }
       .portail-lang-switch { display: flex; gap: 2px; font-size: .8rem; font-weight: 600; }
@@ -198,16 +209,9 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
       <div class="portail-shell portail-header-inner">
         <a href="/portail" class="portail-brand">
           <img src="/images/Oaziz-Logo.webp" alt="" />
-          <span>Portail Oaziz <small>· R&D</small></span>
+          <span>Portail Oaziz</span>
         </a>
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div class="portail-lang-switch" role="group" aria-label="Language / Langue">
-            <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
-            <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
-          </div>
-          {staffName && (
-            <>
-              {!minimal && (
+        {staffName && !minimal && (
                 <nav class="portail-nav">
                   <a href="/portail" class={Astro.url.pathname === '/portail' ? 'active' : ''}>{Tc('nav.home')}</a>
                   {perms.has('rnd') && (
@@ -216,17 +220,24 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
                       Astro.url.pathname.startsWith('/portail/demande') ||
                       Astro.url.pathname === '/portail/nouvelle'
                         ? 'active' : ''
-                    }>{Tc('nav.forms')}</a>
+                    }>{Tc('navShort.forms')}</a>
                   )}
                   {perms.has('atelier') && <a href="/portail/atelier" class={Astro.url.pathname.startsWith('/portail/atelier') ? 'active' : ''}>{Tc('nav.atelier')}</a>}
                   {can(perms, 'payables', 'payables_approve') && <a href={payablesHref(perms)} class={Astro.url.pathname.startsWith('/portail/paiements') ? 'active' : ''}>{Tc('nav.payables')}</a>}
                   {perms.has('calculators') && <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>}
-                  {can(perms, 'vq', 'licenses') && <a href={vqHref(perms)} class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('nav.vendors')}</a>}
-                  {can(perms, 'hr', 'hr_employees', 'hr_evaluations') && <a href="/portail/rh" class={Astro.url.pathname.startsWith('/portail/rh') ? 'active' : ''}>{Tc('nav.hr')}</a>}
-                  {perms.has('admin') && <a href="/portail/admin/utilisateurs" class={Astro.url.pathname.startsWith('/portail/admin') ? 'active' : ''}>{Tc('nav.admin')}</a>}
+                  {can(perms, 'vq', 'licenses') && <a href={vqHref(perms)} class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('navShort.vendors')}</a>}
+                  {can(perms, 'hr', 'hr_employees', 'hr_evaluations') && <a href="/portail/rh" class={Astro.url.pathname.startsWith('/portail/rh') ? 'active' : ''}>{Tc('navShort.hr')}</a>}
+                  {perms.has('admin') && <a href="/portail/admin/utilisateurs" class={Astro.url.pathname.startsWith('/portail/admin') ? 'active' : ''}>{Tc('navShort.admin')}</a>}
                 </nav>
-              )}
-              <span class="portail-user">{staffName}</span>
+        )}
+        <div class="portail-right">
+          <div class="portail-lang-switch" role="group" aria-label="Language / Langue">
+            <a href={currentPath} data-set-locale="fr" class={locale === 'fr' ? 'active' : ''}>FR</a>
+            <a href={currentPath} data-set-locale="en" class={locale === 'en' ? 'active' : ''}>EN</a>
+          </div>
+          {staffName && (
+            <>
+              <span class="portail-user" title={staffName}>{staffName.split(' ')[0]}</span>
               <form method="POST" action="/api/portail/logout" style="margin:0;">
                 <button type="submit" class="portail-logout">{Tc('nav.logout')}</button>
               </form>
