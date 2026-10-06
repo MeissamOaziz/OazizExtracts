@@ -168,8 +168,10 @@ const i18n = {
       for (const v of res.vendors ?? []) venSel.add(new Option(v.name, v.id));
       listsLoaded = true;
     }
-    const printedName = String(lastX?.vendor_legal_name || lastX?.vendor_name || '');
-    $('qbo_vendor_new').textContent = printedName ? `${L.vendorNew} « ${printedName} »` : L.vendorNew;
+    // Created under the trade name, with the legal name as QB's company name.
+    const trade = String(lastX?.vendor_name || lastX?.vendor_legal_name || '');
+    const legal = lastX?.vendor_legal_name && lastX.vendor_legal_name !== trade ? ` (${lastX.vendor_legal_name})` : '';
+    $('qbo_vendor_new').textContent = trade ? `${L.vendorNew} « ${trade} »${legal}` : L.vendorNew;
     venSel.value = res.vendorId ?? 'new';
     $('qb-vendor-hint').textContent = res.vendorId ? L.vendorMatched : L.vendorNone;
     // Account is required unless the bill is already keyed into QB by hand.
