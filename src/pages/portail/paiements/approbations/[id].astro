@@ -18,9 +18,16 @@ const loaded = /^[0-9a-f-]{36}$/i.test(id) ? await loadRun(getAdminClient(), id)
 // Drafts are still being prepared — not visible on the approver side.
 if (!loaded || loaded.run.status === 'draft') return Astro.redirect('/portail/paiements/approbations');
 const isApprover = (loaded.run.approver_email ?? '').toLowerCase() === staff.email.toLowerCase();
+// Meissam/Nathalie (full payables access) can correct an approved week; the approver alone cannot.
+const canEdit = !!Astro.locals.access?.perms.has('payables') && (loaded.run.status === 'approved' || loaded.run.status === 'closed');
+const editing = canEdit && Astro.url.searchParams.has('edit');
 ---
 <PortailLayout title={T('appr.title')} staffName={staff.full_name} wide>
   <PaiementsNav active="approvals" />
+  {canEdit && !editing && (
+    <p style="margin-bottom: 10px;"><a class="btn btn-secondary" href="?edit=1">{T('appr.editBtn')}</a></p>
+  )}
   <PaiementsApproval loaded={loaded} editable={isApprover} submitUrl={`/api/portail/paiements/approbations/${loaded.run.id}`}
-    backHref="/portail/paiements/approbations" />
+    backHref="/portail/paiements/approbations" staffEdit={!!Astro.locals.access?.perms.has('payables')}
+    editUrl={editing ? `/api/portail/paiements/approbations/${loaded.run.id}/edit` : undefined} />
 </PortailLayout>

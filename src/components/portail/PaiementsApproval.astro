@@ -17,8 +17,11 @@ interface Props {
   editable: boolean;
   submitUrl: string;
   backHref?: string;
+  /** Meissam/Nathalie correcting an approved week: every change is logged. */
+  staffEdit?: boolean;
+  editUrl?: string;
 }
-const { loaded, editable, submitUrl, backHref } = Astro.props;
+const { loaded, editable, submitUrl, backHref, staffEdit = false, editUrl } = Astro.props;
 
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frPaiements, enPaiements);
@@ -37,7 +40,9 @@ const rows = lines
   .map((l) => ({ s: supMap.get(l.supplier_id)!, l }))
   .filter((r) => r.s)
   .sort((a, b) => a.s.name.localeCompare(b.s.name, 'fr'));
-const readOnly = !(editable && run.status === 'submitted');
+const editMode = staffEdit && !!editUrl && (run.status === 'approved' || run.status === 'closed');
+const readOnly = !((editable && run.status === 'submitted') || editMode);
+const postUrl = editMode ? editUrl! : submitUrl;
 const others = readOnly ? [] : suppliers.filter((s) => s.is_active && s.bal.owed > 0.004 && !rows.some((r) => r.s.id === s.id))
   .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 const ids = rows.map((r) => r.s.id);
@@ -75,10 +80,34 @@ const fmtDateTime = (iso: string | null) => iso ? new Date(iso).toLocaleString(l
 const methodLabel = (m: string) => T(`m.${m}` as keyof typeof frPaiements);
 const totalSuggested = view.rows.reduce((s, r) => s + n(r.l?.suggested_amount), 0);
 const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.get(r.l.payment_id)) : 0), 0);
+const totalApproved = view.rows.reduce((s, r) => s + n(r.l?.approved_amount), 0);
+
+// Audit trail of the week (who did what, when) — shown to staff.
+const AUDITED = ['submitted', 'resent', 'recalled', 'approved', 'approved_manually', 'approved_amount_changed', 'approval_line_added', 'approval_edited', 'paid', 'payment_voided', 'remittance_sent', 'remittance_unmarked', 'closed', 'reopened'];
+const { data: events } = staffEdit
+  ? await admin.from('ap_events').select('*').eq('run_id', run.id).in('action', AUDITED).order('created_at', { ascending: false }).limit(200)
+  : { data: [] };
+const { data: staffRows } = staffEdit ? await admin.from('staff').select('id, full_name') : { data: [] };
+const staffName = new Map((staffRows ?? []).map((r) => [r.id, r.full_name as string]));
+const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; supplier_id: string | null }) => {
+  const d = e.details ?? {};
+  const sup = e.supplier_id ? supMap.get(e.supplier_id)?.name ?? '' : '';
+  const m = (v: unknown) => (v === null || v === undefined ? '—' : money(n(v), locale));
+  switch (e.action) {
+    case 'approved_amount_changed': return `${sup} : ${m(d.from)} → ${m(d.to)}${d.reason ? ` — « ${d.reason} »` : ''}`;
+    case 'approval_line_added': return `${sup} : ${T('audit.added')} ${m(d.to)}${d.reason ? ` — « ${d.reason} »` : ''}`;
+    case 'approval_edited': return `${T('audit.edited')}${d.reason ? ` — « ${d.reason} »` : ''}`;
+    case 'paid': return `${sup} : ${T('audit.paid')} ${m(d.amount)} (${d.paid_on ?? ''})${d.bulk ? ` · ${T('audit.bulk')}` : ''}`;
+    case 'payment_voided': return `${sup} : ${T('audit.voided')}`;
+    case 'approved': return `${T('audit.approved')} ${m(d.total_approved)}`;
+    default: return sup ? `${sup} : ${T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action}` : (T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action);
+  }
+};
 ---
     <div class="appr">
       {backHref && <p style="margin-bottom: 8px;"><a href={backHref}>← {T('appr.back')}</a></p>}
       <h1>{fill(T('appr.heading'), { date: dayLabel })}</h1>
+      {editMode && <div class="flash flash-info">{T('appr.editMode')}</div>}
       {view.run.approved_at
         ? <div class="flash flash-success">{fill(T('appr.done'), { date: fmtDateTime(view.run.approved_at) })}</div>
         : readOnly
@@ -147,10 +176,12 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
                       <td class="num" data-label={T('col.approved')}>
                         {readOnly
                           ? <strong>{l?.approved_amount !== null && l?.approved_amount !== undefined ? money(l.approved_amount, locale) : '—'}</strong>
-                          : <input type="text" inputmode="decimal" class="in-approved" name={`a_${s.id}`} />}
+                          : <input type="text" inputmode="decimal" class="in-approved" name={`a_${s.id}`}
+                              value={editMode && l?.approved_amount !== null && l?.approved_amount !== undefined ? n(l.approved_amount).toFixed(2) : ''}
+                              disabled={editMode && !!l?.payment_id} title={editMode && l?.payment_id ? T('appr.paidLocked') : ''} />}
                       </td>
                       <td data-label={T('appr.lineNote')}>
-                        {readOnly ? <span class="small">{l?.approver_note ?? ''}</span> : <input type="text" class="in-note" name={`n_${s.id}`} />}
+                        {readOnly ? <span class="small">{l?.approver_note ?? ''}</span> : <input type="text" class="in-note" name={`n_${s.id}`} value={editMode ? l?.approver_note ?? '' : ''} />}
                       </td>
                       {showPaid && (
                         <td class="num" data-label={T('col.paid')}>
@@ -205,7 +236,7 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
                 <th colspan="3">{T('totals.row')}</th>
                 <th class="num">{money(totalSuggested, locale)}</th>
                 <th></th>
-                <th class="num" id="total-approved">{readOnly ? money(view.rows.reduce((s, r) => s + n(r.l?.approved_amount), 0), locale) : money(0, locale)}</th>
+                <th class="num" id="total-approved">{readOnly || editMode ? money(totalApproved, locale) : money(0, locale)}</th>
                 <th></th>
                 {showPaid && <th class="num">{money(totalPaid, locale)}</th>}
               </tr>
@@ -239,22 +270,38 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
           view.run.approver_comment && <div class="card"><strong>{T('run.approverComment')}</strong><p>{view.run.approver_comment}</p></div>
         ) : (
           <div class="card submit-card">
-            <label for="comment">{T('appr.comment')}</label>
-            <textarea id="comment" rows="3"></textarea>
+            <label for="comment">{editMode ? T('appr.editReason') : T('appr.comment')}</label>
+            <textarea id="comment" rows="3" required={editMode}></textarea>
             <div style="margin-top: 14px; display:flex; justify-content:flex-end;">
-              <button type="submit" class="btn btn-primary">{T('appr.submit')}</button>
+              <button type="submit" class="btn btn-primary">{editMode ? T('appr.saveEdits') : T('appr.submit')}</button>
             </div>
             <p class="flash flash-error" id="appr-error" hidden></p>
           </div>
         )}
       </form>
-      <script is:inline define:vars={{ submitUrl, confirmTpl: T('appr.confirm'), locale }}>
-        window.__APPR = { submitUrl, confirmTpl, locale };
+      <script is:inline define:vars={{ submitUrl: postUrl, confirmTpl: editMode ? T('appr.editConfirm') : T('appr.confirm'), locale, editMode }}>
+        window.__APPR = { submitUrl, confirmTpl, locale, editMode };
       </script>
+
+      {staffEdit && (
+        <details class="card audit" open={editMode}>
+          <summary>{T('audit.title')}</summary>
+          <ul class="details-body">
+            {(events ?? []).length === 0 && <li class="muted">—</li>}
+            {(events ?? []).map((e) => (
+              <li>
+                <span class="muted">{fmtDateTime(e.created_at)}</span>
+                {' — '}<strong>{e.actor_label ?? staffName.get(e.actor_staff_id) ?? '?'}</strong>
+                {' · '}{fmtEvent(e)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
 
 <script>
-  const cfg = (window as unknown as { __APPR?: { submitUrl: string; confirmTpl: string; locale: string } }).__APPR;
+  const cfg = (window as unknown as { __APPR?: { submitUrl: string; confirmTpl: string; locale: string; editMode?: boolean } }).__APPR;
   // Read-only once approved: the server-rendered totals are final.
   if (cfg && document.querySelector('.in-approved')) {
     const fmt = new Intl.NumberFormat(cfg.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
@@ -319,17 +366,22 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
       const total = recompute();
       if (document.querySelector('.in-approved.invalid')) return;
       if (!confirm(cfg.confirmTpl.replace('{total}', fmt.format(total)))) return;
-      const lines = rows().map((r) => ({
-        supplier_id: r.dataset.supplier,
-        approved: parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0,
-        note: r.querySelector<HTMLInputElement>('.in-note')?.value ?? '',
-        suggested: Number(r.dataset.suggested) > 0,
-      })).filter((l) => l.suggested || l.approved > 0 || l.note);
+      const comment = (document.getElementById('comment') as HTMLTextAreaElement).value.trim();
+      if (cfg.editMode && !comment) { (document.getElementById('comment') as HTMLTextAreaElement).focus(); return; }
+      const lines = rows()
+        .filter((r) => !r.querySelector<HTMLInputElement>('.in-approved')?.disabled)
+        .map((r) => ({
+          supplier_id: r.dataset.supplier,
+          approved: parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0,
+          note: r.querySelector<HTMLInputElement>('.in-note')?.value ?? '',
+          suggested: Number(r.dataset.suggested) > 0,
+          inWeek: r.closest('details.others') === null,
+        })).filter((l) => l.inWeek || l.approved > 0 || l.note);
       const btn = (ev.target as HTMLFormElement).querySelector<HTMLButtonElement>('button[type=submit]')!;
       btn.disabled = true;
       const r = await fetch(cfg.submitUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines, comment: (document.getElementById('comment') as HTMLTextAreaElement).value }),
+        body: JSON.stringify({ lines, comment }),
       });
       if (r.ok) { location.reload(); return; }
       btn.disabled = false;
@@ -358,6 +410,9 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
   .muted { color: var(--p-muted); }
   .overdue { color: var(--p-danger); font-weight: 600; }
   .in-approved { width: 120px; text-align: right; }
+  .in-approved:disabled { background: #f3f4f6; color: var(--p-muted); }
+  .audit { margin-top: 16px; }
+  .audit ul { list-style: none; font-size: .84rem; display: grid; gap: 5px; }
   .in-note { min-width: 140px; }
   input.invalid { border-color: var(--p-danger); background: #fef2f2; }
   .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .8rem; padding: 0; margin-top: 4px; }
