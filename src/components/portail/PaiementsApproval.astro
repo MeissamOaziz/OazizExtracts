@@ -68,6 +68,11 @@ if (ids.length) {
   }
 }
 const paidMap = await paymentAmounts(admin, lines.map((l) => l.payment_id).filter((x): x is string => !!x));
+const paidIds = lines.map((l) => l.payment_id).filter((x): x is string => !!x);
+const { data: paidRows } = paidIds.length
+  ? await admin.from('ap_payments').select('id, paid_on, reference').in('id', paidIds)
+  : { data: [] };
+const paidInfo = new Map((paidRows ?? []).map((p) => [p.id, p as { id: string; paid_on: string; reference: string | null }]));
 const view = {
   run, rows, others, open, closed, pays, preparedBy: prep?.full_name ?? 'Oaziz',
   cash: computeCash(accounts, cash, lines, supMap, paidMap),
@@ -83,7 +88,7 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
 const totalApproved = view.rows.reduce((s, r) => s + n(r.l?.approved_amount), 0);
 
 // Audit trail of the week (who did what, when) — shown to staff.
-const AUDITED = ['submitted', 'resent', 'recalled', 'approved', 'approved_manually', 'approved_amount_changed', 'approval_line_added', 'approval_edited', 'paid', 'payment_voided', 'remittance_sent', 'remittance_unmarked', 'closed', 'reopened'];
+const AUDITED = ['payment_corrected', 'submitted', 'resent', 'recalled', 'approved', 'approved_manually', 'approved_amount_changed', 'approval_line_added', 'approval_edited', 'paid', 'payment_voided', 'remittance_sent', 'remittance_unmarked', 'closed', 'reopened'];
 const { data: events } = staffEdit
   ? await admin.from('ap_events').select('*').eq('run_id', run.id).in('action', AUDITED).order('created_at', { ascending: false }).limit(200)
   : { data: [] };
@@ -97,8 +102,9 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
     case 'approved_amount_changed': return `${sup} : ${m(d.from)} → ${m(d.to)}${d.reason ? ` — « ${d.reason} »` : ''}`;
     case 'approval_line_added': return `${sup} : ${T('audit.added')} ${m(d.to)}${d.reason ? ` — « ${d.reason} »` : ''}`;
     case 'approval_edited': return `${T('audit.edited')}${d.reason ? ` — « ${d.reason} »` : ''}`;
+    case 'payment_corrected': return `${sup} : ${T('audit.corrected')} ${m(d.from)} (${d.from_date ?? ''}) → ${m(d.to)} (${d.to_date ?? ''})${d.reason ? ` — « ${d.reason} »` : ''}`;
     case 'paid': return `${sup} : ${T('audit.paid')} ${m(d.amount)} (${d.paid_on ?? ''})${d.bulk ? ` · ${T('audit.bulk')}` : ''}`;
-    case 'payment_voided': return `${sup} : ${T('audit.voided')}`;
+    case 'payment_voided': return `${sup} : ${T('audit.voided')}${d.from ? ` (${m(d.from)})` : ''}${d.reason ? ` — « ${d.reason} »` : ''}`;
     case 'approved': return `${T('audit.approved')} ${m(d.total_approved)}`;
     default: return sup ? `${sup} : ${T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action}` : (T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action);
   }
@@ -178,14 +184,25 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
                           ? <strong>{l?.approved_amount !== null && l?.approved_amount !== undefined ? money(l.approved_amount, locale) : '—'}</strong>
                           : <input type="text" inputmode="decimal" class="in-approved" name={`a_${s.id}`}
                               value={editMode && l?.approved_amount !== null && l?.approved_amount !== undefined ? n(l.approved_amount).toFixed(2) : ''}
-                              disabled={editMode && !!l?.payment_id} title={editMode && l?.payment_id ? T('appr.paidLocked') : ''} />}
+                              />}
                       </td>
                       <td data-label={T('appr.lineNote')}>
                         {readOnly ? <span class="small">{l?.approver_note ?? ''}</span> : <input type="text" class="in-note" name={`n_${s.id}`} value={editMode ? l?.approver_note ?? '' : ''} />}
                       </td>
                       {showPaid && (
                         <td class="num" data-label={T('col.paid')}>
-                          {l?.payment_id ? money(n(paidMap.get(l.payment_id)), locale) : '—'}
+                          {editMode ? (
+                            <div class="paid-edit">
+                              <input type="text" inputmode="decimal" class="in-paid" placeholder="—"
+                                value={l?.payment_id ? n(paidMap.get(l.payment_id)).toFixed(2) : ''} />
+                              <input type="date" class="in-paid-date" value={(l?.payment_id && paidInfo.get(l.payment_id)?.paid_on) || today} />
+                            </div>
+                          ) : (
+                            <>
+                              {l?.payment_id ? money(n(paidMap.get(l.payment_id)), locale) : '—'}
+                              {l?.payment_id && paidInfo.get(l.payment_id) && <div class="muted small">{paidInfo.get(l.payment_id)!.paid_on}</div>}
+                            </>
+                          )}
                           {l?.remittance_sent_at && <div class="muted small">{T('col.remittance')} ✓</div>}
                         </td>
                       )}
@@ -343,6 +360,9 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
       return total;
     }
     document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => i.addEventListener('input', recompute));
+    document.querySelectorAll<HTMLInputElement>('.in-paid').forEach((i) => i.addEventListener('input', () => {
+      i.classList.toggle('invalid', Number.isNaN(parse(i.value)));
+    }));
     document.querySelectorAll<HTMLButtonElement>('.toggle').forEach((b) => b.addEventListener('click', () => {
       const id = b.closest<HTMLTableRowElement>('tr.line')!.dataset.supplier;
       const d = document.querySelector<HTMLTableRowElement>(`tr.detail[data-for="${id}"]`)!;
@@ -368,15 +388,19 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
       if (!confirm(cfg.confirmTpl.replace('{total}', fmt.format(total)))) return;
       const comment = (document.getElementById('comment') as HTMLTextAreaElement).value.trim();
       if (cfg.editMode && !comment) { (document.getElementById('comment') as HTMLTextAreaElement).focus(); return; }
+      if (document.querySelector('.in-paid.invalid')) return;
       const lines = rows()
-        .filter((r) => !r.querySelector<HTMLInputElement>('.in-approved')?.disabled)
-        .map((r) => ({
-          supplier_id: r.dataset.supplier,
-          approved: parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0,
-          note: r.querySelector<HTMLInputElement>('.in-note')?.value ?? '',
-          suggested: Number(r.dataset.suggested) > 0,
-          inWeek: r.closest('details.others') === null,
-        })).filter((l) => l.inWeek || l.approved > 0 || l.note);
+        .map((r) => {
+          const paidEl = r.querySelector<HTMLInputElement>('.in-paid');
+          return {
+            supplier_id: r.dataset.supplier,
+            approved: parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0,
+            note: r.querySelector<HTMLInputElement>('.in-note')?.value ?? '',
+            suggested: Number(r.dataset.suggested) > 0,
+            inWeek: r.closest('details.others') === null,
+            ...(paidEl ? { paid: parse(paidEl.value) ?? 0, paid_on: r.querySelector<HTMLInputElement>('.in-paid-date')?.value ?? '' } : {}),
+          };
+        }).filter((l) => l.inWeek || l.approved > 0 || l.note);
       const btn = (ev.target as HTMLFormElement).querySelector<HTMLButtonElement>('button[type=submit]')!;
       btn.disabled = true;
       const r = await fetch(cfg.submitUrl, {
@@ -410,7 +434,10 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
   .muted { color: var(--p-muted); }
   .overdue { color: var(--p-danger); font-weight: 600; }
   .in-approved { width: 120px; text-align: right; }
-  .in-approved:disabled { background: #f3f4f6; color: var(--p-muted); }
+  .paid-edit { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .in-paid { width: 110px; text-align: right; }
+  .in-paid-date { width: 140px; padding: 4px 6px; font-size: .8rem; }
+  input.in-paid.invalid { border-color: var(--p-danger); background: #fef2f2; }
   .audit { margin-top: 16px; }
   .audit ul { list-style: none; font-size: .84rem; display: grid; gap: 5px; }
   .in-note { min-width: 140px; }
