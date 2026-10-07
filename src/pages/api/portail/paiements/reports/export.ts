@@ -35,7 +35,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   } else {
     const head = ['Date', 'Fournisseur', 'Compte', 'Mode', 'Référence', 'Montant', 'Factures', 'Dans QB', 'Remise envoyée', 'Notes'];
     body = '﻿' + [head.join(','), ...rows.map((r) => [
-      r.paid_on, r.supplier, r.account, r.method ?? '', r.reference ?? '', r.amount.toFixed(2),
+      r.paid_on, r.kind === 'deposit_in' ? `Dépôt reçu de ${r.supplier}` : r.supplier, r.account, r.method ?? '', r.reference ?? '', r.amount.toFixed(2),
       r.invoices.join(' / '), r.in_qbo ? 'oui' : 'non', r.remittance_sent ? 'oui' : 'non', r.notes ?? '',
     ].map(csvCell).join(','))].join('\r\n');
   }

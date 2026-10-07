@@ -19,7 +19,7 @@ export type RunStatus = 'draft' | 'submitted' | 'approved' | 'closed';
 
 /** funded_by: another account that deposits this one's weekly payments in one
  *  transfer first (TD MJLB is funded by RBC). */
-export interface BankAccount { id: string; code: string; name: string; sort_order: number; funded_by: string | null }
+export interface BankAccount { id: string; code: string; name: string; sort_order: number; funded_by: string | null; funding_supplier_id?: string | null }
 
 export interface Supplier {
   id: string; name: string; legal_name: string | null; category: string;

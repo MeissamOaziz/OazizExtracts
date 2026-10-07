@@ -7,6 +7,8 @@ import { n, round2 } from './payables';
 
 export interface ReportRow {
   id: string;
+  /** 'deposit_in': a deposit received from the funding account (negative amount = money in). */
+  kind: 'payment' | 'deposit_in';
   paid_on: string;
   supplier: string;
   supplier_id: string;
@@ -26,7 +28,7 @@ export interface ReportFilter { accountId: string | null; from: string; to: stri
 
 export async function loadPaymentReport(admin: SupabaseClient, f: ReportFilter) {
   let q = admin.from('ap_payments')
-    .select('id, paid_on, amount, payment_method, reference, notes, source, bank_account_id, qbo_billpayment_id, remittance_sent_at, supplier_id, ap_suppliers(name), ap_bank_accounts(name), ap_payment_allocations(amount, ap_invoices(invoice_number, kind))')
+    .select('id, paid_on, amount, payment_method, reference, notes, source, bank_account_id, qbo_billpayment_id, remittance_sent_at, supplier_id, ap_suppliers(name), ap_bank_accounts!ap_payments_bank_account_id_fkey(name), ap_payment_allocations(amount, ap_invoices(invoice_number, kind))')
     .is('voided_at', null).gte('paid_on', f.from).lte('paid_on', f.to)
     .order('paid_on').order('created_at');
   if (f.accountId === 'none') q = q.is('bank_account_id', null);
@@ -34,7 +36,7 @@ export async function loadPaymentReport(admin: SupabaseClient, f: ReportFilter) 
   const { data, error } = await q;
   if (error) throw error;
   const rows: ReportRow[] = (data ?? []).map((p: any) => ({
-    id: p.id, paid_on: p.paid_on, supplier: p.ap_suppliers?.name ?? '?', supplier_id: p.supplier_id,
+    kind: 'payment' as const, id: p.id, paid_on: p.paid_on, supplier: p.ap_suppliers?.name ?? '?', supplier_id: p.supplier_id,
     account_id: p.bank_account_id, account: p.ap_bank_accounts?.name ?? '—', method: p.payment_method,
     reference: p.reference || null, amount: n(p.amount), notes: p.notes || null,
     invoices: (p.ap_payment_allocations ?? [])
@@ -42,6 +44,23 @@ export async function loadPaymentReport(admin: SupabaseClient, f: ReportFilter) 
       .filter(Boolean),
     in_qbo: !!p.qbo_billpayment_id, remittance_sent: !!p.remittance_sent_at, source: p.source,
   }));
+  // Deposits received by a funded account (e.g. RBC → TD MJLB) appear on that account as money in.
+  if (f.accountId !== 'none') {
+    let dq = admin.from('ap_payments')
+      .select('id, paid_on, amount, reference, transfer_to_account_id, supplier_id, ap_suppliers(name), funder:ap_bank_accounts!ap_payments_bank_account_id_fkey(name), dest:ap_bank_accounts!ap_payments_transfer_to_account_id_fkey(name)')
+      .is('voided_at', null).not('transfer_to_account_id', 'is', null).gte('paid_on', f.from).lte('paid_on', f.to);
+    if (f.accountId) dq = dq.eq('transfer_to_account_id', f.accountId);
+    const { data: deps, error: depErr } = await dq;
+    if (depErr) throw depErr;
+    for (const d of (deps ?? []) as any[]) {
+      rows.push({
+        kind: 'deposit_in', id: `in-${d.id}`, paid_on: d.paid_on, supplier: d.funder?.name ?? '?', supplier_id: d.supplier_id,
+        account_id: d.transfer_to_account_id, account: d.dest?.name ?? '—', method: 'eft', reference: d.reference || null,
+        amount: -n(d.amount), invoices: [], notes: null, in_qbo: false, remittance_sent: false, source: 'portal',
+      });
+    }
+    rows.sort((a, b) => a.paid_on.localeCompare(b.paid_on));
+  }
   const byAccount = new Map<string, { name: string; count: number; total: number }>();
   for (const r of rows) {
     const k = r.account_id ?? 'none';
@@ -65,6 +84,7 @@ export const csvCell = (v: unknown) => {
 
 /** Text used as the bank-line description in exports. */
 export function describe(r: ReportRow) {
+  if (r.kind === 'deposit_in') return [`Dépôt de ${r.supplier}`, r.reference && `Réf ${r.reference}`].filter(Boolean).join(' — ');
   return [r.supplier, r.reference && `Réf ${r.reference}`, r.invoices.length ? `Fact. ${r.invoices.join(', ')}` : null]
     .filter(Boolean).join(' — ');
 }

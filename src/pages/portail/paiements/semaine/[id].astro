@@ -6,6 +6,7 @@ import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { localizeMsg } from '../../../../lib/msg-i18n';
+import { fundingStatus } from '../../../../lib/payables-funding';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { frCommon, enCommon } from '../../../../i18n/portail/common';
 import {
@@ -38,7 +39,11 @@ const [accounts, allSuppliers, prev, approver, { data: events }, { data: staffRo
 ]);
 const staffName = new Map((staffRows ?? []).map((s) => [s.id, s.full_name as string]));
 const lineBySupplier = new Map<string, RunLine>(lines.map((l) => [l.supplier_id, l]));
-const suppliers = allSuppliers.filter((s) => s.is_active || lineBySupplier.has(s.id));
+// The funding supplier (MJLB) is paid by the weekly deposit, never as a line.
+const fundingIds = new Set(accounts.map((a) => a.funding_supplier_id).filter((x): x is string => !!x));
+const suppliers = allSuppliers.filter((s) => (s.is_active || lineBySupplier.has(s.id)) && !fundingIds.has(s.id));
+const funding = await fundingStatus(admin, run.id);
+const fundingByAccount = new Map(funding.map((f) => [f.accountId, f]));
 const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
 const accountById = new Map(accounts.map((a) => [a.id, a]));
 const defaultAccount = accounts[0]?.id ?? '';
@@ -155,6 +160,21 @@ const i18n = {
           <dt>{T('run.cash.afterApproved')}</dt><dd data-out="afterApproved">{money(c.afterApproved, locale)}</dd>
           <dt>{T('run.cash.afterPaid')}</dt><dd data-out="afterPaid">{money(c.afterPaid, locale)}</dd>
         </dl>
+        {fundingByAccount.get(c.account.id) && (() => {
+          const f = fundingByAccount.get(c.account.id)!;
+          return (
+            <div class="deposit-box">
+              {f.deposits.map((d) => <p class="dep-ok">✓ {fill(T('dep.recorded'), { amount: money(d.amount, locale), from: f.funderName, date: d.paid_on, ref: d.reference ?? '—' })}</p>)}
+              {!f.supplierId && f.paid > 0 && <p class="hint">{T('dep.noSupplier')}</p>}
+              {f.supplierId && f.pending > 0.004 && (
+                <form method="POST" action={`/api/portail/paiements/runs/${run.id}/action`} class="no-print">
+                  <p class="hint" style="margin:0 0 6px;">{fill(T('dep.pending'), { amount: money(f.pending, locale), from: f.funderName })}</p>
+                  <button class="btn btn-secondary btn-sm" name="_action" value="record_deposit">{fill(T('dep.record'), { amount: money(f.pending, locale) })}</button>
+                </form>
+              )}
+            </div>
+          );
+        })()}
         <p class="cash-warn" data-out="warn" hidden></p>
       </div>
     ))}
@@ -697,6 +717,9 @@ const i18n = {
   .run-head h1 { margin-bottom: 4px; }
   .run-head .meta { color: var(--p-muted); font-size: .85rem; margin-left: 10px; }
   .run-actions { display: flex; gap: 8px; }
+  .deposit-box { border-top: 1px dashed var(--p-border); margin-top: 10px; padding-top: 8px; font-size: .84rem; }
+  .deposit-box .dep-ok { color: #15803d; margin: 0 0 4px; }
+  .deposit-box .btn-sm { padding: 4px 10px; font-size: .8rem; }
   .badge.run-draft { background: #f3f4f6; color: #374151; }
   .badge.run-submitted { background: #fef3c7; color: #92400e; }
   .badge.run-approved { background: #dbeafe; color: #1e40af; }

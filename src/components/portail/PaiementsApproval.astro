@@ -43,7 +43,8 @@ const rows = lines
 const editMode = staffEdit && !!editUrl && (run.status === 'approved' || run.status === 'closed');
 const readOnly = !((editable && run.status === 'submitted') || editMode);
 const postUrl = editMode ? editUrl! : submitUrl;
-const others = readOnly ? [] : suppliers.filter((s) => s.is_active && s.bal.owed > 0.004 && !rows.some((r) => r.s.id === s.id))
+const fundingIds = new Set(accounts.map((a) => a.funding_supplier_id).filter((x): x is string => !!x));
+const others = readOnly ? [] : suppliers.filter((s) => s.is_active && s.bal.owed > 0.004 && !fundingIds.has(s.id) && !rows.some((r) => r.s.id === s.id))
   .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 const ids = rows.map((r) => r.s.id);
 const open = await loadOpenInvoices(admin, [...ids, ...others.map((o) => o.id)]);

@@ -52,6 +52,7 @@ const RULES: Rule[] = [
   [/^Seuls ([\d.]+) \$ sur ([\d.]+) \$ liés à des factures QB$/, (_, a, b) => `Only $${a} of $${b} linked to QB bills`],
   [/^Paiement ([\d.]+) \$ créé$/, (_, a) => `Payment $${a} created`],
   [/^Paiement créé dans QuickBooks$/, 'Payment created in QuickBooks'],
+  [/^Paiement (.*) mis à jour dans QB$/, (_, r) => `Payment ${r} updated in QB`],
   [/^Paiement supprimé dans QB \(annulé au portail\)$/, 'Payment deleted in QB (voided in the portal)'],
   [/^Suppression dans QB impossible : (.*)$/, (_, e) => `Could not delete in QB: ${e}`],
   [/^Paiement ([\d.]+) \$ importé de QB \((.*)\)$/, (_, a, s) => `Payment $${a} imported from QB (${s})`],

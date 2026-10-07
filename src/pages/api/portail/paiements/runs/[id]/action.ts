@@ -7,6 +7,7 @@ import {
   mintApproval, approvalUrl, approvalsPortalUrl, money, n, weekLabel, type ApproverSetting,
 } from '../../../../../../lib/payables';
 import { sendPaymentApprovalRequest } from '../../../../../../lib/email';
+import { recordFundingDeposits } from '../../../../../../lib/payables-funding';
 
 export const prerender = false;
 
@@ -100,8 +101,15 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       await logEvent(admin, { run_id: runId, actor_staff_id: staff.id, action: 'approved_manually' });
       return go('ok', T('flash.manual'));
 
+    case 'record_deposit': {
+      const done = await recordFundingDeposits(admin, runId, staff.id);
+      return go(done.length ? 'ok' : 'info', done.length ? done.map((d) => fill(T('dep.done'), { amount: money(d.amount, getPortailLocale(cookies)), account: d.account, ref: d.reference ?? '—' })).join(' · ') : T('dep.none'));
+    }
+
     case 'close':
       if (run.status !== 'approved') return redirect(back, 303);
+      // Deposits still due for this week's funded-account payments are recorded on close.
+      await recordFundingDeposits(admin, runId, staff.id);
       await admin.from('ap_runs').update({ status: 'closed', closed_at: now, closed_by: staff.id }).eq('id', runId);
       await logEvent(admin, { run_id: runId, actor_staff_id: staff.id, action: 'closed' });
       return go('ok', T('flash.closed'));

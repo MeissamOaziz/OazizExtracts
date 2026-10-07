@@ -295,7 +295,7 @@ export async function pushInvoice(admin: SupabaseClient, invoiceId: string, opts
 export async function pushPayment(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
   const qbo = await getQbo(admin);
   if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
-  const { data: p } = await admin.from('ap_payments').select('*, ap_suppliers(*), ap_bank_accounts(*)').eq('id', paymentId).maybeSingle();
+  const { data: p } = await admin.from('ap_payments').select('*, ap_suppliers(*), ap_bank_accounts!ap_payments_bank_account_id_fkey(*)').eq('id', paymentId).maybeSingle();
   if (!p || p.voided_at) return { ok: false, message: 'Paiement introuvable ou annulé' };
   if (p.qbo_billpayment_id) return { ok: true, message: 'Déjà dans QuickBooks' };
   if (p.source !== 'portal') return { ok: true, message: 'Non envoyé (historique ou provenant de QB)' };
@@ -319,7 +319,9 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     const res = await qbo.post('/billpayment', {
       VendorRef: { value: vendorId },
       PayType: 'Check',
-      CheckPayment: { BankAccountRef: { value: bank.qbo_account_id } },
+      // Paid electronically: never "Print later"; the PMT reference is the payment's Ref no.
+      CheckPayment: { BankAccountRef: { value: bank.qbo_account_id }, PrintStatus: 'NotSet' },
+      ...(p.reference ? { DocNumber: String(p.reference).slice(0, 21) } : {}),
       TotalAmt: total,
       TxnDate: p.paid_on,
       PrivateNote: ['Portail Oaziz', p.reference].filter(Boolean).join(' · '),
@@ -332,6 +334,27 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     return { ok: true, message: partial ?? 'Paiement créé dans QuickBooks' };
   } catch (e) {
     return fail(errMsg(e));
+  }
+}
+
+/** Bring an already-created QB bill payment in line: Ref no. = portal reference, not "Print later". */
+export async function refreshQboPayment(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
+  const qbo = await getQbo(admin);
+  if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
+  const { data: p } = await admin.from('ap_payments').select('reference, qbo_billpayment_id').eq('id', paymentId).maybeSingle();
+  if (!p?.qbo_billpayment_id) return { ok: false, message: 'Paiement introuvable ou annulé' };
+  try {
+    const cur = (await qbo.get(`/billpayment/${p.qbo_billpayment_id}`))?.BillPayment;
+    if (!cur) return { ok: false, message: 'Paiement introuvable ou annulé' };
+    await qbo.post('/billpayment', {
+      Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, TotalAmt: cur.TotalAmt, PayType: cur.PayType,
+      ...(p.reference ? { DocNumber: String(p.reference).slice(0, 21) } : {}),
+      ...(cur.PayType === 'Check' ? { CheckPayment: { ...cur.CheckPayment, PrintStatus: 'NotSet' } } : {}),
+    });
+    await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'ok', message: `Paiement ${p.reference ?? ''} mis à jour dans QB` });
+    return { ok: true, message: `Paiement ${p.reference ?? ''} mis à jour dans QB` };
+  } catch (e) {
+    return { ok: false, message: errMsg(e) };
   }
 }
 

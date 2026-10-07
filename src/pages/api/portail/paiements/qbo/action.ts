@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, setSetting } from '../../../../../lib/payables';
 import { disconnect } from '../../../../../lib/qbo';
-import { linkVendors, pushInvoice, pushPayment, qboDefaults, syncAll } from '../../../../../lib/qbo-sync';
+import { linkVendors, pushInvoice, pushPayment, qboDefaults, refreshQboPayment, syncAll } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -76,6 +76,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const id = String(form.get('payment_id') ?? '');
         if (!isUuid(id)) return go('error', 'Paiement invalide');
         const r = await pushPayment(admin, id);
+        return go(r.ok ? 'ok' : 'error', r.message);
+      }
+      case 'refresh_payment': {
+        const id = String(form.get('payment_id') ?? '');
+        if (!isUuid(id)) return go('error', 'Paiement invalide');
+        const r = await refreshQboPayment(admin, id);
         return go(r.ok ? 'ok' : 'error', r.message);
       }
       case 'disconnect':

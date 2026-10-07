@@ -74,13 +74,13 @@ const methodLabel = (m: string | null) => (m ? T(`m.${m}` as K) : '—');
           {report.rows.map((r) => (
             <tr>
               <td class="nowrap">{r.paid_on}</td>
-              <td><a href={`/portail/paiements/fournisseurs/${r.supplier_id}`}>{r.supplier}</a></td>
+              <td>{r.kind === 'deposit_in' ? <em class="dep-in">{T('rep.depositIn').replace('{from}', r.supplier)}</em> : <a href={`/portail/paiements/fournisseurs/${r.supplier_id}`}>{r.supplier}</a>}</td>
               <td>{r.account}</td>
               <td>{methodLabel(r.method)}</td>
               <td>{r.reference ?? '—'}</td>
               <td class="small">{r.invoices.join(', ') || '—'}</td>
-              <td class="num">{money(r.amount, locale)}</td>
-              <td class="center">{r.in_qbo ? '✓' : '—'}</td>
+              <td class={`num ${r.amount < 0 ? 'in' : ''}`}>{r.amount < 0 ? `+ ${money(-r.amount, locale)}` : money(r.amount, locale)}</td>
+              <td class="center">{r.kind === 'deposit_in' ? '' : r.in_qbo ? '✓' : '—'}</td>
               <td class="center">{r.remittance_sent ? '✓' : '—'}</td>
             </tr>
           ))}
@@ -110,6 +110,8 @@ const methodLabel = (m: string | null) => (m ? T(`m.${m}` as K) : '—');
   .nowrap { white-space: nowrap; }
   .small { font-size: .8rem; }
   .muted { color: var(--p-muted); }
+  .dep-in { color: #15803d; font-style: normal; }
+  td.in { color: #15803d; }
   .total-row td { font-weight: 700; border-top: 2px solid var(--p-border); }
   @media print { .no-print { display: none !important; } .tbl-card { overflow: visible; } }
 </style>
