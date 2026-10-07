@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
+import { localizeMsg } from '../../../../../../lib/msg-i18n';
+import { getPortailLocale } from '../../../../../../lib/portail-i18n';
 import { json, isUuid, loadRun, logEvent, n, round2, paymentAmounts } from '../../../../../../lib/payables';
 import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
 
@@ -11,21 +13,22 @@ export const prerender = false;
 // or date) voids the old payment and records the corrected one — balances,
 // bank totals and QuickBooks follow; clearing the paid amount undoes it.
 export const POST: APIRoute = async ({ request, cookies, params, locals }) => {
+  const L = (m: string) => localizeMsg(m, getPortailLocale(cookies));
   const staff = await currentStaff(createServerClient(request, cookies));
-  if (!staff) return json({ error: 'unauthenticated' }, 401);
-  if (!locals.access?.perms.has('payables')) return json({ error: 'Accès refusé' }, 403);
-  if (!isUuid(params.id)) return json({ error: 'not found' }, 404);
+  if (!staff) return json({ error: L('unauthenticated') }, 401);
+  if (!locals.access?.perms.has('payables')) return json({ error: L('Accès refusé') }, 403);
+  if (!isUuid(params.id)) return json({ error: L('not found') }, 404);
 
   const admin = getAdminClient();
   const loaded = await loadRun(admin, params.id);
-  if (!loaded) return json({ error: 'not found' }, 404);
+  if (!loaded) return json({ error: L('not found') }, 404);
   const { run, lines } = loaded;
-  if (run.status !== 'approved' && run.status !== 'closed') return json({ error: 'La semaine n’est pas approuvée.' }, 409);
+  if (run.status !== 'approved' && run.status !== 'closed') return json({ error: L('La semaine n’est pas approuvée.') }, 409);
 
   const body = await request.json().catch(() => null) as { lines?: Array<Record<string, unknown>>; comment?: unknown } | null;
   const reason = String(body?.comment ?? '').trim().slice(0, 1000);
-  if (!body || !Array.isArray(body.lines)) return json({ error: 'Requête invalide.' }, 400);
-  if (!reason) return json({ error: 'Indiquez la raison de la modification.' }, 400);
+  if (!body || !Array.isArray(body.lines)) return json({ error: L('Requête invalide.') }, 400);
+  if (!reason) return json({ error: L('Indiquez la raison de la modification.') }, 400);
 
   const bySupplier = new Map(lines.map((l) => [l.supplier_id, l]));
   const paidAmt = await paymentAmounts(admin, lines.map((l) => l.payment_id).filter((x): x is string => !!x));
@@ -73,7 +76,7 @@ export const POST: APIRoute = async ({ request, cookies, params, locals }) => {
   for (const raw of body.lines) {
     if (!isUuid(raw.supplier_id)) continue;
     const approved = round2(Number(raw.approved));
-    if (!Number.isFinite(approved) || approved < 0) return json({ error: 'Montant invalide.' }, 400);
+    if (!Number.isFinite(approved) || approved < 0) return json({ error: L('Montant invalide.') }, 400);
     const note = String(raw.note ?? '').trim().slice(0, 500) || null;
     const existing = bySupplier.get(raw.supplier_id);
 
@@ -93,7 +96,7 @@ export const POST: APIRoute = async ({ request, cookies, params, locals }) => {
       }
       if ('paid' in raw) {
         const paid = round2(Number(raw.paid));
-        if (!Number.isFinite(paid) || paid < 0) return json({ error: 'Montant payé invalide.' }, 400);
+        if (!Number.isFinite(paid) || paid < 0) return json({ error: L('Montant payé invalide.') }, 400);
         try {
           if (await correctPayment(existing, paid, String(raw.paid_on ?? ''))) changed++;
         } catch (err) {

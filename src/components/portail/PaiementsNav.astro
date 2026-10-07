@@ -5,7 +5,7 @@ import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../i18n/portail/paiements';
 import type { Permission } from '../../lib/access';
 
-type Key = 'week' | 'invoice' | 'suppliers' | 'approvals' | 'history' | 'quickbooks' | 'settings';
+type Key = 'week' | 'invoice' | 'suppliers' | 'approvals' | 'history' | 'reports' | 'quickbooks' | 'settings';
 interface Props { active: Key }
 const { active } = Astro.props;
 const T = makeT(getPortailLocale(Astro.cookies), frPaiements, enPaiements);
@@ -17,6 +17,7 @@ const items: Array<{ key: Key; href: string; label: string; show: boolean }> = [
   { key: 'suppliers', href: '/portail/paiements/fournisseurs', label: T('nav.suppliers'), show: full },
   { key: 'approvals', href: '/portail/paiements/approbations', label: T('nav.approvals'), show: true },
   { key: 'history', href: '/portail/paiements/historique', label: T('nav.history'), show: full },
+  { key: 'reports', href: '/portail/paiements/rapports', label: T('nav.reports'), show: full },
   { key: 'quickbooks', href: '/portail/paiements/quickbooks', label: 'QuickBooks', show: full },
   { key: 'settings', href: '/portail/paiements/parametres', label: T('nav.settings'), show: full },
 ];

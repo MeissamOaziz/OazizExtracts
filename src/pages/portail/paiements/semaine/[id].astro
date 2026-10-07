@@ -5,6 +5,7 @@ import PortailLayout from '../../../../layouts/PortailLayout.astro';
 import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { localizeMsg } from '../../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { frCommon, enCommon } from '../../../../i18n/portail/common';
 import {
@@ -63,7 +64,7 @@ const fmtDate = (iso: string | null) => iso ? new Date(iso).toLocaleString(local
 const dayLabel = new Date(run.run_date + 'T12:00:00').toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
 
 const sp = Astro.url.searchParams;
-const flash = sp.get('ok') ? { cls: 'flash-success', text: sp.get('ok')! } : sp.get('error') ? { cls: 'flash-error', text: sp.get('error')! } : sp.get('info') ? { cls: 'flash-info', text: sp.get('info')! } : null;
+const flash = sp.get('ok') ? { cls: 'flash-success', text: localizeMsg(sp.get('ok'), locale) } : sp.get('error') ? { cls: 'flash-error', text: localizeMsg(sp.get('error'), locale) } : sp.get('info') ? { cls: 'flash-info', text: sp.get('info')! } : null;
 
 const methodLabel = (m: string) => T(`m.${m}` as keyof typeof frPaiements);
 const statusLabel = (s: string) => T(`line.status.${s}` as keyof typeof frPaiements);

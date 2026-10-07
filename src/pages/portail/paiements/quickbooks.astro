@@ -5,6 +5,7 @@ import PortailLayout from '../../../layouts/PortailLayout.astro';
 import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { localizeMsg } from '../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
 import { loadAccounts, loadSuppliers, money, round2 } from '../../../lib/payables';
 import { qboConfig, connectionInfo, RECONNECT_STATUS } from '../../../lib/qbo';
@@ -76,8 +77,8 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
 <PortailLayout title="QuickBooks" staffName={staff.full_name} wide>
   <h1>{T('title')}</h1>
   <PaiementsNav active="quickbooks" />
-  {sp.get('ok') && <div class="flash flash-success">{sp.get('ok') === 'connected' ? T('qbo.connected') : sp.get('ok')}</div>}
-  {errKey && <div class="flash flash-error">{errText[errKey] ?? errKey}</div>}
+  {sp.get('ok') && <div class="flash flash-success">{sp.get('ok') === 'connected' ? T('qbo.connected') : localizeMsg(sp.get('ok'), locale)}</div>}
+  {errKey && <div class="flash flash-error">{errText[errKey] ?? localizeMsg(errKey, locale)}</div>}
 
   <section class="card status">
     <div>
@@ -92,13 +93,13 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
         <dl class="kv">
           <dt>{T('qbo.company')}</dt><dd>{conn.company_name ?? conn.realm_id} <span class={`badge ${conn.environment === 'production' ? 'badge-complete' : 'badge-signing'}`}>{conn.environment}</span></dd>
           <dt>{T('qbo.connectedOn')}</dt><dd>{fmt(conn.connected_at)}</dd>
-          <dt>{T('qbo.lastSync')}</dt><dd>{fmt(conn.last_sync_at)} {conn.last_sync_status && <span class="muted">— {conn.last_sync_status}</span>}</dd>
+          <dt>{T('qbo.lastSync')}</dt><dd>{fmt(conn.last_sync_at)} {conn.last_sync_status && <span class="muted">— {localizeMsg(conn.last_sync_status, locale)}</span>}</dd>
           <dt>{T('qbo.linked')}</dt><dd>{linkedCount} / {suppliers.length} · {mismatches > 0 ? <a class="bad" href="/portail/paiements/quickbooks/ecarts">{mismatches} {T('qbo.mismatches')} →</a> : <span>0 {T('qbo.mismatches')}</span>}</dd>
           {conn.refresh_expires_at && <dt>{T('qbo.reauth')}</dt>}{conn.refresh_expires_at && <dd>{fmt(conn.refresh_expires_at)}</dd>}
         </dl>
         </>
       )}
-      {listError && <p class="flash flash-error" style="margin-top:10px;">{listError}</p>}
+      {listError && <p class="flash flash-error" style="margin-top:10px;">{localizeMsg(listError, locale)}</p>}
     </div>
     <div class="status-actions">
       {cfg.configured && !conn && <a class="btn btn-primary" href="/api/portail/paiements/qbo/connect">{T('qbo.connect')}</a>}
@@ -242,7 +243,7 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
     <ul class="details-body log">
       {(logRows ?? []).length === 0 && <li class="muted">—</li>}
       {(logRows ?? []).map((l) => (
-        <li class={`st-${l.status}`}><span class="muted">{fmt(l.created_at)}</span> · {l.direction} · {l.entity} · <strong>{l.status}</strong> — {l.message}</li>
+        <li class={`st-${l.status}`}><span class="muted">{fmt(l.created_at)}</span> · {l.direction} · {l.entity} · <strong>{l.status}</strong> — {localizeMsg(l.message, locale)}</li>
       ))}
     </ul>
   </details>

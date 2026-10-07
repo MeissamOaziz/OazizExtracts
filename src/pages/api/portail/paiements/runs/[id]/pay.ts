@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
+import { localizeMsg } from '../../../../../../lib/msg-i18n';
+import { getPortailLocale } from '../../../../../../lib/portail-i18n';
 import { json, isUuid, parseAmount, logEvent, paymentWithReference, todayIso } from '../../../../../../lib/payables';
 import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
 
@@ -8,37 +10,38 @@ export const prerender = false;
 // Mark an approved line as paid (records the payment, allocated oldest-first),
 // or undo it (voids the payment — never deletes — and restores the balance).
 export const POST: APIRoute = async ({ request, cookies, params }) => {
+  const L = (m: string) => localizeMsg(m, getPortailLocale(cookies));
   const staff = await currentStaff(createServerClient(request, cookies));
-  if (!staff) return json({ error: 'unauthenticated' }, 401);
+  if (!staff) return json({ error: L('unauthenticated') }, 401);
   const runId = String(params.id ?? '');
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-  if (!isUuid(runId) || !body || !isUuid(body.line_id)) return json({ error: 'bad request' }, 400);
+  if (!isUuid(runId) || !body || !isUuid(body.line_id)) return json({ error: L('bad request') }, 400);
 
   const admin = getAdminClient();
   const { data: run } = await admin.from('ap_runs').select('status').eq('id', runId).maybeSingle();
   const { data: line } = await admin.from('ap_run_lines').select('*').eq('id', body.line_id).eq('run_id', runId).maybeSingle();
-  if (!run || !line) return json({ error: 'not found' }, 404);
+  if (!run || !line) return json({ error: L('not found') }, 404);
 
   if (body.undo) {
     if (!line.payment_id) return json({ ok: true });
     await deleteQboPayment(admin, line.payment_id);
     const { error } = await admin.rpc('ap_void_payment', { p_payment_id: line.payment_id, p_staff_id: staff.id });
-    if (error) return json({ error: error.message }, 500);
+    if (error) return json({ error: L(error.message) }, 500);
     await admin.from('ap_run_lines').update({ remittance_sent_at: null, remittance_sent_by: null }).eq('id', line.id);
     await logEvent(admin, { run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'payment_voided', details: { payment_id: line.payment_id } });
     return json({ ok: true });
   }
 
-  if (run.status !== 'approved') return json({ error: 'run not approved' }, 409);
-  if (line.payment_id) return json({ error: 'already paid' }, 409);
-  if (!(Number(line.approved_amount) > 0)) return json({ error: 'not approved' }, 409);
+  if (run.status !== 'approved') return json({ error: L('run not approved') }, 409);
+  if (line.payment_id) return json({ error: L('already paid') }, 409);
+  if (!(Number(line.approved_amount) > 0)) return json({ error: L('not approved') }, 409);
   const amount = parseAmount(body.amount);
-  if (!amount || amount <= 0) return json({ error: 'amount' }, 400);
+  if (!amount || amount <= 0) return json({ error: L('amount') }, 400);
   const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(String(body.paid_on ?? '')) ? String(body.paid_on) : todayIso();
 
   const ref = String(body.reference ?? '').trim();
   const d = await paymentWithReference(admin, ref);
-  if (d) return json({ error: `Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}` }, 409);
+  if (d) return json({ error: L(`Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}`) }, 409);
   const { data: sup } = await admin.from('ap_suppliers').select('payment_method, bank_account_id').eq('id', line.supplier_id).single();
   const { data: paymentId, error } = await admin.rpc('ap_record_payment', {
     p_supplier_id: line.supplier_id, p_amount: amount, p_paid_on: paidOn,
@@ -47,7 +50,7 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
   });
   if (error || !paymentId) {
     console.error('[paiements] record payment failed:', error);
-    return json({ error: error?.message ?? 'failed' }, 500);
+    return json({ error: L(error?.message ?? 'failed') }, 500);
   }
   await admin.from('ap_run_lines').update({
     payment_id: paymentId, processed_at: new Date().toISOString(), processed_by: staff.id,

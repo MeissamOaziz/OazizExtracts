@@ -1,0 +1,115 @@
+---
+export const prerender = false;
+
+// Payments report: by bank account and period, with exports for the bank
+// reconciliation and for QuickBooks' "Upload transactions" (accounts whose
+// books aren't connected, e.g. TD MJLB).
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
+import { isUuid, loadAccounts, money } from '../../../lib/payables';
+import { defaultPeriod, loadPaymentReport } from '../../../lib/payables-report';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frPaiements, enPaiements);
+type K = keyof typeof frPaiements;
+const admin = getAdminClient();
+const accounts = await loadAccounts(admin);
+
+const sp = Astro.url.searchParams;
+const def = defaultPeriod();
+const isDate = (v: string | null) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const from = isDate(sp.get('from')) ? sp.get('from')! : def.from;
+const to = isDate(sp.get('to')) ? sp.get('to')! : def.to;
+const acc = sp.get('account');
+const accountId = acc === 'none' ? 'none' : isUuid(acc) ? acc : null;
+const report = await loadPaymentReport(admin, { accountId, from, to });
+const qs = new URLSearchParams({ from, to, ...(accountId ? { account: accountId } : {}) }).toString();
+const methodLabel = (m: string | null) => (m ? T(`m.${m}` as K) : '—');
+---
+<PortailLayout title={T('rep.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <PaiementsNav active="reports" />
+
+  <form class="card filters no-print" method="GET">
+    <div class="form-row"><label>{T('rep.account')}</label>
+      <select name="account">
+        <option value="">{T('rep.allAccounts')}</option>
+        {accounts.map((a) => <option value={a.id} selected={a.id === accountId}>{a.name}</option>)}
+        <option value="none" selected={accountId === 'none'}>{T('rep.noAccount')}</option>
+      </select>
+    </div>
+    <div class="form-row"><label>{T('rep.from')}</label><input type="date" name="from" value={from} /></div>
+    <div class="form-row"><label>{T('rep.to')}</label><input type="date" name="to" value={to} /></div>
+    <div class="form-row"><label>&nbsp;</label><button class="btn btn-primary" type="submit">{T('rep.show')}</button></div>
+  </form>
+
+  <div class="sum-grid">
+    {report.byAccount.map((b) => (
+      <div class="card kpi"><span>{b.name}</span><strong>{money(b.total, locale)}</strong><em>{b.count} {T('rep.payments')}</em></div>
+    ))}
+    {report.byAccount.length > 1 && <div class="card kpi"><span>Total</span><strong>{money(report.total, locale)}</strong><em>{report.rows.length} {T('rep.payments')}</em></div>}
+  </div>
+
+  <section class="card tbl-card">
+    <div class="tbl-head">
+      <h2>{T('rep.list')} ({report.rows.length})</h2>
+      <div class="exports no-print">
+        <a class="btn btn-secondary" href={`/api/portail/paiements/reports/export?format=csv&${qs}`}>{T('rep.exportCsv')}</a>
+        <a class="btn btn-secondary" href={`/api/portail/paiements/reports/export?format=qbo&${qs}`}>{T('rep.exportQbo')}</a>
+        <button class="btn btn-secondary" type="button" onclick="window.print()">{T('rep.print')}</button>
+      </div>
+    </div>
+    {report.rows.length === 0 ? <p class="muted" style="padding: 8px 20px 18px;">{T('rep.empty')}</p> : (
+      <table class="data">
+        <thead><tr>
+          <th>{T('pay.date')}</th><th>{T('col.supplier')}</th><th>{T('pay.account')}</th><th>{T('pay.method')}</th>
+          <th>{T('pay.ref')}</th><th>{T('rep.invoices')}</th><th class="num">{T('pay.amount')}</th><th class="center">QB</th><th class="center">{T('rep.remit')}</th>
+        </tr></thead>
+        <tbody>
+          {report.rows.map((r) => (
+            <tr>
+              <td class="nowrap">{r.paid_on}</td>
+              <td><a href={`/portail/paiements/fournisseurs/${r.supplier_id}`}>{r.supplier}</a></td>
+              <td>{r.account}</td>
+              <td>{methodLabel(r.method)}</td>
+              <td>{r.reference ?? '—'}</td>
+              <td class="small">{r.invoices.join(', ') || '—'}</td>
+              <td class="num">{money(r.amount, locale)}</td>
+              <td class="center">{r.in_qbo ? '✓' : '—'}</td>
+              <td class="center">{r.remittance_sent ? '✓' : '—'}</td>
+            </tr>
+          ))}
+          <tr class="total-row"><td colspan="6">Total</td><td class="num">{money(report.total, locale)}</td><td colspan="2"></td></tr>
+        </tbody>
+      </table>
+    )}
+    <p class="hint no-print" style="padding: 10px 20px 16px;">{T('rep.qboHint')}</p>
+  </section>
+</PortailLayout>
+
+<style>
+  .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+  .filters .form-row { margin: 0; min-width: 180px; }
+  .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { display: grid; gap: 2px; }
+  .kpi span { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--p-muted); }
+  .kpi strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .kpi em { font-style: normal; font-size: .8rem; color: var(--p-muted); }
+  .tbl-card { padding: 0; overflow-x: auto; }
+  .tbl-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px 8px; }
+  .exports { display: flex; gap: 8px; flex-wrap: wrap; }
+  .exports .btn { font-size: .82rem; padding: 6px 12px; }
+  table.data td, table.data th { padding: 8px 12px; font-size: .85rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .center { text-align: center; }
+  .nowrap { white-space: nowrap; }
+  .small { font-size: .8rem; }
+  .muted { color: var(--p-muted); }
+  .total-row td { font-weight: 700; border-top: 2px solid var(--p-border); }
+  @media print { .no-print { display: none !important; } .tbl-card { overflow: visible; } }
+</style>

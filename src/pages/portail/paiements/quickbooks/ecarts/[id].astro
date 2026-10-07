@@ -5,6 +5,7 @@ import PortailLayout from '../../../../../layouts/PortailLayout.astro';
 import PaiementsNav from '../../../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../../lib/portail-i18n';
+import { localizeMsg } from '../../../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../../../i18n/portail/paiements';
 import { isUuid, money } from '../../../../../lib/payables';
 import { connectionInfo } from '../../../../../lib/qbo';
@@ -57,9 +58,9 @@ const histRows = (history ?? []).map((h) => {
     {r && <> · <a href={`/portail/paiements/fournisseurs/${r.supplier.id}`}>{T('col.supplier')}</a></>}
     {r?.vendor && <> · <a href={qbAppUrl('Vendor', r.vendor.id, env)} target="_blank" rel="noopener">{T('rec.act.openQb')} ↗</a></>}
   </p>
-  {sp.get('ok') && <div class="flash flash-success">{sp.get('ok')}</div>}
-  {sp.get('error') && <div class="flash flash-error">{sp.get('error')}</div>}
-  {error && <div class="flash flash-error">{error}</div>}
+  {sp.get('ok') && <div class="flash flash-success">{localizeMsg(sp.get('ok'), locale)}</div>}
+  {sp.get('error') && <div class="flash flash-error">{localizeMsg(sp.get('error'), locale)}</div>}
+  {error && <div class="flash flash-error">{localizeMsg(error, locale)}</div>}
 
   {r && !r.vendor && <div class="card"><p class="muted">{T('rec.notLinked')}</p></div>}
 

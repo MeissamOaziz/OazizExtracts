@@ -5,6 +5,7 @@ import PortailLayout from '../../../../../layouts/PortailLayout.astro';
 import PaiementsNav from '../../../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../../lib/portail-i18n';
+import { localizeMsg } from '../../../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../../../i18n/portail/paiements';
 import { loadSuppliers, money, round2 } from '../../../../../lib/payables';
 import { connectionInfo } from '../../../../../lib/qbo';
@@ -40,7 +41,7 @@ const totalDiff = round2(rows.reduce((t, r) => t + r.diff, 0));
   <section class="card tbl-card">
     <div class="tbl-head"><h2>{T('rec.title')} ({rows.length})</h2></div>
     <p class="muted small" style="padding: 4px 20px 8px;">{T('rec.intro')}</p>
-    {listError && <p class="flash flash-error" style="margin: 0 20px 12px;">{listError}</p>}
+    {listError && <p class="flash flash-error" style="margin: 0 20px 12px;">{localizeMsg(listError, locale)}</p>}
     {rows.length === 0 ? <p class="muted" style="padding: 0 20px 18px;">✓ {T('rec.none')}</p> : (
       <table class="data">
         <thead><tr><th>{T('col.supplier')}</th><th>{T('qbo.qbVendor')}</th><th class="num">{T('rec.portal')}</th><th class="num">{T('rec.qb')}</th><th class="num">{T('rec.diff')}</th><th></th></tr></thead>
