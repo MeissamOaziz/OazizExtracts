@@ -4,7 +4,7 @@ export const prerender = false;
 import PortailLayout from '../../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
-import { effectivePermissions, cleanOverrides, isRole, PERMISSIONS, ROLES } from '../../../../lib/access';
+import { effectivePermissions, grantedPermissions, isLocked, type Permission } from '../../../../lib/access';
 import { frAdminUsers, enAdminUsers } from '../../../../i18n/portail/admin-users';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
@@ -14,11 +14,13 @@ if (!effectivePermissions(staff).has('admin')) return Astro.redirect('/portail?e
 
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frAdminUsers, enAdminUsers);
+type K = keyof typeof frAdminUsers;
 
 const admin = getAdminClient();
 const { data: users } = await admin
   .from('staff')
   .select('id, full_name, email, title, is_active, portal_role, portal_permission_overrides')
+  .order('is_active', { ascending: false })
   .order('full_name');
 
 const url = new URL(Astro.request.url);
@@ -30,11 +32,23 @@ const errorMessages: Record<string, string> = {
   duplicate: T('error.duplicate'), unknown: T('error.unknown'),
 };
 
-const rows = (users ?? []).map((u) => {
-  const perms = effectivePermissions(u);
-  const customized = Object.keys(cleanOverrides(u.portal_permission_overrides)).length > 0 && u.portal_role !== 'admin';
-  return { ...u, perms, customized };
-});
+// Columns, grouped by module.
+const GROUPS: Array<{ key: string; perms: Permission[] }> = [
+  { key: 'rnd', perms: ['rnd'] },
+  { key: 'calculators', perms: ['calculators'] },
+  { key: 'vq', perms: ['vq', 'licenses'] },
+  { key: 'hr', perms: ['hr', 'hr_employees', 'hr_evaluations'] },
+  { key: 'atelier', perms: ['atelier'] },
+  { key: 'payables', perms: ['payables', 'payables_approve'] },
+  { key: 'admin', perms: ['admin'] },
+];
+const COLS = GROUPS.flatMap((g) => g.perms);
+const groupStart = new Set(GROUPS.map((g) => g.perms[0]));
+
+const rows = (users ?? []).map((u) => ({ ...u, granted: grantedPermissions(u) }));
+const errText = {
+  self_admin: T('error.self_admin'), last_admin: T('error.last_admin'), not_found: T('error.not_found'), unknown: T('error.unknown'),
+};
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name} wide>
   <div style="margin-bottom: 20px;">
@@ -45,29 +59,57 @@ const rows = (users ?? []).map((u) => {
 
   {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
   {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+  <div id="grid-msg" class="flash" hidden></div>
 
-  <div class="card" style="padding: 0; margin-bottom: 24px;">
-    <div style="padding: 20px 20px 0;"><h2>{T('section.users')}</h2></div>
-    <table class="data" style="margin-top: 14px;">
-      <thead>
-        <tr><th>{T('th.name')}</th><th>{T('th.email')}</th><th>{T('th.role')}</th><th>{T('th.access')}</th><th>{T('th.status')}</th><th></th></tr>
-      </thead>
-      <tbody>
-        {rows.map((u) => (
+  <div class="card grid-card">
+    <div class="grid-head">
+      <h2>{T('section.users')}</h2>
+      <p class="hint" style="margin:0;">{T('grid.hint')}</p>
+    </div>
+    <div class="grid-scroll">
+      <table class="data access-grid">
+        <thead>
           <tr>
-            <td><a href={`/portail/admin/utilisateurs/${u.id}`}><strong>{u.full_name}</strong></a>{u.title && <div class="hint" style="margin:0;">{u.title}</div>}</td>
-            <td>{u.email}</td>
-            <td>{isRole(u.portal_role) ? T(`role.${u.portal_role}` as keyof typeof frAdminUsers) : T('noRole')}</td>
-            <td style="font-size:.85rem;">
-              {u.perms.size === 0 ? '—' : PERMISSIONS.filter((p) => u.perms.has(p) && p !== 'admin').map((p) => T(`perm.${p}` as keyof typeof frAdminUsers).split(' — ')[0]).filter((v, i, a) => a.indexOf(v) === i).join(', ')}
-              {u.customized && <span class="badge badge-signing" style="margin-left:6px;">{T('access.custom')}</span>}
-            </td>
-            <td><span class={`badge ${u.is_active ? 'badge-complete' : 'badge-cancelled'}`}>{u.is_active ? T('status.active') : T('status.inactive')}</span></td>
-            <td style="text-align:right;"><a href={`/portail/admin/utilisateurs/${u.id}`} class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('editBtn')}</a></td>
+            <th rowspan="2" class="name-col">{T('th.name')}</th>
+            {GROUPS.map((g) => g.perms.length === 1
+              ? <th rowspan="2" class="grp grp-start">{T(`grp.${g.key}` as K)}</th>
+              : <th colspan={g.perms.length} class="grp grp-start">{T(`grp.${g.key}` as K)}</th>)}
+            <th rowspan="2">{T('th.status')}</th>
+            <th rowspan="2"></th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+          <tr>
+            {GROUPS.filter((g) => g.perms.length > 1).flatMap((g) => g.perms.map((p, i) => (
+              <th class={`sub ${i === 0 ? 'grp-start' : ''}`}>{T(`col.${p}` as K)}</th>
+            )))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((u) => (
+            <tr id={`u-${u.id}`} class={u.is_active ? '' : 'inactive'}>
+              <td class="name-col">
+                <a href={`/portail/admin/utilisateurs/${u.id}`}><strong>{u.full_name}</strong></a>
+                <div class="hint" style="margin:0;">{u.title ?? u.email}</div>
+              </td>
+              {COLS.map((p) => {
+                const locked = isLocked(p, u.email);
+                const selfAdmin = p === 'admin' && u.id === staff.id;
+                return (
+                  <td class={`cell ${groupStart.has(p) ? 'grp-start' : ''}`}>
+                    <input type="checkbox" class="perm" data-user={u.id} data-perm={p}
+                      checked={u.granted.has(p) && !locked} disabled={locked || selfAdmin}
+                      title={locked ? T('grid.locked') : T(`perm.${p}` as K)}
+                      aria-label={`${u.full_name} — ${T(`perm.${p}` as K)}`} />
+                    {locked && <span class="lock" title={T('grid.locked')}>🔒</span>}
+                  </td>
+                );
+              })}
+              <td><span class={`badge ${u.is_active ? 'badge-complete' : 'badge-cancelled'}`}>{u.is_active ? T('status.active') : T('status.inactive')}</span></td>
+              <td style="text-align:right;"><a href={`/portail/admin/utilisateurs/${u.id}`} class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('editBtn')}</a></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="card" style="max-width: 560px;">
@@ -77,14 +119,62 @@ const rows = (users ?? []).map((u) => {
       <div class="form-row"><label for="full_name">{T('label.fullName')}</label><input type="text" id="full_name" name="full_name" required /></div>
       <div class="form-row"><label for="email">{T('label.email')}</label><input type="email" id="email" name="email" required /></div>
       <div class="form-row"><label for="title">{T('label.title')}</label><input type="text" id="title" name="title" /></div>
-      <div class="form-row">
-        <label for="portal_role">{T('label.role')}</label>
-        <select id="portal_role" name="portal_role">
-          <option value="">{T('role.none')}</option>
-          {ROLES.map((r) => <option value={r}>{T(`role.${r}` as keyof typeof frAdminUsers)}</option>)}
-        </select>
-      </div>
       <button type="submit" class="btn btn-primary">{T('addBtn')}</button>
     </form>
   </div>
+
+  <script is:inline define:vars={{ errText, savedText: T('grid.saved') }}>
+    (function () {
+      const msg = document.getElementById('grid-msg');
+      let timer;
+      function show(text, ok) {
+        msg.textContent = text;
+        msg.className = 'flash ' + (ok ? 'flash-success' : 'flash-error');
+        msg.hidden = false;
+        clearTimeout(timer);
+        timer = setTimeout(function () { msg.hidden = true; }, ok ? 1500 : 5000);
+      }
+      document.querySelectorAll('input.perm').forEach(function (box) {
+        box.addEventListener('change', async function () {
+          const granted = box.checked;
+          box.disabled = true;
+          try {
+            const res = await fetch('/api/portail/admin/users/' + box.dataset.user + '/permission', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ perm: box.dataset.perm, granted: granted }),
+            });
+            const data = await res.json().catch(function () { return {}; });
+            if (!res.ok || !data.ok) throw new Error(errText[data.error] || errText.unknown);
+            box.closest('td').classList.add('flash-ok');
+            setTimeout(function () { box.closest('td').classList.remove('flash-ok'); }, 700);
+            show(savedText, true);
+          } catch (e) {
+            box.checked = !granted;
+            show(e.message, false);
+          } finally {
+            box.disabled = false;
+          }
+        });
+      });
+    })();
+  </script>
 </PortailLayout>
+
+<style>
+  .grid-card { padding: 0; margin-bottom: 24px; }
+  .grid-head { padding: 20px 20px 12px; display: grid; gap: 4px; }
+  .grid-scroll { overflow-x: auto; }
+  .access-grid { min-width: 980px; }
+  .access-grid th, .access-grid td { padding: 8px 10px; vertical-align: middle; }
+  .access-grid th.grp, .access-grid th.sub { text-align: center; font-size: .72rem; white-space: normal; line-height: 1.25; }
+  .access-grid th.sub { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--p-muted); max-width: 96px; }
+  .access-grid .name-col { min-width: 170px; position: sticky; left: 0; background: var(--p-card, #fff); z-index: 1; }
+  .access-grid .grp-start { border-left: 1px solid var(--p-border, #e5e7eb); }
+  .access-grid td.cell { text-align: center; position: relative; transition: background .3s; }
+  .access-grid td.cell input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--p-accent); }
+  .access-grid td.cell input:disabled { cursor: not-allowed; opacity: .45; }
+  .access-grid td.flash-ok { background: #e7f6ec; }
+  .access-grid tr.inactive td { opacity: .55; }
+  .lock { font-size: .7rem; margin-left: 2px; }
+  #grid-msg { position: fixed; right: 20px; bottom: 20px; z-index: 50; margin: 0; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+</style>

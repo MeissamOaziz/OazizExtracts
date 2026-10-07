@@ -1,6 +1,6 @@
-// Portal module access control. Each staff member has a preset role whose
-// default permissions can be overridden per user (true = granted, false =
-// denied) from the admin panel. Enforced centrally by src/middleware.ts via
+// Portal module access control. Each staff member has an explicit list of
+// modules ticked in the admin panel (stored in portal_permission_overrides as
+// { permission: true }). Enforced centrally by src/middleware.ts via
 // ROUTE_RULES, and used by pages/layout to hide what a user can't open.
 
 export const PERMISSIONS = [
@@ -18,29 +18,36 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-export const ROLES = ['admin', 'qa', 'sales', 'production'] as const;
-export type PortalRole = (typeof ROLES)[number];
-
-export const ROLE_PRESETS: Record<PortalRole, readonly Permission[]> = {
+// Legacy role presets — only used to read accounts not yet converted to
+// explicit ticks (portal_role still set). New saves always clear the role.
+const LEGACY_ROLES = ['admin', 'qa', 'sales', 'production'] as const;
+type LegacyRole = (typeof LEGACY_ROLES)[number];
+const LEGACY_PRESETS: Record<LegacyRole, readonly Permission[]> = {
   admin: PERMISSIONS,
   qa: ['rnd', 'vq', 'licenses', 'hr', 'hr_employees'],
   sales: ['rnd', 'calculators', 'vq', 'licenses'],
   production: ['rnd', 'hr', 'hr_employees'],
 };
 
-export type PermissionOverrides = Partial<Record<Permission, boolean>>;
+export type PermissionGrants = Partial<Record<Permission, boolean>>;
 
-// Atelier isn't open to the team yet: only these accounts can ever get the
-// 'atelier' permission, no matter their role or overrides.
-export const ATELIER_ALLOWED_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
+// Modules not open to the team yet: only these accounts can ever get them,
+// whatever is ticked. Lift a lock by adding the email (e.g. Nathalie for
+// payables, jorge@oaziz.ca for payables_approve) or removing the entry.
+export const RESTRICTED: Partial<Record<Permission, readonly string[]>> = {
+  atelier: ['meissam@oaziz.ca'],
+  payables: ['meissam@oaziz.ca'],
+  payables_approve: ['meissam@oaziz.ca'],
+};
+export const ATELIER_ALLOWED_EMAILS = RESTRICTED.atelier!;
+export const PAYABLES_ALLOWED_EMAILS = RESTRICTED.payables!;
+export const PAYABLES_APPROVER_EMAILS = RESTRICTED.payables_approve!;
 
-// Supplier payments hold banking details and the company's cash position:
-// restricted to these accounts regardless of role (add Nathalie here once she
-// has a portal login).
-export const PAYABLES_ALLOWED_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
-// Who may open the approver screens (past approvals + the pending one) by
-// logging in. Add jorge@oaziz.ca when the module goes live for him.
-export const PAYABLES_APPROVER_EMAILS: readonly string[] = ['meissam@oaziz.ca'];
+/** True when the module is locked for this email (allowlist). */
+export function isLocked(perm: Permission, email: string | null | undefined): boolean {
+  const list = RESTRICTED[perm];
+  return !!list && !list.includes((email ?? '').toLowerCase());
+}
 
 export interface AccessSubject {
   email: string;
@@ -48,12 +55,8 @@ export interface AccessSubject {
   portal_permission_overrides: unknown;
 }
 
-export function isRole(v: unknown): v is PortalRole {
-  return typeof v === 'string' && (ROLES as readonly string[]).includes(v);
-}
-
-export function cleanOverrides(raw: unknown): PermissionOverrides {
-  const out: PermissionOverrides = {};
+export function cleanGrants(raw: unknown): PermissionGrants {
+  const out: PermissionGrants = {};
   if (!raw || typeof raw !== 'object') return out;
   for (const p of PERMISSIONS) {
     const v = (raw as Record<string, unknown>)[p];
@@ -62,26 +65,28 @@ export function cleanOverrides(raw: unknown): PermissionOverrides {
   return out;
 }
 
-// Admins always have everything (so the last admin can never lock themselves
-// out through an override); everyone else = preset + overrides. No role =
-// no access.
-export function effectivePermissions(s: AccessSubject): Set<Permission> {
-  const perms = rolePermissions(s);
-  if (!ATELIER_ALLOWED_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('atelier');
-  if (!PAYABLES_ALLOWED_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('payables');
-  if (!PAYABLES_APPROVER_EMAILS.includes((s.email ?? '').toLowerCase())) perms.delete('payables_approve');
-  return perms;
+/** What is ticked for the user (before allowlist locks). */
+export function grantedPermissions(s: AccessSubject): Set<Permission> {
+  const grants = cleanGrants(s.portal_permission_overrides);
+  const role = s.portal_role as LegacyRole | null;
+  if (role && (LEGACY_ROLES as readonly string[]).includes(role)) {
+    // Legacy account: role preset adjusted by overrides.
+    const perms = new Set<Permission>(LEGACY_PRESETS[role]);
+    if (role !== 'admin') {
+      for (const p of PERMISSIONS) {
+        if (grants[p] === true) perms.add(p);
+        else if (grants[p] === false) perms.delete(p);
+      }
+    }
+    return perms;
+  }
+  return new Set(PERMISSIONS.filter((p) => grants[p] === true));
 }
 
-function rolePermissions(s: AccessSubject): Set<Permission> {
-  if (!isRole(s.portal_role)) return new Set();
-  if (s.portal_role === 'admin') return new Set(PERMISSIONS);
-  const perms = new Set<Permission>(ROLE_PRESETS[s.portal_role]);
-  const overrides = cleanOverrides(s.portal_permission_overrides);
-  for (const p of PERMISSIONS) {
-    if (overrides[p] === true) perms.add(p);
-    else if (overrides[p] === false) perms.delete(p);
-  }
+/** What the user can actually open: ticked modules minus locked ones. */
+export function effectivePermissions(s: AccessSubject): Set<Permission> {
+  const perms = grantedPermissions(s);
+  for (const p of [...perms]) if (isLocked(p, s.email)) perms.delete(p);
   return perms;
 }
 

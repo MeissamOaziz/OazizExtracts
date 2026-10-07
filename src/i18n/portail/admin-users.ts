@@ -64,6 +64,15 @@ export const frAdminUsers = {
   'error.self_deactivate': 'Vous ne pouvez pas désactiver votre propre compte.',
   'error.invite_failed': "L'envoi de l'invitation a échoué.",
   'error.unknown': 'Une erreur est survenue.',
+  'grid.hint': 'Cochez les modules auxquels chaque personne a accès. Chaque case est enregistrée immédiatement.',
+  'grid.saved': 'Enregistré',
+  'grid.locked': 'Réservé pour l’instant (liste fermée dans access.ts)',
+  'grid.inactive': 'Compte désactivé',
+  'grp.rnd': 'R&D', 'grp.calculators': 'Calculatrices', 'grp.vq': 'Fournisseurs', 'grp.hr': 'RH', 'grp.atelier': 'Atelier', 'grp.payables': 'Paiements', 'grp.admin': 'Admin',
+  'col.rnd': 'Formulaires', 'col.calculators': 'Accès', 'col.vq': 'VQ', 'col.licenses': 'Licences', 'col.hr': 'Attestations / incidents', 'col.hr_employees': 'Nouveaux employés', 'col.hr_evaluations': 'Évaluations', 'col.atelier': 'Accès', 'col.payables': 'Paiements', 'col.payables_approve': 'Approbation', 'col.admin': 'Utilisateurs',
+  'edit.modulesHint': 'Cochez les modules que cette personne peut ouvrir.',
+  'error.self_admin': 'Vous ne pouvez pas retirer votre propre accès Admin.',
+  'error.not_found': 'Utilisateur introuvable.',
 } as const;
 
 export type AdminUsersDict = typeof frAdminUsers;
@@ -134,4 +143,13 @@ export const enAdminUsers: Partial<Record<keyof AdminUsersDict, string>> = {
   'error.self_deactivate': 'You cannot deactivate your own account.',
   'error.invite_failed': 'Sending the invitation failed.',
   'error.unknown': 'An error occurred.',
+  'grid.hint': 'Tick the modules each person can open. Each box is saved immediately.',
+  'grid.saved': 'Saved',
+  'grid.locked': 'Restricted for now (allowlist in access.ts)',
+  'grid.inactive': 'Account deactivated',
+  'grp.rnd': 'R&D', 'grp.calculators': 'Calculators', 'grp.vq': 'Vendors', 'grp.hr': 'HR', 'grp.atelier': 'Atelier', 'grp.payables': 'Payments', 'grp.admin': 'Admin',
+  'col.rnd': 'Forms', 'col.calculators': 'Access', 'col.vq': 'VQ', 'col.licenses': 'Licenses', 'col.hr': 'Attestations / incidents', 'col.hr_employees': 'New employees', 'col.hr_evaluations': 'Evaluations', 'col.atelier': 'Access', 'col.payables': 'Payments', 'col.payables_approve': 'Approval', 'col.admin': 'Users',
+  'edit.modulesHint': 'Tick the modules this person can open.',
+  'error.self_admin': 'You cannot remove your own Admin access.',
+  'error.not_found': 'User not found.',
 };

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
-import { effectivePermissions, isRole } from '../../../../../lib/access';
+import { effectivePermissions } from '../../../../../lib/access';
 
 export const prerender = false;
 
@@ -14,8 +14,6 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const fullName = String(form.get('full_name') ?? '').trim();
   const email = String(form.get('email') ?? '').trim().toLowerCase();
   const title = String(form.get('title') ?? '').trim() || null;
-  const roleRaw = String(form.get('portal_role') ?? '');
-  const role = isRole(roleRaw) ? roleRaw : null;
 
   const base = '/portail/admin/utilisateurs';
   if (!fullName || !email) return redirect(`${base}?error=missing`, 303);
@@ -27,7 +25,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   const { data: inserted, error } = await admin
     .from('staff')
-    .insert({ full_name: fullName, email, title, portal_role: role })
+    .insert({ full_name: fullName, email, title, portal_role: null, portal_permission_overrides: {} })
     .select('id')
     .single();
   if (error || !inserted) {
@@ -39,8 +37,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     submission_id: null,
     actor_email: staff.email,
     action: 'portal_user_created',
-    metadata: { staff_id: inserted.id, email, portal_role: role },
+    metadata: { staff_id: inserted.id, email },
   });
 
-  return redirect(`${base}/${inserted.id}?info=saved`, 303);
+  return redirect(`${base}?info=created#u-${inserted.id}`, 303);
 };

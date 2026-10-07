@@ -4,9 +4,7 @@ export const prerender = false;
 import PortailLayout from '../../../../layouts/PortailLayout.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
-import {
-  effectivePermissions, cleanOverrides, isRole, PERMISSIONS, ROLES, ROLE_PRESETS,
-} from '../../../../lib/access';
+import { effectivePermissions, grantedPermissions, isLocked, PERMISSIONS } from '../../../../lib/access';
 import { frAdminUsers, enAdminUsers } from '../../../../i18n/portail/admin-users';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
@@ -28,10 +26,7 @@ const { data: user } = await admin
   .maybeSingle();
 if (!user) return Astro.redirect('/portail/admin/utilisateurs');
 
-const overrides = cleanOverrides(user.portal_permission_overrides);
-const role = isRole(user.portal_role) ? user.portal_role : null;
-const rolePreset = role ? new Set(ROLE_PRESETS[role]) : new Set<string>();
-const effective = effectivePermissions(user);
+const granted = grantedPermissions(user);
 const isSelf = user.id === staff.id;
 
 const url = new URL(Astro.request.url);
@@ -41,11 +36,9 @@ const infoMessages: Record<string, string> = { saved: T('info.saved'), invited: 
 const errorMessages: Record<string, string> = {
   last_admin: T('error.last_admin'), self_deactivate: T('error.self_deactivate'),
   invite_failed: T('error.invite_failed'), missing: T('error.missing'), unknown: T('error.unknown'),
+  self_admin: T('error.self_admin'), not_found: T('error.not_found'),
 };
 
-const presets = Object.fromEntries(ROLES.map((r) => [r, [...ROLE_PRESETS[r]]]));
-const yes = T('yes');
-const no = T('no');
 ---
 <PortailLayout title={user.full_name} staffName={staff.full_name}>
   <div style="margin-bottom: 20px;">
@@ -63,41 +56,21 @@ const no = T('no');
       <div class="form-row"><label for="full_name">{T('label.fullName')}</label><input type="text" id="full_name" name="full_name" value={user.full_name} required /></div>
       <div class="form-row"><label for="title">{T('label.title')}</label><input type="text" id="title" name="title" value={user.title ?? ''} /></div>
     </div>
-    <div class="form-row">
-      <label for="portal_role">{T('label.role')}</label>
-      <select id="portal_role" name="portal_role">
-        <option value="" selected={!role}>{T('role.none')}</option>
-        {ROLES.map((r) => <option value={r} selected={role === r}>{T(`role.${r}` as keyof typeof frAdminUsers)}</option>)}
-      </select>
-      <div class="hint">{T('edit.roleHint')}</div>
-    </div>
-
     <h2 style="margin-top: 24px;">{T('edit.accessHeading')}</h2>
-    <p id="admin-note" class="hint" style={`margin: 4px 0 10px;${role === 'admin' ? '' : 'display:none;'}`}>{T('adminAll')}</p>
-    <table class="data" style="margin-top: 10px;">
-      <thead>
-        <tr><th>{T('edit.th.module')}</th><th>{T('edit.th.fromRole')}</th><th>{T('edit.th.override')}</th><th>{T('edit.th.effective')}</th></tr>
-      </thead>
-      <tbody>
-        {PERMISSIONS.map((p) => {
-          const o = overrides[p];
-          return (
-            <tr data-perm={p}>
-              <td>{T(`perm.${p}` as keyof typeof frAdminUsers)}</td>
-              <td class="from-role">{rolePreset.has(p) ? yes : no}</td>
-              <td>
-                <select name={`perm_${p}`} class="override-select" style="max-width:170px;">
-                  <option value="default" selected={o === undefined}>{T('override.default')}</option>
-                  <option value="grant" selected={o === true}>{T('override.grant')}</option>
-                  <option value="deny" selected={o === false}>{T('override.deny')}</option>
-                </select>
-              </td>
-              <td class="effective"><strong>{effective.has(p) ? yes : no}</strong></td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <p class="hint" style="margin: 4px 0 10px;">{T('edit.modulesHint')}</p>
+    <div class="perm-list">
+      {PERMISSIONS.map((p) => {
+        const locked = isLocked(p, user.email);
+        const selfAdmin = p === 'admin' && isSelf;
+        return (
+          <label class={`perm-item ${locked ? 'locked' : ''}`} title={locked ? T('grid.locked') : ''}>
+            <input type="checkbox" name={`perm_${p}`} checked={granted.has(p) && !locked} disabled={locked || selfAdmin} />
+            <span>{T(`perm.${p}` as keyof typeof frAdminUsers)}{locked && ' 🔒'}</span>
+          </label>
+        );
+      })}
+    </div>
+    {isSelf && <input type="hidden" name="perm_admin" value="on" />}
 
     <div class="check-row" style="margin-top: 20px;">
       <input type="checkbox" id="is_active" name="is_active" value="1" checked={user.is_active} disabled={isSelf} />
@@ -113,33 +86,10 @@ const no = T('no');
     <button type="submit" class="btn btn-secondary">{T('inviteBtn')}</button>
   </form>
 
-  <script is:inline define:vars={{ presets, yes, no }}>
-    (function () {
-      const roleSel = document.getElementById('portal_role');
-      const rows = Array.from(document.querySelectorAll('tr[data-perm]'));
-      const adminNote = document.getElementById('admin-note');
-      function refresh() {
-        const role = roleSel.value;
-        const preset = presets[role] || [];
-        if (adminNote) adminNote.style.display = role === 'admin' ? '' : 'none';
-        rows.forEach((row) => {
-          const perm = row.getAttribute('data-perm');
-          const select = row.querySelector('.override-select');
-          const inPreset = preset.indexOf(perm) >= 0;
-          row.querySelector('.from-role').textContent = inPreset ? yes : no;
-          select.disabled = role === 'admin';
-          let eff = inPreset;
-          if (role && role !== 'admin') {
-            if (select.value === 'grant') eff = true;
-            else if (select.value === 'deny') eff = false;
-          }
-          if (!role) eff = false;
-          row.querySelector('.effective').innerHTML = '<strong>' + (eff ? yes : no) + '</strong>';
-        });
-      }
-      roleSel.addEventListener('change', refresh);
-      rows.forEach((r) => r.querySelector('.override-select').addEventListener('change', refresh));
-      refresh();
-    })();
-  </script>
 </PortailLayout>
+<style>
+  .perm-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px 16px; margin: 6px 0 4px; }
+  .perm-item { display: flex; gap: 8px; align-items: center; font-weight: 400; margin: 0; cursor: pointer; }
+  .perm-item input { width: 17px; height: 17px; accent-color: var(--p-accent); }
+  .perm-item.locked { opacity: .55; cursor: not-allowed; }
+</style>
