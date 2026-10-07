@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount } from '../../../../../lib/payables';
 import { autoPushInvoice, linkVendorChoice } from '../../../../../lib/qbo-sync';
+import { numKey } from '../../../../../lib/payables-duplicates';
 
 export const prerender = false;
 
@@ -81,8 +82,23 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     }
   }
 
+  // Same supplier + same invoice number already in the portal: refuse unless
+  // the reviewer explicitly confirmed it is not a duplicate.
+  if (number && form.get('confirm_not_duplicate') !== '1') {
+    const { data: same } = await admin.from('ap_invoices').select('invoice_number')
+      .eq('supplier_id', supplierId).is('voided_at', null).not('invoice_number', 'is', null);
+    if ((same ?? []).some((i) => numKey(i.invoice_number) === numKey(number))) return redirect(`${back}?error=dup_invoice`, 303);
+  }
+  // Reuse an existing QB bill instead of creating a second one.
+  const linkBill = str(form, 'link_qbo_bill_id');
+  if (linkBill) {
+    if (!/^\d+$/.test(linkBill)) return redirect(`${back}?error=save`, 303);
+    const { data: taken } = await admin.from('ap_invoices').select('id').eq('qbo_bill_id', linkBill).is('voided_at', null).limit(1);
+    if (taken?.length) return redirect(`${back}?error=qb_linked`, 303);
+  }
+
   const subtotal = parseAmount(form.get('subtotal'));
-  const alreadyInQb = form.get('in_quickbooks') === 'on';
+  const alreadyInQb = form.get('in_quickbooks') === 'on' || !!linkBill;
   const { data: created, error } = await admin.from('ap_invoices').insert({
     supplier_id: supplierId, kind, invoice_number: number, po_number: str(form, 'po_number'),
     invoice_date: invoiceDate, due_date: dueDate, amount, description: str(form, 'description'),
@@ -90,13 +106,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     tax_gst: parseAmount(form.get('tax_gst')), tax_qst: parseAmount(form.get('tax_qst')),
     qbo_account_id: str(form, 'qbo_account_id'), qbo_tax_code_id: str(form, 'qbo_tax_code_id'),
     in_quickbooks: alreadyInQb, file_path: safePath, created_by: staff.id, submission_key: submissionKey,
+    ...(linkBill ? { qbo_bill_id: linkBill, qbo_synced_at: new Date().toISOString() } : {}),
   }).select('id').single();
   if (error?.code === '23505') return redirect(`/portail/paiements/fournisseurs/${supplierId}?ok=inv`, 303);
   if (error || !created) {
     console.error('[paiements] invoice create failed:', error);
     return redirect(`${back}?error=save`, 303);
   }
-  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, via: 'pdf' } });
+  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, via: 'pdf', ...(linkBill ? { linked_qbo_bill: linkBill } : {}) } });
   if (form.get('qbo_remember') === 'on' && str(form, 'qbo_account_id')) {
     await admin.from('ap_suppliers').update({ qbo_expense_account_id: str(form, 'qbo_account_id'), qbo_tax_code_id: str(form, 'qbo_tax_code_id') }).eq('id', supplierId);
   }

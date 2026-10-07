@@ -336,7 +336,9 @@ const okText: Record<string, string> = {
   tr.closed-row td { color: var(--p-muted); }
   tr.voided td { text-decoration: line-through; color: #9ca3af; }
   form.inline { display: inline; margin: 0; }
-  .actions { white-space: nowrap; display: flex; gap: 10px; }
+  td.actions { white-space: nowrap; }
+  td.actions > * { display: inline-block; vertical-align: middle; margin-right: 10px; }
+  td.actions > *:last-child { margin-right: 0; }
   .link-btn { background: none; border: none; color: var(--p-accent); cursor: pointer; font: inherit; font-size: .8rem; padding: 0; }
   .link-btn.danger { color: var(--p-danger); }
   .events { list-style: none; font-size: .82rem; display: grid; gap: 4px; }

@@ -212,21 +212,21 @@ const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
       <tbody>
         <tr>
           <th style="width:260px;">{T('doc.cra')}</th>
-          <td style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <td><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             {submission.file_cra_license_path ? (
               <a href={`/api/portail/vendor-submissions/${id}/files/cra`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
             ) : T('notProvided')}
             {craExpiry && <span class={`badge ${craExpiry.className}`}>{craExpiry.text}</span>}
-          </td>
+          </div></td>
         </tr>
         <tr>
           <th>{T('doc.hc')}</th>
-          <td style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <td><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             {submission.file_health_canada_license_path ? (
               <a href={`/api/portail/vendor-submissions/${id}/files/hc`} class="btn btn-secondary" style="font-size:.82rem;padding:5px 12px;">{T('downloadBtn')}</a>
             ) : T('notProvided')}
             {hcExpiry && <span class={`badge ${hcExpiry.className}`}>{hcExpiry.text}</span>}
-          </td>
+          </div></td>
         </tr>
         <tr>
           <th>{T('doc.bankProof')}</th>

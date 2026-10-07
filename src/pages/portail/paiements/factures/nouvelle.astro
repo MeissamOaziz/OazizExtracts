@@ -11,12 +11,14 @@ import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { loadSuppliers } from '../../../../lib/payables';
 import { extractionAvailable } from '../../../../lib/payables-extract';
+import { connectionInfo } from '../../../../lib/qbo';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frPaiements, enPaiements);
 const suppliers = await loadSuppliers(getAdminClient(), { includeInactive: false });
+const qbEnv = (await connectionInfo(getAdminClient()))?.environment ?? null;
 const sp = Astro.url.searchParams;
 const errorKey = sp.get('error');
 const i18n = {
@@ -26,6 +28,11 @@ const i18n = {
   qbSubtotal: T('pdf.subtotal'), qbGst: T('pdf.gst'), qbQst: T('pdf.qst'), qbOther: T('pdf.otherTaxes'),
   qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), locale,
   codingFrom: T('pdf.qbFromHistory'), codingNone: T('pdf.qbNoHistory'), codingNew: T('pdf.qbNewSupplier'),
+  dupTitle: T('dup.title'), dupChecking: T('dup.checking'), dupNone: T('dup.none'), dupNoneNoQb: T('dup.noneNoQb'),
+  dupSrcPortal: T('dup.src.portal'), dupSrcQb: T('dup.src.qb'), dupRnumber: T('dup.r.number'), dupRamount_date: T('dup.r.amount_date'),
+  dupRnumber_other_supplier: T('dup.r.number_other_supplier'), dupExact: T('dup.exact'), dupLikely: T('dup.likely'), dupView: T('dup.view'),
+  dupLinkedQb: T('dup.linkedQb'), dupUseQb: T('dup.useQb'), dupBlocked: T('dup.blocked'),
+  qbHost: qbEnv === 'production' ? 'https://qbo.intuit.com' : 'https://sandbox.qbo.intuit.com',
   saving: T('pdf.saving'), vendorNew: T('pdf.qbVendorNew'), vendorMatched: T('pdf.qbVendorMatched'), vendorNone: T('pdf.qbVendorNone'),
 };
 ---
@@ -102,7 +109,13 @@ const i18n = {
       </fieldset>
       <label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('pdf.enteredQb')}</label>
       <p class="hint" style="margin:-6px 0 12px;">{T('pdf.qbAuto')}</p>
-      <p class="warn-banner" id="dup-warn" hidden></p>
+      <input type="hidden" name="link_qbo_bill_id" id="link_qbo_bill_id" />
+      <div class="dup-panel" id="dup-panel" hidden>
+        <p class="dup-status" id="dup-status"></p>
+        <ul class="dup-list" id="dup-list"></ul>
+        <p class="hint dup-using" id="dup-using" hidden>{T('dup.usingQb')}</p>
+        <label class="check-inline" id="dup-confirm-row" hidden><input type="checkbox" id="dup-confirm" name="confirm_not_duplicate" value="1" /> {T('dup.confirm')}</label>
+      </div>
       <div class="actions">
         <button class="btn btn-primary" type="submit" name="next" value="supplier">{T('pdf.save')}</button>
         <button class="btn btn-secondary" type="submit" name="next" value="another">{T('pdf.saveAnother')}</button>
@@ -174,6 +187,7 @@ const i18n = {
     $('qbo_vendor_new').textContent = trade ? `${L.vendorNew} « ${trade} »${legal}` : L.vendorNew;
     venSel.value = res.vendorId ?? 'new';
     $('qb-vendor-hint').textContent = res.vendorId ? L.vendorMatched : L.vendorNone;
+    scheduleCheck();
     // Account is required unless the bill is already keyed into QB by hand.
     const already = document.querySelector<HTMLInputElement>('input[name="in_quickbooks"]')!;
     accSel.required = !already.checked;
@@ -226,8 +240,7 @@ const i18n = {
     }
     toggleNew();
     loadCoding();
-    $('dup-warn').hidden = !res.duplicate_of;
-    if (res.duplicate_of) $('dup-warn').textContent = L.dup.replace('{number}', String(x.invoice_number));
+    runCheck();
 
     const money = (v: unknown) => (v === null || v === undefined ? null : fmt.format(Number(v)));
     const rows: Array<[string, string | null]> = [
@@ -253,10 +266,90 @@ const i18n = {
     status.hidden = true;
   }
 
+  // ---- Duplicate check (portal + QuickBooks), re-run whenever a key field changes.
+  type Dup = { source: 'portal' | 'qb'; strength: 'exact' | 'likely'; reason: string; number: string | null; date: string | null;
+    amount: number; supplier: string | null; id: string; supplierId?: string; qbType?: string; linked?: boolean };
+  let dupBlocking = false;
+  let checkSeq = 0;
+  let checkTimer: number | undefined;
+  const linkInput = $<HTMLInputElement>('link_qbo_bill_id');
+  function setLink(id: string) {
+    linkInput.value = id;
+    $('dup-using').hidden = !id;
+    const acc = document.getElementById('qbo_account_id') as HTMLSelectElement | null;
+    const already = document.querySelector<HTMLInputElement>('input[name="in_quickbooks"]')!;
+    if (acc) acc.required = !id && !already.checked;
+    document.querySelectorAll<HTMLButtonElement>('.use-qb').forEach((b) => b.classList.toggle('chosen', b.dataset.id === id));
+  }
+  async function runCheck() {
+    const number = $<HTMLInputElement>('invoice_number').value.trim();
+    const amount = $<HTMLInputElement>('amount').value.trim();
+    const panel = $('dup-panel');
+    if (!number && !amount) { panel.hidden = true; dupBlocking = false; return; }
+    const seq = ++checkSeq;
+    panel.hidden = false;
+    $('dup-status').textContent = L.dupChecking;
+    $('dup-status').className = 'dup-status';
+    const venSel = document.getElementById('qbo_vendor_choice') as HTMLSelectElement | null;
+    const r = await fetch('/api/portail/paiements/invoices/check-duplicates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supplier_id: supSel.value, qbo_vendor_id: venSel && venSel.value !== 'new' ? venSel.value : null,
+        number, amount, date: $<HTMLInputElement>('invoice_date').value, kind: $<HTMLSelectElement>('kind').value,
+      }),
+    }).catch(() => null);
+    if (seq !== checkSeq) return;
+    const res = r ? await r.json().catch(() => ({})) : {};
+    const matches = (res.matches ?? []) as Dup[];
+    const list = $('dup-list'); list.innerHTML = '';
+    if (!matches.some((m) => m.source === 'qb' && m.id === linkInput.value)) setLink('');
+    if (!matches.length) {
+      $('dup-status').textContent = res.qbChecked ? L.dupNone : L.dupNoneNoQb;
+      $('dup-status').className = 'dup-status ok';
+      $('dup-confirm-row').hidden = true; dupBlocking = false;
+      return;
+    }
+    $('dup-status').textContent = L.dupTitle;
+    $('dup-status').className = 'dup-status bad';
+    for (const m of matches) {
+      const li = document.createElement('li');
+      const tag = document.createElement('span');
+      tag.className = `dup-tag ${m.strength}`; tag.textContent = m.strength === 'exact' ? L.dupExact : L.dupLikely;
+      const txt = document.createElement('span');
+      const reason = (L as Record<string, string>)[`dupR${m.reason}`] ?? m.reason;
+      txt.textContent = ` ${m.source === 'qb' ? L.dupSrcQb : L.dupSrcPortal} · ${m.supplier ?? ''} · #${m.number ?? '—'} · ${m.date ?? '—'} · ${fmt.format(m.amount)} — ${reason}${m.linked ? ` (${L.dupLinkedQb})` : ''} `;
+      const a = document.createElement('a');
+      a.target = '_blank'; a.rel = 'noopener'; a.textContent = `${L.dupView} ↗`;
+      a.href = m.source === 'portal' ? `/portail/paiements/fournisseurs/${m.supplierId}` : `${L.qbHost}/app/${m.qbType === 'VendorCredit' ? 'vendorcredit' : 'bill'}?txnId=${m.id}`;
+      li.append(tag, txt, a);
+      if (m.source === 'qb' && !m.linked) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-secondary use-qb'; b.dataset.id = m.id; b.textContent = L.dupUseQb;
+        b.onclick = () => setLink(linkInput.value === m.id ? '' : m.id);
+        li.append(' ', b);
+      }
+      list.append(li);
+    }
+    // An exact match must be resolved: confirm it's not a duplicate, or reuse the QB bill.
+    dupBlocking = matches.some((m) => m.strength === 'exact');
+    $('dup-confirm-row').hidden = !dupBlocking;
+    $<HTMLInputElement>('dup-confirm').checked = false;
+    setLink(linkInput.value);
+  }
+  const scheduleCheck = () => { clearTimeout(checkTimer); checkTimer = window.setTimeout(runCheck, 500); };
+  ['invoice_number', 'amount', 'invoice_date'].forEach((id) => $(id).addEventListener('input', scheduleCheck));
+  ['kind', 'supplier_id', 'qbo_vendor_choice'].forEach((id) => $(id).addEventListener('change', scheduleCheck));
+
   // One save per form: grey out both buttons and show progress after the first click.
   const invForm = $<HTMLFormElement>('inv-form');
   invForm.addEventListener('submit', (ev) => {
     const btns = invForm.querySelectorAll<HTMLButtonElement>('button[type=submit]');
+    if (dupBlocking && !$<HTMLInputElement>('dup-confirm').checked && !linkInput.value) {
+      ev.preventDefault();
+      $('dup-status').textContent = L.dupBlocked;
+      $('dup-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (invForm.dataset.sent) { ev.preventDefault(); return; }
     invForm.dataset.sent = '1';
     const clicked = (ev as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -299,4 +392,15 @@ const i18n = {
   .preview { padding: 0; overflow: hidden; }
   .preview iframe { width: 100%; height: 640px; border: 0; }
   .preview img { width: 100%; display: block; }
+  .dup-panel { border: 1px solid var(--p-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+  .dup-status { margin: 0 0 6px; font-weight: 600; font-size: .88rem; color: var(--p-muted); }
+  .dup-status.ok { color: #15803d; margin: 0; }
+  .dup-status.bad { color: var(--p-danger); }
+  .dup-list { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; font-size: .84rem; }
+  .dup-tag { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+  .dup-tag.exact { background: #fde8e8; color: #b42318; }
+  .dup-tag.likely { background: #fff4e5; color: #9a3412; }
+  .use-qb { padding: 2px 8px; font-size: .76rem; }
+  .use-qb.chosen { background: var(--p-accent); color: #fff; border-color: var(--p-accent); }
+  .dup-using { color: #15803d; margin: 0 0 8px; }
 </style>
