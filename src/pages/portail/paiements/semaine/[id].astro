@@ -9,8 +9,7 @@ import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { frCommon, enCommon } from '../../../../i18n/portail/common';
 import {
   loadAccounts, loadSuppliers, loadRun, loadOpenInvoices, paymentAmounts, previousRun, computeCash,
-  lineStatus, money, n, todayIso, getSetting, type ApproverSetting, type RunLine,
-} from '../../../../lib/payables';
+  lineStatus, money, n, todayIso, getSetting, type ApproverSetting, type RunLine, nextPaymentReference } from '../../../../lib/payables';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -21,6 +20,7 @@ const Tc = makeT(locale, frCommon, enCommon);
 const fill = (s: string, vars: Record<string, string | number>) =>
   Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), s);
 const admin = getAdminClient();
+const nextRef = await nextPaymentReference(admin);
 
 const id = String(Astro.params.id ?? '');
 const loaded = /^[0-9a-f-]{36}$/i.test(id) ? await loadRun(admin, id) : null;
@@ -316,8 +316,9 @@ const i18n = {
       <p class="hint" style="margin-bottom:10px;">{T('bulk.hint')}</p>
       <div class="bulk-top">
         <div class="form-row"><label>{T('line.payModal.date')}</label><input type="date" name="paid_on" value={today} required /></div>
-        <div class="form-row"><label>{T('line.payModal.ref')}</label><input type="text" name="reference" /></div>
+        <div class="form-row"><label>{T('line.payModal.ref')}</label><input type="text" name="reference" id="bulk-ref" /></div>
       </div>
+      <p class="hint" id="bulk-ref-hint" hidden style="margin:-4px 0 10px;">{T('bulk.refSeq')}</p>
       <div class="bulk-list-wrap">
         <table class="inner bulk-list">
           <thead><tr><th><input type="checkbox" id="bulk-all" checked /></th><th>{T('col.supplier')}</th><th>{T('col.account')}</th><th class="num">{T('line.payModal.amount')}</th></tr></thead>
@@ -334,13 +335,13 @@ const i18n = {
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
-  <script is:inline define:vars={{ runId: run.id, status: run.status, i18n, cashAccounts: accounts.map((a) => a.id), accountNames: Object.fromEntries(accounts.map((a) => [a.id, a.name])) }}>
-    window.__AP = { runId, status, i18n, cashAccounts, accountNames };
+  <script is:inline define:vars={{ runId: run.id, status: run.status, i18n, nextRef: nextRef ?? '', cashAccounts: accounts.map((a) => a.id), accountNames: Object.fromEntries(accounts.map((a) => [a.id, a.name])) }}>
+    window.__AP = { runId, status, i18n, nextRef, cashAccounts, accountNames };
   </script>
 </PortailLayout>
 
 <script>
-  type APState = { runId: string; status: string; i18n: Record<string, string>; cashAccounts: string[]; accountNames: Record<string, string> };
+  type APState = { runId: string; status: string; i18n: Record<string, string>; nextRef: string; cashAccounts: string[]; accountNames: Record<string, string> };
   const AP = (window as unknown as { __AP: APState }).__AP;
   const base = `/api/portail/paiements/runs/${AP.runId}`;
   const fmt = new Intl.NumberFormat(AP.i18n.locale === 'en' ? 'en-CA' : 'fr-CA', { style: 'currency', currency: 'CAD' });
@@ -521,7 +522,7 @@ const i18n = {
     payRow = row; payCb = cb;
     document.getElementById('pay-title')!.textContent = AP.i18n.payTitle.replace('{name}', row.querySelector('.sup-cell a')!.textContent ?? '');
     (payForm.elements.namedItem('amount') as HTMLInputElement).value = num(row.dataset.approved).toFixed(2);
-    (payForm.elements.namedItem('reference') as HTMLInputElement).value = '';
+    (payForm.elements.namedItem('reference') as HTMLInputElement).value = AP.nextRef;
     dialog.showModal();
   }));
   payForm.addEventListener('submit', async (ev) => {
@@ -644,6 +645,10 @@ const i18n = {
       bulkRows.appendChild(tr);
     }
     (document.getElementById('bulk-all') as HTMLInputElement).checked = true;
+    const bulkRef = document.getElementById('bulk-ref') as HTMLInputElement;
+    bulkRef.value = AP.nextRef;
+    const refHint = () => { document.getElementById('bulk-ref-hint')!.hidden = !/^[A-Za-z]{2,6}-\d{2}-\d{3,}$/.test(bulkRef.value.trim()); };
+    bulkRef.oninput = refHint; refHint();
     document.getElementById('bulk-error')!.hidden = true;
     bulkRecompute();
     bulkDlg.showModal();

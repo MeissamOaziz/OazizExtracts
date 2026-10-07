@@ -4,10 +4,11 @@ export const prerender = false;
 import PortailLayout from '../../../../layouts/PortailLayout.astro';
 import PaiementsNav from '../../../../components/portail/PaiementsNav.astro';
 import SupplierFields from '../../../../components/portail/PaiementsSupplierFields.astro';
+import PaiementsDuplicateCheck from '../../../../components/portail/PaiementsDuplicateCheck.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
-import { loadAccounts, money, n, todayIso, PAYMENT_METHODS, type InvoiceBalance, type Supplier } from '../../../../lib/payables';
+import { loadAccounts, money, n, nextPaymentReference, todayIso, PAYMENT_METHODS, type InvoiceBalance, type Supplier } from '../../../../lib/payables';
 import { connectionInfo } from '../../../../lib/qbo';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
@@ -56,6 +57,7 @@ const okKey = sp.get('ok');
 const warnDup = sp.get('dup');
 const fmtDate = (iso: string) => new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' });
 const qboOn = !!(await connectionInfo(admin));
+const nextRef = await nextPaymentReference(admin);
 const here = `/portail/paiements/fournisseurs/${id}`;
 const okText: Record<string, string> = {
   created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'),
@@ -68,8 +70,10 @@ const okText: Record<string, string> = {
   {warnDup && <div class="warn-banner">{fill(T('inv.dupWarn'), { number: warnDup })}</div>}
   {sp.get('error') === 'missing' && <div class="flash flash-error">{T('inv.missing')}</div>}
   {sp.get('error') === 'duplicate' && <div class="flash flash-error">{T('sup.duplicate')}</div>}
+  {sp.get('error') === 'dup_invoice' && <div class="flash flash-error">{T('pdf.error.dup_invoice')}</div>}
+  {sp.get('error') === 'qb_linked' && <div class="flash flash-error">{T('pdf.error.qb_linked')}</div>}
   {sp.get('ok') && !okText[sp.get('ok')!] && <div class="flash flash-success">{sp.get('ok')}</div>}
-  {sp.get('error') && !['missing', 'duplicate'].includes(sp.get('error')!) && <div class="flash flash-error">{sp.get('error')}</div>}
+  {sp.get('error') && !['missing', 'duplicate', 'dup_invoice', 'qb_linked'].includes(sp.get('error')!) && <div class="flash flash-error">{sp.get('error')}</div>}
 
   <div class="top-grid">
     <div class="card kpi"><span>{T('det.balance')}</span><strong class={owed < 0 ? 'neg' : ''}>{money(owed, locale)}</strong></div>
@@ -89,8 +93,9 @@ const okText: Record<string, string> = {
   <div class="forms">
     <details class="card" open={sp.has('addinv')}>
       <summary>{T('det.addInvoice')}</summary>
-      <form class="details-body" method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} enctype="multipart/form-data">
+      <form class="details-body" method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} enctype="multipart/form-data" data-dup-form>
         <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="supplier_id" value={s.id} />
         <input type="hidden" name="submission_key" value={crypto.randomUUID()} />
         <div class="grid3">
           <div class="form-row"><label>{T('inv.kind')}</label>
@@ -111,6 +116,7 @@ const okText: Record<string, string> = {
           <div class="form-row"><label>{T('inv.file')}</label><input type="file" name="file" accept="application/pdf,image/*" /></div>
           <div class="form-row"><label>&nbsp;</label><label class="check-inline"><input type="checkbox" name="in_quickbooks" /> {T('inv.qbo.title')}</label></div>
         </div>
+        <PaiementsDuplicateCheck />
         <button class="btn btn-primary" type="submit">{T('det.addInvoice')}</button>
       </form>
     </details>
@@ -128,7 +134,7 @@ const okText: Record<string, string> = {
           <div class="form-row"><label>{T('pay.account')}</label>
             <select name="bank_account_id">{accounts.map((a) => <option value={a.id} selected={s.bank_account_id === a.id}>{a.name}</option>)}</select>
           </div>
-          <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" /></div>
+          <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" value={nextRef ?? ''} /></div>
           <div class="form-row"><label>{T('pay.notes')}</label><input type="text" name="notes" /></div>
         </div>
         {qboOn && <label class="check-inline" style="margin-bottom:12px;"><input type="checkbox" name="already_in_qbo" /> {T('pay.alreadyQbo')}</label>}

@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { json, isUuid, parseAmount, logEvent, todayIso, round2 } from '../../../../../../lib/payables';
+import { bumpReference, json, isUuid, parseAmount, logEvent, paymentWithReference, todayIso, round2 } from '../../../../../../lib/payables';
 import { autoPushPayment } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
-// Pay several approved lines at once with one date and one reference (how
-// payments are usually released at the bank). Payments are recorded first;
+// Pay several approved lines at once with one date (how payments are usually
+// released at the bank). A numbered reference (PMT-26-0913) gives each payment
+// the next number in turn; any other reference is shared by the batch. Payments are recorded first;
 // QuickBooks bill payments follow within a time budget, and anything left is
 // picked up by "Sync now" or the nightly sync.
 export const POST: APIRoute = async ({ request, cookies, params }) => {
@@ -22,6 +23,15 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
   if (run.status !== 'approved') return json({ error: 'run not approved' }, 409);
   const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(String(body.paid_on ?? '')) ? String(body.paid_on) : todayIso();
   const reference = String(body.reference ?? '').trim();
+  const sequential = !!bumpReference(reference);
+  const okCount = body.lines.length;
+  // Refuse before paying anything if a reference of this batch is already used.
+  for (let k = 0; k < (sequential ? okCount : reference ? 1 : 0); k++) {
+    const ref = sequential ? bumpReference(reference, k)! : reference;
+    const d = await paymentWithReference(admin, ref);
+    if (d) return json({ error: `Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}` }, 409);
+  }
+  let seq = 0;
 
   const results: Array<{ line_id: string; ok: boolean; error?: string; payment_id?: string }> = [];
   const created: string[] = [];
@@ -34,14 +44,16 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
     if (line.payment_id) { results.push({ line_id: lineId, ok: false, error: 'déjà payé' }); continue; }
     if (!(Number(line.approved_amount) > 0)) { results.push({ line_id: lineId, ok: false, error: 'non approuvé' }); continue; }
     const { data: sup } = await admin.from('ap_suppliers').select('payment_method, bank_account_id').eq('id', line.supplier_id).single();
+    const lineRef = sequential ? bumpReference(reference, seq)! : reference;
     const { data: paymentId, error } = await admin.rpc('ap_record_payment', {
       p_supplier_id: line.supplier_id, p_amount: amount, p_paid_on: paidOn,
       p_method: sup?.payment_method ?? null, p_bank_account_id: sup?.bank_account_id ?? null,
-      p_reference: reference, p_notes: '', p_staff_id: staff.id, p_run_line_id: line.id,
+      p_reference: lineRef, p_notes: '', p_staff_id: staff.id, p_run_line_id: line.id,
     });
     if (error || !paymentId) { results.push({ line_id: lineId, ok: false, error: error?.message ?? 'échec' }); continue; }
     await admin.from('ap_run_lines').update({ payment_id: paymentId, processed_at: new Date().toISOString(), processed_by: staff.id }).eq('id', line.id);
-    await logEvent(admin, { run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'paid', details: { amount, paid_on: paidOn, reference: reference || null, bulk: true } });
+    await logEvent(admin, { run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'paid', details: { amount, paid_on: paidOn, reference: lineRef || null, bulk: true } });
+    seq++;
     created.push(paymentId as string);
     results.push({ line_id: lineId, ok: true, payment_id: paymentId as string });
   }

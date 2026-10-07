@@ -353,3 +353,41 @@ export const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0
 export function weekLabel(runDate: string): string {
   return new Date(runDate + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
 }
+
+// ------------------------------------------------------------------ payment references
+// Portal payments are numbered like PMT-26-0912: the next one is prefilled as
+// the highest number under the most recent prefix + 1 (zero padding kept).
+const SEQ_REF = /^([A-Za-z]{2,6}-\d{2}-)(\d{3,})$/;
+
+/** "PMT-26-0912" + 1 → "PMT-26-0913"; null when the reference isn't sequential. */
+export function bumpReference(ref: string, by = 1): string | null {
+  const m = SEQ_REF.exec(ref.trim());
+  if (!m) return null;
+  return m[1] + String(Number(m[2]) + by).padStart(m[2].length, '0');
+}
+
+export async function nextPaymentReference(admin: SupabaseClient): Promise<string | null> {
+  const { data: recent } = await admin.from('ap_payments').select('reference')
+    .eq('source', 'portal').not('reference', 'is', null).order('created_at', { ascending: false }).limit(200);
+  const last = (recent ?? []).map((p) => String(p.reference).trim()).find((r) => SEQ_REF.test(r));
+  if (!last) return null;
+  const prefix = SEQ_REF.exec(last)![1];
+  // Highest number ever used under this prefix (voided ones too: a number is never reused automatically).
+  const { data: same } = await admin.from('ap_payments').select('reference').ilike('reference', `${prefix}%`);
+  let best = last;
+  for (const p of same ?? []) {
+    const m = SEQ_REF.exec(String(p.reference).trim());
+    if (m && m[1].toLowerCase() === prefix.toLowerCase() && Number(m[2]) > Number(SEQ_REF.exec(best)![2])) best = String(p.reference).trim();
+  }
+  return bumpReference(best);
+}
+
+/** Active (not voided) payment already using this reference, if any. */
+export async function paymentWithReference(admin: SupabaseClient, ref: string) {
+  const r = ref.trim();
+  if (!r) return null;
+  const { data } = await admin.from('ap_payments').select('id, supplier_id, amount, paid_on, ap_suppliers(name)')
+    .ilike('reference', r.replace(/[%_\\]/g, (c) => `\\${c}`)).is('voided_at', null).limit(1);
+  const p = data?.[0];
+  return p ? { id: p.id, supplierId: p.supplier_id, amount: n(p.amount), paidOn: p.paid_on, supplier: (p.ap_suppliers as unknown as { name: string } | null)?.name ?? null } : null;
+}

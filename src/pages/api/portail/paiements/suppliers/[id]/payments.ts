@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { isUuid, logEvent, parseAmount, todayIso, PAYMENT_METHODS } from '../../../../../../lib/payables';
+import { isUuid, logEvent, parseAmount, paymentWithReference, todayIso, PAYMENT_METHODS } from '../../../../../../lib/payables';
 import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
@@ -39,18 +39,21 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const method = String(form.get('payment_method'));
   const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get('paid_on') ?? '')) ? String(form.get('paid_on')) : todayIso();
   const invoiceIds = form.getAll('invoice_ids').map(String).filter(isUuid);
+  const ref = String(form.get('reference') ?? '').trim();
+  const d = await paymentWithReference(admin, ref);
+  if (d) return redirect(`${back}?error=${encodeURIComponent(`Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}`)}`, 303);
   const { data: newId, error } = await admin.rpc('ap_record_payment', {
     p_supplier_id: supplierId, p_amount: amount, p_paid_on: paidOn,
     p_method: (PAYMENT_METHODS as readonly string[]).includes(method) ? method : null,
     p_bank_account_id: isUuid(form.get('bank_account_id')) ? form.get('bank_account_id') : null,
-    p_reference: String(form.get('reference') ?? ''), p_notes: String(form.get('notes') ?? ''),
+    p_reference: ref, p_notes: String(form.get('notes') ?? ''),
     p_staff_id: staff.id, p_run_line_id: null, p_invoice_ids: invoiceIds.length ? invoiceIds : null,
   });
   if (error) {
     console.error('[paiements] record payment failed:', error);
     return redirect(`${back}?error=missing`, 303);
   }
-  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_recorded', details: { amount, paid_on: paidOn } });
+  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_recorded', details: { amount, paid_on: paidOn, reference: ref || null } });
   if (newId && form.get('already_in_qbo') !== 'on') await autoPushPayment(admin, newId as string);
   return redirect(`${back}?ok=pay`, 303);
 };

@@ -10,7 +10,7 @@ import { n } from './payables';
 export interface DupMatch {
   source: 'portal' | 'qb';
   strength: 'exact' | 'likely';
-  reason: 'number' | 'amount_date' | 'number_other_supplier';
+  reason: 'number' | 'amount_date' | 'number_other_supplier' | 'amount_date_other_supplier';
   number: string | null;
   date: string | null;
   amount: number;
@@ -63,17 +63,32 @@ export async function findDuplicates(admin: SupabaseClient, q: DupQuery): Promis
       }
     }
   }
-  if (key && q.amount) {
-    // Same number + same amount under another supplier (wrong supplier picked?).
-    const { data: others } = await admin.from('ap_invoices')
+  // Under another supplier record (e.g. the numbered company vs its trade name):
+  // same number with the same amount or a close date, or same amount on the same day.
+  const other = (i: any, reason: DupMatch['reason']) => matches.push({
+    source: 'portal', strength: 'likely', reason, number: i.invoice_number, date: i.invoice_date, amount: n(i.amount),
+    supplier: (i.ap_suppliers as { name: string } | null)?.name ?? null, id: i.id, supplierId: i.supplier_id,
+  });
+  const seenOther = new Set<string>();
+  if (key) {
+    const { data: rows } = await admin.from('ap_invoices')
       .select('id, invoice_number, invoice_date, amount, supplier_id, ap_suppliers(name)')
-      .ilike('invoice_number', `%${String(q.number).replace(/[%_]/g, '')}%`).is('voided_at', null).limit(50);
-    for (const i of others ?? []) {
-      if (i.supplier_id === q.supplierId || numKey(i.invoice_number) !== key || !sameAmount(n(i.amount), q.amount)) continue;
-      matches.push({
-        source: 'portal', strength: 'likely', reason: 'number_other_supplier', number: i.invoice_number, date: i.invoice_date,
-        amount: n(i.amount), supplier: (i.ap_suppliers as unknown as { name: string } | null)?.name ?? null, id: i.id, supplierId: i.supplier_id,
-      });
+      .ilike('invoice_number', `%${String(q.number).replace(/[%_\\]/g, '')}%`).is('voided_at', null).limit(50);
+    for (const i of rows ?? []) {
+      if (i.supplier_id === q.supplierId || numKey(i.invoice_number) !== key) continue;
+      if ((q.amount && sameAmount(n(i.amount), q.amount)) || (q.date && i.invoice_date && near(i.invoice_date, q.date))) {
+        seenOther.add(i.id);
+        other(i, 'number_other_supplier');
+      }
+    }
+  }
+  if (q.amount && q.date) {
+    const { data: rows } = await admin.from('ap_invoices')
+      .select('id, invoice_number, invoice_date, amount, supplier_id, ap_suppliers(name)')
+      .in('amount', [q.amount, -q.amount]).eq('invoice_date', q.date).is('voided_at', null).limit(20);
+    for (const i of rows ?? []) {
+      if (i.supplier_id === q.supplierId || seenOther.has(i.id)) continue;
+      other(i, 'amount_date_other_supplier');
     }
   }
 

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { json, isUuid, parseAmount, logEvent, todayIso } from '../../../../../../lib/payables';
+import { json, isUuid, parseAmount, logEvent, paymentWithReference, todayIso } from '../../../../../../lib/payables';
 import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
@@ -36,11 +36,14 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
   if (!amount || amount <= 0) return json({ error: 'amount' }, 400);
   const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(String(body.paid_on ?? '')) ? String(body.paid_on) : todayIso();
 
+  const ref = String(body.reference ?? '').trim();
+  const d = await paymentWithReference(admin, ref);
+  if (d) return json({ error: `Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}` }, 409);
   const { data: sup } = await admin.from('ap_suppliers').select('payment_method, bank_account_id').eq('id', line.supplier_id).single();
   const { data: paymentId, error } = await admin.rpc('ap_record_payment', {
     p_supplier_id: line.supplier_id, p_amount: amount, p_paid_on: paidOn,
     p_method: sup?.payment_method ?? null, p_bank_account_id: sup?.bank_account_id ?? null,
-    p_reference: String(body.reference ?? ''), p_notes: '', p_staff_id: staff.id, p_run_line_id: line.id,
+    p_reference: ref, p_notes: '', p_staff_id: staff.id, p_run_line_id: line.id,
   });
   if (error || !paymentId) {
     console.error('[paiements] record payment failed:', error);
@@ -51,7 +54,7 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
   }).eq('id', line.id);
   await logEvent(admin, {
     run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'paid',
-    details: { amount, paid_on: paidOn, reference: body.reference || null },
+    details: { amount, paid_on: paidOn, reference: ref || null },
   });
   await autoPushPayment(admin, paymentId as string);
   return json({ ok: true, payment_id: paymentId });

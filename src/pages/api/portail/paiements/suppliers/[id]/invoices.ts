@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { isUuid, logEvent, parseAmount, uploadInvoiceFile } from '../../../../../../lib/payables';
 import { autoPushInvoice, deleteQboBill } from '../../../../../../lib/qbo-sync';
+import { numKey } from '../../../../../../lib/payables-duplicates';
 
 export const prerender = false;
 
@@ -74,6 +75,20 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   }
   const number = String(form.get('invoice_number') ?? '').trim() || null;
 
+  // Same invoice number already on this supplier: refuse unless confirmed on the form.
+  if (number && kind !== 'adjustment' && form.get('confirm_not_duplicate') !== '1') {
+    const { data: same } = await admin.from('ap_invoices').select('invoice_number')
+      .eq('supplier_id', supplierId).is('voided_at', null).not('invoice_number', 'is', null);
+    if ((same ?? []).some((i) => numKey(i.invoice_number) === numKey(number))) return redirect(`${back}?error=dup_invoice&addinv=1`, 303);
+  }
+  // Reuse an existing QB bill instead of creating a second one.
+  const linkBill = String(form.get('link_qbo_bill_id') ?? '').trim() || null;
+  if (linkBill) {
+    if (!/^\d+$/.test(linkBill)) return redirect(`${back}?error=missing&addinv=1`, 303);
+    const { data: taken } = await admin.from('ap_invoices').select('id').eq('qbo_bill_id', linkBill).is('voided_at', null).limit(1);
+    if (taken?.length) return redirect(`${back}?error=qb_linked&addinv=1`, 303);
+  }
+
   let filePath: string | null = null;
   const file = form.get('file') as File | null;
   if (file && file.size > 0) {
@@ -94,7 +109,8 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     po_number: String(form.get('po_number') ?? '').trim() || null,
     invoice_date: invoiceDate, due_date: dueDate, amount,
     description: String(form.get('description') ?? '').trim() || null,
-    in_quickbooks: form.get('in_quickbooks') === 'on', file_path: filePath, created_by: staff.id, submission_key: submissionKey,
+    in_quickbooks: form.get('in_quickbooks') === 'on' || !!linkBill, file_path: filePath, created_by: staff.id, submission_key: submissionKey,
+    ...(linkBill ? { qbo_bill_id: linkBill, qbo_synced_at: new Date().toISOString() } : {}),
   }).select('id').single();
   if (error?.code === '23505') return redirect(`${back}?ok=inv`, 303);
   if (error || !created) {
@@ -102,6 +118,6 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`${back}?error=missing&addinv=1`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, kind } });
-  if (form.get('in_quickbooks') !== 'on') await autoPushInvoice(admin, created.id);
+  if (form.get('in_quickbooks') !== 'on' && !linkBill) await autoPushInvoice(admin, created.id);
   return redirect(`${back}?ok=inv${dup ? `&dup=${encodeURIComponent(number!)}` : ''}`, 303);
 };
