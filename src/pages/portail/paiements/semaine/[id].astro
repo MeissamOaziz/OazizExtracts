@@ -43,6 +43,10 @@ const lineBySupplier = new Map<string, RunLine>(lines.map((l) => [l.supplier_id,
 const fundingIds = new Set(accounts.map((a) => a.funding_supplier_id).filter((x): x is string => !!x));
 const suppliers = allSuppliers.filter((s) => (s.is_active || lineBySupplier.has(s.id)) && !fundingIds.has(s.id));
 const funding = await fundingStatus(admin, run.id);
+const { data: lastLine } = await admin.from('ap_run_lines').select('updated_at').eq('run_id', run.id)
+  .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+const draftCount = lines.filter((l) => Number(l.suggested_amount) > 0).length;
+const draftTotal = lines.reduce((t, l) => t + (Number(l.suggested_amount) > 0 ? Number(l.suggested_amount) : 0), 0);
 const fundingByAccount = new Map(funding.map((f) => [f.accountId, f]));
 const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
 const accountById = new Map(accounts.map((a) => [a.id, a]));
@@ -77,6 +81,7 @@ const totalSuggested = lines.reduce((s, l) => s + n(l.suggested_amount), 0);
 const suggestedCount = lines.filter((l) => n(l.suggested_amount) > 0).length;
 const i18n = {
   saved: T('saved'), saveError: T('saveError'), undoPaid: T('line.undoPaid'),
+  draftLast: T('draft.last'), draftCount: T('draft.count'), draftSaved: T('draft.saved'),
   submitConfirm: fill(T('submit.confirm'), { name: approver?.name ?? '?', email: approver?.email ?? '?' }),
   manualConfirm: T('action.manualApprove.confirm'), closeConfirm: T('action.close.confirm'),
   noLines: T('submit.noLines'), payTitle: T('line.payModal.title'),
@@ -100,6 +105,19 @@ const i18n = {
   {flash && <div class={`flash ${flash.cls}`}>{flash.text}</div>}
   {run.approver_comment && <div class="flash flash-info"><strong>{T('run.approverComment')} :</strong> {run.approver_comment}</div>}
   {run.status === 'submitted' && <div class="warn-banner">{T('locked.submitted')}</div>}
+  {run.status === 'draft' && (
+    <div class="draft-bar no-print">
+      <div>
+        <strong>{fill(T('draft.title'), { date: run.run_date })}</strong>
+        <span class="muted"> — {T('draft.auto')}</span>
+        <div class="draft-meta">
+          <span id="draft-count">{fill(T('draft.count'), { n: draftCount, total: money(draftTotal, locale) })}</span>
+          <span> · </span><span id="draft-last">{lastLine?.updated_at ? fill(T('draft.last'), { when: fmtDate(lastLine.updated_at) }) : T('draft.never')}</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary" id="draft-save">{T('draft.save')}</button>
+    </div>
+  )}
 
   <form method="POST" action={`/api/portail/paiements/runs/${run.id}/action`} class="action-bar no-print" id="action-form">
     {run.status === 'draft' && (
@@ -388,8 +406,16 @@ const i18n = {
     toastTimer = window.setTimeout(() => { toast.hidden = true; }, bad ? 5000 : 1200);
   }
 
+  let pending = 0;
   async function post(path: string, body: unknown) {
-    const r = await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    pending++;
+    try {
+      return await postNow(path, body);
+    } finally { pending--; }
+  }
+  async function postNow(path: string, body: unknown) {
+    // keepalive: a save still in flight survives leaving or closing the page.
+    const r = await fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error ?? r.statusText);
     return data;
@@ -494,14 +520,44 @@ const i18n = {
       row.dataset.hasLine = res.line && (num(res.line.suggested_amount) > 0 || num(res.line.approved_amount) > 0) ? '1' : '';
       row.querySelectorAll<HTMLInputElement>('.cb-paid, .cb-remit').forEach((cb) => { cb.dataset.line = res.line?.id ?? ''; });
       say(AP.i18n.saved);
+      markSaved();
       recompute();
     } catch (e) {
       say(`${AP.i18n.saveError} (${(e as Error).message})`, true);
     }
   }
 
+  // Draft bar: last saved time + count/total of suggested payments.
+  function markSaved() {
+    const last = document.getElementById('draft-last');
+    if (last) last.textContent = AP.i18n.draftLast.replace('{when}', new Date().toLocaleTimeString(AP.i18n.locale === 'en' ? 'en-CA' : 'fr-CA', { hour: '2-digit', minute: '2-digit' }));
+    const cnt = document.getElementById('draft-count');
+    if (cnt) {
+      const vals = [...document.querySelectorAll<HTMLInputElement>('.in-suggested')].map((i) => parseAmount(i.value)).filter((v): v is number => typeof v === 'number' && v > 0);
+      cnt.textContent = AP.i18n.draftCount.replace('{n}', String(vals.length)).replace('{total}', money(vals.reduce((t, v) => t + v, 0)));
+    }
+  }
+  // Save while typing too (after a short pause), not only when leaving the field.
+  const typing = new WeakMap<HTMLInputElement, number>();
+  function saveSoon(input: HTMLInputElement) {
+    clearTimeout(typing.get(input));
+    typing.set(input, window.setTimeout(() => input.dispatchEvent(new Event('change')), 900));
+  }
+  document.querySelectorAll<HTMLInputElement>('.in-suggested, .in-note').forEach((i) => i.addEventListener('input', () => saveSoon(i)));
+  document.getElementById('draft-save')?.addEventListener('click', async () => {
+    const el = document.activeElement as HTMLInputElement | null;
+    if (el && el.matches('.in-suggested, .in-note, .in-approved')) el.dispatchEvent(new Event('change'));
+    for (let k = 0; k < 50 && pending > 0; k++) await new Promise((r) => setTimeout(r, 100));
+    markSaved();
+    say(AP.i18n.draftSaved);
+  });
+  window.addEventListener('beforeunload', (e) => { if (pending > 0) { e.preventDefault(); e.returnValue = ''; } });
+
   function bindAmount(input: HTMLInputElement, field: string) {
+    let lastSent: string | null = null;
     input.addEventListener('change', () => {
+      if (input.value === lastSent) return;
+      lastSent = input.value;
       const v = parseAmount(input.value);
       if (Number.isNaN(v)) { input.classList.add('invalid'); return; }
       input.classList.remove('invalid');
@@ -511,9 +567,14 @@ const i18n = {
   }
   document.querySelectorAll<HTMLInputElement>('.in-suggested').forEach((i) => bindAmount(i, 'suggested_amount'));
   document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => bindAmount(i, 'approved_amount'));
-  document.querySelectorAll<HTMLInputElement>('.in-note').forEach((i) => i.addEventListener('change', () => {
-    saveLine(i.closest('tr')!, { suggested_note: i.value });
-  }));
+  document.querySelectorAll<HTMLInputElement>('.in-note').forEach((i) => {
+    let lastSent: string | null = null;
+    i.addEventListener('change', () => {
+      if (i.value === lastSent) return;
+      lastSent = i.value;
+      saveLine(i.closest('tr')!, { suggested_note: i.value });
+    });
+  });
   document.querySelectorAll<HTMLButtonElement>('[data-quick]').forEach((b) => b.addEventListener('click', () => {
     const row = b.closest<HTMLTableRowElement>('tr.ap-row')!;
     const owed = Math.max(0, num(row.dataset.owed)); const overdue = num(row.dataset.overdue);
@@ -717,6 +778,10 @@ const i18n = {
   .run-head h1 { margin-bottom: 4px; }
   .run-head .meta { color: var(--p-muted); font-size: .85rem; margin-left: 10px; }
   .run-actions { display: flex; gap: 8px; }
+  .draft-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: .88rem; }
+  .draft-bar .muted { color: var(--p-muted); }
+  .draft-meta { font-size: .8rem; color: var(--p-muted); margin-top: 2px; }
   .deposit-box { border-top: 1px dashed var(--p-border); margin-top: 10px; padding-top: 8px; font-size: .84rem; }
   .deposit-box .dep-ok { color: #15803d; margin: 0 0 4px; }
   .deposit-box .btn-sm { padding: 4px 10px; font-size: .8rem; }
