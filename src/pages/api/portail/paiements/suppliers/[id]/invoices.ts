@@ -60,7 +60,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   let amount = parseAmount(form.get('amount'));
   if (amount === null || amount === 0) return redirect(`${back}?error=missing&addinv=1`, 303);
-  const kind = ['invoice', 'credit', 'adjustment'].includes(String(form.get('kind'))) ? String(form.get('kind')) : 'invoice';
+  // 'expense': a reimbursement already entered in QuickBooks as an expense —
+  // saved as an invoice marked "in QuickBooks" so no bill is created there.
+  const isExpense = form.get('kind') === 'expense';
+  const kind = isExpense ? 'invoice' : ['invoice', 'credit', 'adjustment'].includes(String(form.get('kind'))) ? String(form.get('kind')) : 'invoice';
   if (kind === 'credit') amount = -Math.abs(amount);
 
   const invoiceDate = isDate(form.get('invoice_date')) ? String(form.get('invoice_date')) : null;
@@ -108,8 +111,8 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     supplier_id: supplierId, kind, invoice_number: number,
     po_number: String(form.get('po_number') ?? '').trim() || null,
     invoice_date: invoiceDate, due_date: dueDate, amount,
-    description: String(form.get('description') ?? '').trim() || null,
-    in_quickbooks: form.get('in_quickbooks') === 'on' || !!linkBill, file_path: filePath, created_by: staff.id, submission_key: submissionKey,
+    description: [isExpense ? 'Remboursement — dépense déjà dans QB' : null, String(form.get('description') ?? '').trim() || null].filter(Boolean).join(' · ') || null,
+    in_quickbooks: form.get('in_quickbooks') === 'on' || !!linkBill || isExpense, file_path: filePath, created_by: staff.id, submission_key: submissionKey,
     ...(linkBill ? { qbo_bill_id: linkBill, qbo_synced_at: new Date().toISOString() } : {}),
   }).select('id').single();
   if (error?.code === '23505') return redirect(`${back}?ok=inv`, 303);
@@ -118,6 +121,6 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`${back}?error=missing&addinv=1`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_added', details: { invoice: number, amount, kind } });
-  if (form.get('in_quickbooks') !== 'on' && !linkBill) await autoPushInvoice(admin, created.id);
+  if (form.get('in_quickbooks') !== 'on' && !linkBill && !isExpense) await autoPushInvoice(admin, created.id);
   return redirect(`${back}?ok=inv${dup ? `&dup=${encodeURIComponent(number!)}` : ''}`, 303);
 };

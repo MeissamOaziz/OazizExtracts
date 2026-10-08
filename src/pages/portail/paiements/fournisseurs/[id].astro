@@ -104,6 +104,7 @@ const okText: Record<string, string> = {
               <option value="invoice">{T('inv.kind.invoice')}</option>
               <option value="credit">{T('inv.kind.credit')}</option>
               <option value="adjustment">{T('inv.kind.adjustment')}</option>
+              <option value="expense">{T('inv.kind.expense')}</option>
             </select>
           </div>
           <div class="form-row"><label>{T('inv.number')}</label><input type="text" name="invoice_number" /></div>
@@ -253,8 +254,9 @@ const okText: Record<string, string> = {
                 {p.reference ?? ''}{p.source === 'import' && <span class="muted small"> · {T('pay.historical')}</span>}{p.source === 'qbo' && <span class="muted small"> · QuickBooks</span>}
                 {p.notes && <div class="muted small">{p.notes}</div>}
                 {p.qbo_billpayment_id && <div class="small ok-txt">{T('inv.qbo.linked')}</div>}
+                {!p.qbo_billpayment_id && p.qbo_synced_at && <div class="small ok-txt">{T('pay.qbExpense')}</div>}
                 {p.qbo_error && <div class="small err-txt">⚠ {localizeMsg(p.qbo_error, locale)}</div>}
-                {qboOn && !p.voided_at && !p.qbo_billpayment_id && p.source === 'portal' && (
+                {qboOn && !p.voided_at && !p.qbo_billpayment_id && !p.qbo_synced_at && p.source === 'portal' && (
                   <form method="POST" action="/api/portail/paiements/qbo/action" class="inline">
                     <input type="hidden" name="_action" value="push_payment" /><input type="hidden" name="payment_id" value={p.id} />
                     <input type="hidden" name="_back" value={here} />

@@ -297,7 +297,7 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
   if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
   const { data: p } = await admin.from('ap_payments').select('*, ap_suppliers(*), ap_bank_accounts!ap_payments_bank_account_id_fkey(*)').eq('id', paymentId).maybeSingle();
   if (!p || p.voided_at) return { ok: false, message: 'Paiement introuvable ou annulé' };
-  if (p.qbo_billpayment_id) return { ok: true, message: 'Déjà dans QuickBooks' };
+  if (p.qbo_billpayment_id || p.qbo_synced_at) return { ok: true, message: 'Déjà dans QuickBooks' };
   if (p.source !== 'portal') return { ok: true, message: 'Non envoyé (historique ou provenant de QB)' };
   const fail = async (message: string, status: 'error' | 'skipped' = 'error') => {
     await admin.from('ap_payments').update({ qbo_error: message }).eq('id', paymentId);
@@ -307,10 +307,18 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
   const bank = p.ap_bank_accounts as { name: string; qbo_account_id: string | null } | null;
   if (!bank?.qbo_account_id) return fail(`Compte bancaire « ${bank?.name ?? '?'} » non lié à un compte QB — voir Paiements → QuickBooks`, 'skipped');
 
-  const { data: allocs } = await admin.from('ap_payment_allocations').select('amount, ap_invoices(qbo_bill_id)').eq('payment_id', paymentId);
+  const { data: allocs } = await admin.from('ap_payment_allocations').select('amount, ap_invoices(qbo_bill_id, in_quickbooks)').eq('payment_id', paymentId);
   const lines = (allocs ?? [])
     .map((a) => ({ amount: n(a.amount), bill: (a.ap_invoices as unknown as { qbo_bill_id: string | null } | null)?.qbo_bill_id }))
     .filter((a): a is { amount: number; bill: string } => !!a.bill);
+  // Paying entries that are already in QB as expenses (reimbursements): QB has
+  // the money going out already, so no bill payment is created.
+  const invs = (allocs ?? []).map((a) => a.ap_invoices as unknown as { qbo_bill_id: string | null; in_quickbooks: boolean } | null);
+  if (lines.length === 0 && invs.length > 0 && invs.every((i) => i && i.in_quickbooks && !i.qbo_bill_id)) {
+    await admin.from('ap_payments').update({ qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', paymentId);
+    await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, status: 'skipped', message: 'Déjà dans QB comme dépense — aucun paiement créé' });
+    return { ok: true, message: 'Déjà dans QB comme dépense — aucun paiement créé' };
+  }
   if (lines.length === 0) return fail('Aucune des factures payées n’est liée à une facture QB — enregistrez ce paiement dans QB manuellement', 'skipped');
 
   try {

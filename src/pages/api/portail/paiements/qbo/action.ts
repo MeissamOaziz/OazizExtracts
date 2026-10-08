@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, setSetting } from '../../../../../lib/payables';
-import { disconnect } from '../../../../../lib/qbo';
+import { disconnect, getQbo } from '../../../../../lib/qbo';
 import { linkVendors, pushInvoice, pushPayment, qboDefaults, refreshQboPayment, syncAll } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
@@ -77,6 +77,25 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         if (!isUuid(id)) return go('error', 'Paiement invalide');
         const r = await pushPayment(admin, id);
         return go(r.ok ? 'ok' : 'error', r.message);
+      }
+      case 'create_from_vendor': {
+        const vid = str('qbo_vendor_id');
+        if (!vid || !/^\d+$/.test(vid)) return go('error', 'Fournisseur invalide');
+        const { data: taken } = await admin.from('ap_suppliers').select('id').eq('qbo_vendor_id', vid).maybeSingle();
+        if (taken) return redirect(`/portail/paiements/fournisseurs/${taken.id}`, 303);
+        const qbo = await getQbo(admin);
+        if (!qbo) return go('error', 'QuickBooks non connecté');
+        const v = (await qbo.get(`/vendor/${vid}`))?.Vendor;
+        if (!v) return go('error', 'Fournisseur invalide');
+        const { data: rbc } = await admin.from('ap_bank_accounts').select('id').eq('code', 'rbc').maybeSingle();
+        const { data: created, error } = await admin.from('ap_suppliers').insert({
+          name: v.DisplayName, legal_name: v.CompanyName && v.CompanyName !== v.DisplayName ? v.CompanyName : null,
+          contact_email: v.PrimaryEmailAddr?.Address ?? null, qbo_vendor_id: vid, qbo_vendor_name: v.DisplayName,
+          bank_account_id: rbc?.id ?? null,
+        }).select('id').single();
+        if (error || !created) return go('error', error?.code === '23505' ? 'Ce fournisseur existe déjà dans le portail.' : (error?.message ?? 'Erreur'));
+        await logEvent(admin, { supplier_id: created.id, actor_staff_id: staff.id, action: 'supplier_created', details: { via: 'qbo_vendor', qbo_vendor_id: vid } });
+        return redirect(`/portail/paiements/fournisseurs/${created.id}?ok=created`, 303);
       }
       case 'refresh_payment': {
         const id = String(form.get('payment_id') ?? '');
