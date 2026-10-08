@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { effectivePermissions } from '../../../../../lib/access';
+import { invitePortalUser } from '../../../../../lib/portal-invite';
 
 export const prerender = false;
 
@@ -40,5 +41,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     metadata: { staff_id: inserted.id, email },
   });
 
+  // Invitation email goes out right away unless the box was unticked.
+  if (form.get('send_invite') === '1') {
+    const sent = await invitePortalUser(admin, inserted.id, staff.email);
+    return redirect(`${base}?info=${sent ? 'created_invited' : 'created&error=invite_failed'}#u-${inserted.id}`, 303);
+  }
   return redirect(`${base}?info=created#u-${inserted.id}`, 303);
 };

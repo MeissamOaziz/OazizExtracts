@@ -406,15 +406,15 @@ export async function sendPortalInvite(
   const isInvite = invite.kind === 'invite';
   const badge = isInvite ? 'Bienvenue' : 'Réinitialisation';
   const subject = isInvite
-    ? '[Oaziz R&D] Bienvenue - définissez votre mot de passe'
-    : '[Oaziz R&D] Réinitialisation du mot de passe';
+    ? '[Portail Oaziz] Bienvenue — définissez votre mot de passe'
+    : '[Portail Oaziz] Réinitialisation du mot de passe';
 
   const intro = isInvite
-    ? `Vous avez été invité(e) à utiliser le <strong>portail interne R&amp;D d'Oaziz Extracts</strong>. Cliquez ci-dessous pour définir votre mot de passe et vous connecter.`
+    ? `Vous avez été invité(e) à utiliser le <strong>portail interne d'Oaziz Extracts</strong>. Cliquez ci-dessous pour définir votre mot de passe et vous connecter.`
     : `Une réinitialisation du mot de passe a été demandée pour votre compte. Cliquez ci-dessous pour choisir un nouveau mot de passe.`;
 
   const html = renderEmailShell({
-    preheader: isInvite ? 'Définissez votre mot de passe pour accéder au portail R&D d\'Oaziz Extracts.' : 'Choisissez un nouveau mot de passe pour votre compte du portail R&D.',
+    preheader: isInvite ? 'Définissez votre mot de passe pour accéder au portail d\'Oaziz Extracts.' : 'Choisissez un nouveau mot de passe pour votre compte du portail Oaziz.',
     badge,
     greeting: `Bonjour ${invite.toName.split(' ')[0] || invite.toName},`,
     intro,
