@@ -32,8 +32,8 @@ export const frAdminUsers = {
   'perm.hr_employees': 'RH — dossiers de nouveaux employés',
   'perm.hr_evaluations': 'RH — évaluations et suivi',
   'perm.atelier': 'Atelier (réservé à Meissam)',
-  'perm.payables': 'Paiements fournisseurs (réservé à Meissam)',
-  'perm.payables_approve': 'Approbation des paiements (liste fermée — voir access.ts)',
+  'perm.payables': 'Paiements fournisseurs (factures, semaine, QuickBooks)',
+  'perm.payables_approve': 'Approbation des paiements (Jorge)',
   'perm.admin': 'Administration (utilisateurs et accès)',
 
   'edit.back': '← Utilisateurs',
@@ -111,8 +111,8 @@ export const enAdminUsers: Partial<Record<keyof AdminUsersDict, string>> = {
   'perm.hr_employees': 'HR — new employee packages',
   'perm.hr_evaluations': 'HR — evaluations and tracker',
   'perm.atelier': 'Atelier (Meissam only)',
-  'perm.payables': 'Supplier payments (Meissam only)',
-  'perm.payables_approve': 'Payment approval (allowlist — see access.ts)',
+  'perm.payables': 'Supplier payments (invoices, week, QuickBooks)',
+  'perm.payables_approve': 'Payment approval (Jorge)',
   'perm.admin': 'Administration (users and access)',
 
   'edit.back': '← Users',

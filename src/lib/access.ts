@@ -36,8 +36,9 @@ export type PermissionGrants = Partial<Record<Permission, boolean>>;
 // payables, jorge@oaziz.ca for payables_approve) or removing the entry.
 export const RESTRICTED: Partial<Record<Permission, readonly string[]>> = {
   atelier: ['meissam@oaziz.ca'],
-  payables: ['meissam@oaziz.ca'],
-  payables_approve: ['meissam@oaziz.ca'],
+  payables: ['meissam@oaziz.ca', 'nathalieashegh@gmail.com'],
+  // Jorge approves the weekly payments (Meissam/Nathalie can still open approvals through 'payables').
+  payables_approve: ['jorge@oaziz.ca'],
 };
 // Who may set a supplier's payment status (Not due / Unpaid / Paid) on the weekly page.
 export const DUE_STATUS_EDITORS: readonly string[] = ['meissam@oaziz.ca'];
