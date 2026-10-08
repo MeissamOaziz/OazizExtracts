@@ -58,8 +58,8 @@ const cashByAccount = computeCash(accounts, cash, lines, supplierMap, paidMap);
 const openInvoices = await loadOpenInvoices(admin, suppliers.filter((s) => s.bal.open_count > 0).map((s) => s.id));
 const prevCash = new Map((prev?.cash ?? []).map((c) => [`${c.bank_account_id}|${c.kind}|${c.label}`, c.amount]));
 
-// Alphabetical (numbered companies first, 2 before 10); "In this week" filters the ones with a line.
-suppliers.sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }));
+// Alphabetical, numbered companies first; "In this week" filters the ones with a line.
+suppliers.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
 const editableSuggest = run.status === 'draft';
 const editableApproved = run.status === 'approved';
