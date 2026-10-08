@@ -7,12 +7,12 @@ import type { VendorFormDict } from '../i18n/vendor-form';
 interface VendorFormValues {
   vendor_type: string | null;
   company_name: string; address: string; city: string; province: string; postal_code: string;
-  contact_person: string; phone: string; email: string;
+  contact_person: string; phone: string; phone_ext: string; email: string;
   shipping_same_as_billing: boolean; shipping_address: string; shipping_city: string;
   shipping_province: string; shipping_postal_code: string;
-  sales_contact_name: string; sales_contact_email: string; sales_contact_phone: string;
-  qa_contact_name: string; qa_contact_email: string; qa_contact_phone: string;
-  accounting_contact_email: string; accounting_contact_phone: string;
+  sales_contact_name: string; sales_contact_email: string; sales_contact_phone: string; sales_contact_phone_ext: string;
+  qa_contact_name: string; qa_contact_email: string; qa_contact_phone: string; qa_contact_phone_ext: string;
+  accounting_contact_name: string; accounting_contact_email: string; accounting_contact_phone: string; accounting_contact_phone_ext: string;
   business_number: string; gst_hst_number: string; qst_number: string;
   bank_institution_number: string; bank_transit_number: string; bank_account_number: string; bank_address: string;
   products_sold: string;
@@ -34,6 +34,34 @@ interface Props {
 const { T, action, values: v, hasFiles, hiddenFields = {} } = Astro.props;
 
 const hasMethod = (code: string) => v.cultivation_methods.includes(code);
+
+// The three contacts share one layout: a heading, then full name, email, phone
+// and extension as separate fields. Accounting's name is optional because some
+// vendors give a shared mailbox rather than a person.
+// Astro hoists type declarations out of the component body, so these must not
+// refer to anything declared inside it.
+type ContactRole = 'sales' | 'qa' | 'accounting';
+type ContactField = 'name' | 'email' | 'phone' | 'phone_ext';
+const CONTACTS: Array<{ key: ContactRole; title: string; nameRequired: boolean }> = [
+  { key: 'sales', title: T('contact.sales'), nameRequired: true },
+  { key: 'qa', title: T('contact.qa'), nameRequired: true },
+  { key: 'accounting', title: T('contact.accounting'), nameRequired: false },
+];
+const contactValues: Record<ContactRole, Record<ContactField, string>> = {
+  sales: {
+    name: v.sales_contact_name, email: v.sales_contact_email,
+    phone: v.sales_contact_phone, phone_ext: v.sales_contact_phone_ext,
+  },
+  qa: {
+    name: v.qa_contact_name, email: v.qa_contact_email,
+    phone: v.qa_contact_phone, phone_ext: v.qa_contact_phone_ext,
+  },
+  accounting: {
+    name: v.accounting_contact_name, email: v.accounting_contact_email,
+    phone: v.accounting_contact_phone, phone_ext: v.accounting_contact_phone_ext,
+  },
+};
+const cv = (role: ContactRole, field: ContactField): string => contactValues[role][field] ?? '';
 const hasMaterial = (code: string) => v.starting_material.includes(code);
 ---
 <form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form">
@@ -63,44 +91,36 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <h2>{T('section.contacts.title')}</h2>
     <p>{T('section.contacts.desc')}</p>
   </div>
-  <div class="form-row">
-    <label for="sales_contact_name">{T('label.salesContactName')}</label>
-    <input type="text" id="sales_contact_name" name="sales_contact_name" value={v.sales_contact_name} required />
-  </div>
-  <div class="two-col">
-    <div class="form-row">
-      <label for="sales_contact_email">{T('label.salesContactEmail')}</label>
-      <input type="email" id="sales_contact_email" name="sales_contact_email" value={v.sales_contact_email} required />
-    </div>
-    <div class="form-row">
-      <label for="sales_contact_phone">{T('label.salesContactPhone')}</label>
-      <input type="tel" id="sales_contact_phone" name="sales_contact_phone" value={v.sales_contact_phone} class="contact-phone" />
-    </div>
-  </div>
-  <div class="form-row">
-    <label for="qa_contact_name">{T('label.qaContactName')}</label>
-    <input type="text" id="qa_contact_name" name="qa_contact_name" value={v.qa_contact_name} required />
-  </div>
-  <div class="two-col">
-    <div class="form-row">
-      <label for="qa_contact_email">{T('label.qaContactEmail')}</label>
-      <input type="email" id="qa_contact_email" name="qa_contact_email" value={v.qa_contact_email} required />
-    </div>
-    <div class="form-row">
-      <label for="qa_contact_phone">{T('label.qaContactPhone')}</label>
-      <input type="tel" id="qa_contact_phone" name="qa_contact_phone" value={v.qa_contact_phone} class="contact-phone" />
-    </div>
-  </div>
-  <div class="two-col">
-    <div class="form-row">
-      <label for="accounting_contact_email">{T('label.accountingContactEmail')}</label>
-      <input type="email" id="accounting_contact_email" name="accounting_contact_email" value={v.accounting_contact_email} required />
-    </div>
-    <div class="form-row">
-      <label for="accounting_contact_phone">{T('label.accountingContactPhone')}</label>
-      <input type="tel" id="accounting_contact_phone" name="accounting_contact_phone" value={v.accounting_contact_phone} class="contact-phone" />
-    </div>
-  </div>
+  {CONTACTS.map((c) => (
+    <fieldset class="contact-block">
+      <legend>{c.title}</legend>
+      <div class="form-row">
+        <label for={`${c.key}_contact_name`}>
+          {T('label.fullName')}{!c.nameRequired && <span class="optional"> {T('label.optional')}</span>}
+        </label>
+        <input type="text" id={`${c.key}_contact_name`} name={`${c.key}_contact_name`}
+               value={cv(c.key, 'name')} autocomplete="name" required={c.nameRequired} />
+      </div>
+      <div class="form-row">
+        <label for={`${c.key}_contact_email`}>{T('label.contactEmail')}</label>
+        <input type="email" id={`${c.key}_contact_email`} name={`${c.key}_contact_email`}
+               value={cv(c.key, 'email')} autocomplete="email" required />
+      </div>
+      <div class="phone-row">
+        <div class="form-row">
+          <label for={`${c.key}_contact_phone`}>{T('label.contactPhone')}</label>
+          <input type="tel" id={`${c.key}_contact_phone`} name={`${c.key}_contact_phone`}
+                 value={cv(c.key, 'phone')} class="contact-phone" autocomplete="tel"
+                 placeholder="514 555-1234" />
+        </div>
+        <div class="form-row">
+          <label for={`${c.key}_contact_phone_ext`}>{T('label.ext')}</label>
+          <input type="text" id={`${c.key}_contact_phone_ext`} name={`${c.key}_contact_phone_ext`}
+                 value={cv(c.key, 'phone_ext')} inputmode="numeric" maxlength="8" />
+        </div>
+      </div>
+    </fieldset>
+  ))}
   <div id="phone-error" class="hint" style="color: var(--p-danger); display: none;">{T('error.phone_required')}</div>
 
   <div class="section-hdr"><h2>{T('section.company.title')}</h2></div>
@@ -130,15 +150,19 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <label for="contact_person">{T('label.contactPerson')}</label>
     <input type="text" id="contact_person" name="contact_person" value={v.contact_person} required />
   </div>
-  <div class="two-col">
+  <div class="phone-row">
     <div class="form-row">
       <label for="phone">{T('label.phone')}</label>
-      <input type="tel" id="phone" name="phone" value={v.phone} required />
+      <input type="tel" id="phone" name="phone" value={v.phone} autocomplete="tel" required />
     </div>
     <div class="form-row">
-      <label for="email">{T('label.email')}</label>
-      <input type="email" id="email" name="email" value={v.email} required />
+      <label for="phone_ext">{T('label.ext')}</label>
+      <input type="text" id="phone_ext" name="phone_ext" value={v.phone_ext} inputmode="numeric" maxlength="8" />
     </div>
+  </div>
+  <div class="form-row">
+    <label for="email">{T('label.email')}</label>
+    <input type="email" id="email" name="email" value={v.email} autocomplete="email" required />
   </div>
 
   <div class="section-hdr"><h2>{T('section.shipping.title')}</h2></div>
@@ -302,10 +326,10 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
   </div>
 
   <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
-    <button type="submit" name="action" value="draft" formnovalidate class="btn btn-secondary" id="btn-save-draft" style="flex: 1;">
+    <button type="submit" name="action" value="draft" formnovalidate class="btn btn-secondary" id="btn-save-draft" style="flex: 1;" data-busy={T('btn.busy')}>
       {T('saveDraftBtn')}
     </button>
-    <button type="submit" name="action" value="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;">
+    <button type="submit" name="action" value="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;" data-busy={T('btn.busy')}>
       {T('submitBtn')}
     </button>
   </div>
@@ -361,5 +385,55 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
         firstVisible?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
+
+    // One submission per click. The uploaded files make the request slow enough
+    // that a second click used to arrive as a second submission (PBG BioPharma,
+    // 2026-10-02). The server refuses twins now too; this stops the click itself.
+    //
+    // Registered last, so it only locks once the checks above have let the
+    // submit through. The buttons are disabled on the next tick rather than
+    // here: a disabled submitter is left out of the form data, which would drop
+    // its action=draft and turn a draft save into a full submission.
+    let sending = false;
+    form.addEventListener('submit', (e: SubmitEvent) => {
+      if (sending) { e.preventDefault(); return; }
+      if (e.defaultPrevented) return;
+      sending = true;
+      const submitter = e.submitter as HTMLButtonElement | null;
+      setTimeout(() => {
+        form.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach((b) => {
+          b.dataset.label = b.textContent ?? '';
+          b.disabled = true;
+        });
+        if (submitter?.dataset.busy) submitter.textContent = submitter.dataset.busy;
+      }, 0);
+    });
+
+    // Coming back with the Back button can restore the page from cache exactly
+    // as it was left — locked. Unlock it so the vendor is not stuck.
+    window.addEventListener('pageshow', (ev) => {
+      if (!ev.persisted) return;
+      sending = false;
+      form.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach((b) => {
+        b.disabled = false;
+        if (b.dataset.label) b.textContent = b.dataset.label;
+      });
+    });
   })();
 </script>
+
+<style>
+  .contact-block {
+    border: 1px solid var(--p-border); border-radius: 8px;
+    padding: 14px 16px 2px; margin: 0 0 14px;
+  }
+  .contact-block legend {
+    padding: 0 6px; margin-left: -6px;
+    font-size: .8rem; font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
+    color: var(--p-muted);
+  }
+  .phone-row { display: grid; grid-template-columns: 1fr 110px; gap: 0 16px; }
+  .optional { color: var(--p-muted); font-weight: 400; font-size: .85em; }
+  /* Native fieldsets ignore min-width:0 and can overflow narrow screens. */
+  .contact-block { min-width: 0; }
+</style>

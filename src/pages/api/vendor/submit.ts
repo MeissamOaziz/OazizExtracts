@@ -48,6 +48,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const postal_code = get('postal_code');
   const contact_person = get('contact_person');
   const phone = get('phone');
+  const phone_ext = getOrNull('phone_ext');
   const email = get('email');
 
   const shipping_same_as_billing = form.get('shipping_same_as_billing') === '1';
@@ -59,11 +60,15 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const sales_contact_name = get('sales_contact_name');
   const sales_contact_email = get('sales_contact_email');
   const sales_contact_phone = getOrNull('sales_contact_phone');
+  const sales_contact_phone_ext = getOrNull('sales_contact_phone_ext');
   const qa_contact_name = get('qa_contact_name');
   const qa_contact_email = get('qa_contact_email');
   const qa_contact_phone = getOrNull('qa_contact_phone');
+  const qa_contact_phone_ext = getOrNull('qa_contact_phone_ext');
+  const accounting_contact_name = getOrNull('accounting_contact_name');
   const accounting_contact_email = getOrNull('accounting_contact_email');
   const accounting_contact_phone = getOrNull('accounting_contact_phone');
+  const accounting_contact_phone_ext = getOrNull('accounting_contact_phone_ext');
 
   const business_number = getOrNull('business_number');
   const gst_hst_number = getOrNull('gst_hst_number');
@@ -99,11 +104,11 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const fields = {
     vendor_type,
-    company_name, address, city, province, postal_code, contact_person, phone, email,
+    company_name, address, city, province, postal_code, contact_person, phone, phone_ext, email,
     shipping_same_as_billing, shipping_address, shipping_city, shipping_province, shipping_postal_code,
-    sales_contact_name, sales_contact_email, sales_contact_phone,
-    qa_contact_name, qa_contact_email, qa_contact_phone,
-    accounting_contact_email, accounting_contact_phone,
+    sales_contact_name, sales_contact_email, sales_contact_phone, sales_contact_phone_ext,
+    qa_contact_name, qa_contact_email, qa_contact_phone, qa_contact_phone_ext,
+    accounting_contact_name, accounting_contact_email, accounting_contact_phone, accounting_contact_phone_ext,
     business_number, gst_hst_number, qst_number,
     bank_institution_number, bank_transit_number, bank_account_number, bank_address,
     products_sold,
@@ -150,7 +155,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/fournisseurs?error=unknown', 303);
     }
     await uploadAnyProvidedFiles(admin, inserted.id, form);
-    await linkInviteIfAny(admin, inviteToken, inserted.id);
+    await linkInviteIfAny(admin, inviteToken, inserted.id, fields);
 
     const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
     const resumeUrl = `${siteUrl}/fournisseurs/brouillon/${raw}`;
@@ -230,6 +235,26 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect(backTo(existingSubmissionId, resumeToken, 'unknown'), 303);
     }
   } else {
+    // A second click on Submit while the first request is still uploading files
+    // arrives as a brand-new submission, which is how PBG BioPharma ended up with
+    // two identical rows four seconds apart (2026-10-02). If the same vendor email
+    // already submitted the same company in the last ten minutes, that earlier
+    // submission is the one: acknowledge it rather than create a twin.
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: twin } = await admin
+      .from('vendor_submissions')
+      .select('id')
+      .eq('status', 'submitted')
+      .ilike('email', likeLiteral(email))
+      .ilike('company_name', likeLiteral(company_name))
+      .gte('submitted_at', tenMinutesAgo)
+      .limit(1)
+      .maybeSingle();
+    if (twin) {
+      await linkInviteIfAny(admin, inviteToken, twin.id, fields);
+      return redirect('/fournisseurs/merci', 303);
+    }
+
     const { data: inserted, error: insErr } = await admin
       .from('vendor_submissions')
       .insert({ ...fields, status: 'submitted', submitted_at: new Date().toISOString() })
@@ -240,7 +265,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect('/fournisseurs?error=unknown', 303);
     }
     submissionId = inserted.id as string;
-    await linkInviteIfAny(admin, inviteToken, submissionId);
+    await linkInviteIfAny(admin, inviteToken, submissionId, fields);
   }
 
   try {
@@ -280,19 +305,68 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   return redirect('/fournisseurs/merci', 303);
 };
 
-// Best-effort: links this brand-new submission back to the invite that
-// brought the vendor here (if any), so staff can see on the dashboard that
-// the invite was acted on instead of it sitting as "not started" forever.
+// ilike is used for its case-insensitivity only; its wildcards must not apply,
+// and underscores are common in email addresses.
+function likeLiteral(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+// Free mailboxes say nothing about which company someone works for, so they
+// never count as a domain match.
+const FREE_MAIL_DOMAINS = new Set([
+  'gmail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'yahoo.ca',
+  'icloud.com', 'me.com', 'msn.com', 'aol.com', 'videotron.ca', 'bell.net', 'sympatico.ca',
+]);
+
+// Best-effort: links this submission back to the invite that brought the vendor
+// here, so staff can see on the dashboard that the invite was acted on instead
+// of it sitting as "not started" forever.
+//
+// The token is the reliable route, but invites get forwarded: PBG's went to
+// their QA lead and was filled in by their sales lead from a link without the
+// token, so it stayed "not started" despite two submissions. Without a token,
+// an open invite is matched by exact email against any address on the
+// submission, then by company domain.
 async function linkInviteIfAny(
   admin: ReturnType<typeof getAdminClient>,
   inviteToken: string | null,
   submissionId: string,
+  fields: Record<string, unknown>,
 ): Promise<void> {
-  if (!inviteToken) return;
+  if (inviteToken) {
+    await admin
+      .from('vendor_invites')
+      .update({ vendor_submission_id: submissionId })
+      .eq('invite_token_hash', sha256Hex(inviteToken))
+      .is('vendor_submission_id', null);
+    return;
+  }
+
+  const addresses = ['email', 'sales_contact_email', 'qa_contact_email', 'accounting_contact_email']
+    .map((k) => String(fields[k] ?? '').trim().toLowerCase())
+    .filter((e) => e.includes('@'));
+  if (addresses.length === 0) return;
+
+  const { data: open } = await admin
+    .from('vendor_invites')
+    .select('id, email')
+    .is('vendor_submission_id', null)
+    .order('sent_at', { ascending: false });
+  if (!open || open.length === 0) return;
+
+  const domainOf = (e: string) => e.split('@')[1] ?? '';
+  const domains = new Set(addresses.map(domainOf).filter((d) => d && !FREE_MAIL_DOMAINS.has(d)));
+
+  const match =
+    open.find((i) => addresses.includes(i.email.trim().toLowerCase())) ??
+    open.find((i) => domains.has(domainOf(i.email.trim().toLowerCase())));
+  if (!match) return;
+
   await admin
     .from('vendor_invites')
     .update({ vendor_submission_id: submissionId })
-    .eq('invite_token_hash', sha256Hex(inviteToken));
+    .eq('id', match.id)
+    .is('vendor_submission_id', null);
 }
 
 async function uploadAnyProvidedFiles(

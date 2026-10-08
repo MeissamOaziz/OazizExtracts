@@ -85,6 +85,33 @@ function expiryBadge(dateStr: string | null): { text: string; className: string 
 }
 const craExpiry = expiryBadge(submission.file_cra_license_expiry);
 const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
+
+// Contacts as labelled rows, the same way the company address is laid out,
+// rather than one dash-joined line per person.
+const contacts = [
+  {
+    title: T('label.salesContact'),
+    name: submission.sales_contact_name, email: submission.sales_contact_email,
+    phone: submission.sales_contact_phone, ext: submission.sales_contact_phone_ext,
+  },
+  {
+    title: T('label.qaContact'),
+    name: submission.qa_contact_name, email: submission.qa_contact_email,
+    phone: submission.qa_contact_phone, ext: submission.qa_contact_phone_ext,
+  },
+  {
+    title: T('label.accountingContact'),
+    name: submission.accounting_contact_name, email: submission.accounting_contact_email,
+    phone: submission.accounting_contact_phone, ext: submission.accounting_contact_phone_ext,
+  },
+];
+
+// A comma in a tel: link makes the phone pause after connecting and then dial
+// the extension, so tapping the number on a phone reaches the right desk.
+function telHref(phone: string, ext?: string | null): string {
+  const digits = phone.replace(/[^\d+]/g, '');
+  return ext ? `tel:${digits},${String(ext).replace(/\D/g, '')}` : `tel:${digits}`;
+}
 ---
 <PortailLayout title={submission.company_name} staffName={staff.full_name} wide>
   <div style="margin-bottom: 20px;">
@@ -145,9 +172,25 @@ const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
     <h2>{T('section.contacts')}</h2>
     <table class="data" style="margin-top: 12px;">
       <tbody>
-        <tr><th style="width:260px;">{T('label.salesContact')}</th><td>{submission.sales_contact_name} — {submission.sales_contact_email} — {submission.sales_contact_phone}</td></tr>
-        <tr><th>{T('label.qaContact')}</th><td>{submission.qa_contact_name} — {submission.qa_contact_email} — {submission.qa_contact_phone}</td></tr>
-        <tr><th>{T('label.accountingContact')}</th><td>{submission.accounting_contact_email || '—'} — {submission.accounting_contact_phone || '—'}</td></tr>
+        {contacts.map((c, i) => (
+          <>
+            <tr class="contact-group"><th colspan="2" style={i === 0 ? 'width:260px;' : undefined}>{c.title}</th></tr>
+            <tr><th style="width:260px;">{T('field.fullName')}</th><td>{c.name || '—'}</td></tr>
+            <tr>
+              <th>{T('field.email')}</th>
+              <td>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}</td>
+            </tr>
+            <tr>
+              <th>{T('field.phone')}</th>
+              <td>
+                {c.phone ? (
+                  <a href={telHref(c.phone, c.ext)}>{c.phone}</a>
+                ) : '—'}
+                {c.phone && c.ext && <span class="ext"> · {T('field.ext')} {c.ext}</span>}
+              </td>
+            </tr>
+          </>
+        ))}
       </tbody>
     </table>
   </div>
@@ -162,8 +205,17 @@ const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
         <tr><th>{T('field.address')}</th><td>{submission.address}</td></tr>
         <tr><th>{T('field.cityProvincePostal')}</th><td>{submission.city} / {submission.province} / {submission.postal_code}</td></tr>
         <tr><th>{T('field.contactPerson')}</th><td>{submission.contact_person}</td></tr>
-        <tr><th>{T('field.phone')}</th><td>{submission.phone}</td></tr>
-        <tr><th>{T('field.email')}</th><td>{submission.email}</td></tr>
+        <tr>
+          <th>{T('field.phone')}</th>
+          <td>
+            {submission.phone ? <a href={telHref(submission.phone, submission.phone_ext)}>{submission.phone}</a> : '—'}
+            {submission.phone && submission.phone_ext && <span class="ext"> · {T('field.ext')} {submission.phone_ext}</span>}
+          </td>
+        </tr>
+        <tr>
+          <th>{T('field.email')}</th>
+          <td>{submission.email ? <a href={`mailto:${submission.email}`}>{submission.email}</a> : '—'}</td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -269,3 +321,12 @@ const hcExpiry = expiryBadge(submission.file_health_canada_license_expiry);
   </div>
   </>}
 </PortailLayout>
+
+<style>
+  tr.contact-group th {
+    padding-top: 18px; color: var(--p-text); font-size: .82rem;
+    border-bottom: 1px solid var(--p-border); background: var(--p-bg);
+  }
+  tbody tr.contact-group:first-child th { padding-top: 12px; }
+  .ext { color: var(--p-muted); }
+</style>
