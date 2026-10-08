@@ -28,6 +28,7 @@ export interface Supplier {
   contact_name: string | null; contact_email: string | null; remittance_email: string | null;
   qbo_vendor_name: string | null; sheet_tab: string | null; is_active: boolean; sort_order: number;
   aliases: string[]; gst_number: string | null; qst_number: string | null;
+  due_status?: 'not_due' | 'unpaid' | 'paid' | null;
 }
 
 export interface SupplierBalance {

@@ -39,6 +39,8 @@ export const RESTRICTED: Partial<Record<Permission, readonly string[]>> = {
   payables: ['meissam@oaziz.ca'],
   payables_approve: ['meissam@oaziz.ca'],
 };
+// Who may set a supplier's payment status (Not due / Unpaid / Paid) on the weekly page.
+export const DUE_STATUS_EDITORS: readonly string[] = ['meissam@oaziz.ca'];
 export const ATELIER_ALLOWED_EMAILS = RESTRICTED.atelier!;
 export const PAYABLES_ALLOWED_EMAILS = RESTRICTED.payables!;
 export const PAYABLES_APPROVER_EMAILS = RESTRICTED.payables_approve!;
