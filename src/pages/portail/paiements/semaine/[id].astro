@@ -58,13 +58,8 @@ const cashByAccount = computeCash(accounts, cash, lines, supplierMap, paidMap);
 const openInvoices = await loadOpenInvoices(admin, suppliers.filter((s) => s.bal.open_count > 0).map((s) => s.id));
 const prevCash = new Map((prev?.cash ?? []).map((c) => [`${c.bank_account_id}|${c.kind}|${c.label}`, c.amount]));
 
-// Suppliers in this week first, then by balance.
-suppliers.sort((a, b) => {
-  const la = lineBySupplier.has(a.id) && n(lineBySupplier.get(a.id)!.suggested_amount ?? lineBySupplier.get(a.id)!.approved_amount) > 0 ? 0 : 1;
-  const lb = lineBySupplier.has(b.id) && n(lineBySupplier.get(b.id)!.suggested_amount ?? lineBySupplier.get(b.id)!.approved_amount) > 0 ? 0 : 1;
-  if (la !== lb) return la - lb;
-  return a.name.localeCompare(b.name, 'fr');
-});
+// Alphabetical (numbered companies first, 2 before 10); "In this week" filters the ones with a line.
+suppliers.sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }));
 
 const editableSuggest = run.status === 'draft';
 const editableApproved = run.status === 'approved';
@@ -268,7 +263,7 @@ const i18n = {
                 </td>
                 <td>
                   {editableSuggest
-                    ? <input type="text" class="in-note" value={l?.suggested_note ?? ''} />
+                    ? <textarea class="in-note" rows="1" title={l?.suggested_note ?? ''}>{l?.suggested_note ?? ''}</textarea>
                     : <span class="small">{l?.suggested_note ?? ''}</span>}
                 </td>
                 <td class="num">
@@ -601,6 +596,11 @@ const i18n = {
   }
   document.querySelectorAll<HTMLInputElement>('.in-suggested').forEach((i) => bindAmount(i, 'suggested_amount'));
   document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => bindAmount(i, 'approved_amount'));
+  const grow = (t: HTMLTextAreaElement) => { t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight + 2, 140)}px`; };
+  document.querySelectorAll<HTMLTextAreaElement>('textarea.in-note').forEach((t) => {
+    grow(t);
+    t.addEventListener('input', () => { grow(t); t.title = t.value; });
+  });
   document.querySelectorAll<HTMLInputElement>('.in-note').forEach((i) => {
     let lastSent: string | null = null;
     i.addEventListener('change', () => {
@@ -873,7 +873,8 @@ const i18n = {
   .overdue { color: var(--p-danger); font-weight: 600; }
   .sugg-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
   .in-suggested, .in-approved { width: 110px; padding: 5px 8px; font-size: .86rem; }
-  .in-note { min-width: 120px; padding: 5px 8px; font-size: .82rem; }
+  .in-note { width: 100%; min-width: 220px; padding: 5px 8px; font-size: .82rem; line-height: 1.35; resize: vertical; overflow: hidden; font-family: inherit; field-sizing: content; max-height: 9em; }
+  .in-note:focus { overflow: auto; }
   .quick { display: flex; gap: 4px; }
   .quick button { background: none; border: none; color: var(--p-accent); font-size: .7rem; cursor: pointer; padding: 0; font-family: inherit; }
   .pay-info { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p-muted); }
