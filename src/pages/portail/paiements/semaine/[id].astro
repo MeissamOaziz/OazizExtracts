@@ -186,10 +186,7 @@ const i18n = {
               {f.deposits.map((d) => <p class="dep-ok">✓ {fill(T('dep.recorded'), { amount: money(d.amount, locale), from: f.funderName, date: d.paid_on, ref: d.reference ?? '—' })}</p>)}
               {!f.supplierId && f.paid > 0 && <p class="hint">{T('dep.noSupplier')}</p>}
               {f.supplierId && f.pending > 0.004 && (
-                <form method="POST" action={`/api/portail/paiements/runs/${run.id}/action`} class="no-print">
-                  <p class="hint" style="margin:0 0 6px;">{fill(T('dep.pending'), { amount: money(f.pending, locale), from: f.funderName })}</p>
-                  <button class="btn btn-secondary btn-sm" name="_action" value="record_deposit">{fill(T('dep.record'), { amount: money(f.pending, locale) })}</button>
-                </form>
+                <p class="hint" style="margin:0;">{fill(T('dep.pendingQb'), { amount: money(f.pending, locale), from: f.funderName })}</p>
               )}
             </div>
           );

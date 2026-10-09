@@ -6,7 +6,6 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadAccounts, logEvent, n, nextPaymentReference, round2, weekLabel } from './payables';
-import { autoPushPayment } from './qbo-sync';
 
 export interface FundingStatus {
   accountId: string;
@@ -73,7 +72,6 @@ export async function recordFundingDeposits(admin: SupabaseClient, runId: string
       run_id: runId, supplier_id: f.supplierId, actor_staff_id: staffId, action: 'funding_deposit',
       details: { amount: f.pending, from: f.funderName, to: f.accountName, reference },
     });
-    await autoPushPayment(admin, pid as string);
     done.push({ account: f.accountName, amount: f.pending, reference });
   }
   return done;

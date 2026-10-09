@@ -108,8 +108,6 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
     case 'close':
       if (run.status !== 'approved') return redirect(back, 303);
-      // Deposits still due for this week's funded-account payments are recorded on close.
-      await recordFundingDeposits(admin, runId, staff.id);
       await admin.from('ap_runs').update({ status: 'closed', closed_at: now, closed_by: staff.id }).eq('id', runId);
       await logEvent(admin, { run_id: runId, actor_staff_id: staff.id, action: 'closed' });
       return go('ok', T('flash.closed'));

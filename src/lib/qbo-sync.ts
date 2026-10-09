@@ -419,6 +419,12 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
   if (!p || p.voided_at) return { ok: false, message: 'Paiement introuvable ou annulé' };
   if (p.qbo_billpayment_id || p.qbo_synced_at) return { ok: true, message: 'Déjà dans QuickBooks' };
   if (p.source !== 'portal') return { ok: true, message: 'Non envoyé (historique ou provenant de QB)' };
+  // RBC → TD deposits are entered in QuickBooks by hand (as MJLB bill payments)
+  // and pulled back in; the portal never creates them there (decided 2026-10-09).
+  if (p.transfer_to_account_id) {
+    await admin.from('ap_payments').update({ qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', paymentId);
+    return { ok: true, message: 'Dépôt RBC → TD — saisi dans QB à la main, non envoyé' };
+  }
   const fail = async (message: string, status: 'error' | 'skipped' = 'error') => {
     await admin.from('ap_payments').update({ qbo_error: message }).eq('id', paymentId);
     await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, status, message });
@@ -587,9 +593,14 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
     await log(admin, { direction: 'pull', entity: 'bill', portal_id: created?.id, qbo_id: b.Id, status: 'ok', message: `Facture ${b.DocNumber ?? ''} importée de QB (${sup.name})` });
   }
 
+  const { data: connRow } = await admin.from('qbo_connection').select('connected_at').eq('id', 1).maybeSingle();
+  const connectedOn = String(connRow?.connected_at ?? '').slice(0, 10);
+  const { data: fundedAccts } = await admin.from('ap_bank_accounts').select('id, funded_by, funding_supplier_id').not('funding_supplier_id', 'is', null);
   for (const bp of await qbo.query('BillPayment', `MetaData.LastUpdatedTime > ${qstr(since)}`)) {
     const { data: linked } = await admin.from('ap_payments').select('id').eq('qbo_billpayment_id', bp.Id).maybeSingle();
     if (linked) continue;
+    // Payments made before QuickBooks was connected are already in the imported balances.
+    if (connectedOn && String(bp.TxnDate ?? '') < connectedOn) continue;
     const sup = await supplierForVendor(admin, bp.VendorRef?.value);
     if (!sup) {
       skipped++;
@@ -619,12 +630,25 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
       continue;
     }
     await admin.from('ap_payments').update({ source: 'qbo', qbo_billpayment_id: bp.Id, qbo_synced_at: new Date().toISOString() }).eq('id', pid);
+    // A payment to the funding supplier (MJLB) is the RBC → TD deposit: tag it for the TD report and the week.
+    const fund = (fundedAccts ?? []).find((a) => a.funding_supplier_id === sup.id);
+    if (fund) await tagDeposit(admin, pid as string, fund.id, fund.funded_by, bp.TxnDate);
     payments++;
     await log(admin, { direction: 'pull', entity: 'billpayment', portal_id: pid, qbo_id: bp.Id, status: 'ok', message: `Paiement ${amount.toFixed(2)} $ importé de QB (${sup.name})` });
   }
 
   await admin.from('qbo_connection').update({ last_pull_cursor: startedAt.toISOString() }).eq('id', 1);
   return { bills, payments, skipped };
+}
+
+/** Mark a payment to the funding supplier as the deposit into its funded account, for the week it belongs to. */
+export async function tagDeposit(admin: SupabaseClient, paymentId: string, accountId: string, funderId: string | null, paidOn: string) {
+  const d = new Date(paidOn + 'T12:00:00');
+  const from = new Date(d.getTime() - 6 * 86400_000).toISOString().slice(0, 10);
+  const to = new Date(d.getTime() + 6 * 86400_000).toISOString().slice(0, 10);
+  const { data: runs } = await admin.from('ap_runs').select('id, run_date').gte('run_date', from).lte('run_date', to);
+  const run = (runs ?? []).sort((a, b) => Math.abs(new Date(a.run_date).getTime() - d.getTime()) - Math.abs(new Date(b.run_date).getTime() - d.getTime()))[0];
+  await admin.from('ap_payments').update({ transfer_to_account_id: accountId, funds_run_id: run?.id ?? null, ...(funderId ? { bank_account_id: funderId } : {}) }).eq('id', paymentId);
 }
 
 // ------------------------------------------------------------------ hooks

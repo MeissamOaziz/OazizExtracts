@@ -52,6 +52,7 @@ const RULES: Rule[] = [
   [/^Seuls ([\d.]+) \$ sur ([\d.]+) \$ liés à des factures QB$/, (_, a, b) => `Only $${a} of $${b} linked to QB bills`],
   [/^Paiement ([\d.]+) \$ créé$/, (_, a) => `Payment $${a} created`],
   [/^Paiement créé dans QuickBooks$/, 'Payment created in QuickBooks'],
+  [/^Dépôt RBC → TD — saisi dans QB à la main, non envoyé$/, 'RBC → TD deposit — entered in QB by hand, not sent'],
   [/^Déjà dans QB comme dépense — aucun paiement créé$/, 'Already in QB as an expense — no payment created'],
   [/^Ce fournisseur existe déjà dans le portail\.$/, 'This supplier already exists in the portal.'],
   [/^Paiement (.*) mis à jour dans QB$/, (_, r) => `Payment ${r} updated in QB`],
