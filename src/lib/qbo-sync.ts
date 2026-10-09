@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getQbo, qstr, QboError, type Qbo } from './qbo';
-import { getSetting, n, round2 } from './payables';
+import { bumpReference, getSetting, n, nextPaymentReference, round2 } from './payables';
 import { docKey, queryVendorDocs } from './qbo-reconcile';
 
 export interface QboDefaults {
@@ -477,6 +477,29 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     // ensureVendor (which can create one) when the supplier has no link at all.
     const vendorId = sup.qbo_vendor_id ?? await ensureVendor(admin, qbo, sup);
     const total = round2(lines.reduce((s, l) => s + l.amount, 0));
+
+    // 1) Already entered in QB by hand (same vendor, same amount, ±7 days)?
+    //    Link to it instead of creating a duplicate.
+    const twin = await findHandEnteredTwin(admin, qbo, vendorId, total, p.paid_on);
+    if (twin) {
+      await admin.from('ap_payments').update({
+        qbo_billpayment_id: twin.type === 'BillPayment' ? twin.id : null, qbo_synced_at: new Date().toISOString(), qbo_error: null,
+      }).eq('id', paymentId);
+      const msg = `Déjà saisi dans QB (${twin.type === 'BillPayment' ? 'paiement de facture' : 'dépense'} ${twin.doc ?? '#' + twin.id} du ${twin.date}, ${total.toFixed(2)} $) — lié, aucun doublon créé`;
+      await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: twin.id, status: 'warning', message: msg });
+      return { ok: true, message: msg };
+    }
+
+    // 2) Reference already used in QB by another transaction? Take the next free number.
+    let reference: string | null = p.reference || null;
+    if (reference && await docNumberTaken(qbo, reference)) {
+      const old = reference;
+      reference = await nextFreeReference(admin, qbo);
+      if (!reference) return fail(`Référence ${old} déjà utilisée dans QB — changez-la sur la page du fournisseur, puis réessayez`);
+      await admin.from('ap_payments').update({ reference }).eq('id', paymentId);
+      p.reference = reference;
+      await log(admin, { direction: 'system', entity: 'billpayment', portal_id: paymentId, status: 'warning', message: `Référence ${old} déjà utilisée dans QB — renumérotée ${reference}` });
+    }
     const res = await qbo.post('/billpayment', {
       VendorRef: { value: vendorId },
       PayType: 'Check',
@@ -496,6 +519,43 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
   } catch (e) {
     return fail(errMsg(e));
   }
+}
+
+/** A payment entered by hand in QB for the same vendor and amount within ±7 days, not yet linked to a portal payment. */
+async function findHandEnteredTwin(admin: SupabaseClient, qbo: Qbo, vendorId: string, amount: number, paidOn: string) {
+  const d = new Date(paidOn + 'T12:00:00');
+  const from = new Date(d.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
+  const to = new Date(d.getTime() + 7 * 86400_000).toISOString().slice(0, 10);
+  const cands: Array<{ type: 'BillPayment' | 'Purchase'; id: string; doc: string | null; date: string }> = [];
+  for (const t of await qbo.query('BillPayment', `TxnDate >= ${qstr(from)} and TxnDate <= ${qstr(to)}`)) {
+    if (t.VendorRef?.value === vendorId && Math.abs(n(t.TotalAmt) - amount) < 0.005) cands.push({ type: 'BillPayment', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
+  }
+  for (const t of await qbo.query('Purchase', `TxnDate >= ${qstr(from)} and TxnDate <= ${qstr(to)}`)) {
+    if (t.EntityRef?.value === vendorId && Math.abs(n(t.TotalAmt) - amount) < 0.005) cands.push({ type: 'Purchase', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
+  }
+  if (!cands.length) return null;
+  const { data: linked } = await admin.from('ap_payments').select('qbo_billpayment_id').in('qbo_billpayment_id', cands.map((c) => c.id)).is('voided_at', null);
+  const used = new Set((linked ?? []).map((r) => String(r.qbo_billpayment_id)));
+  return cands.find((c) => !used.has(c.id)) ?? null;
+}
+
+/** Is this reference already the Ref no. of a bill payment or expense in QB? */
+async function docNumberTaken(qbo: Qbo, doc: string): Promise<boolean> {
+  const ref = qstr(String(doc).slice(0, 21));
+  for (const entity of ['BillPayment', 'Purchase']) {
+    if ((await qbo.query(entity, `DocNumber = ${ref}`)).length) return true;
+  }
+  return false;
+}
+
+/** Next portal payment number that is also unused in QB. */
+async function nextFreeReference(admin: SupabaseClient, qbo: Qbo): Promise<string | null> {
+  let ref = await nextPaymentReference(admin);
+  for (let k = 0; ref && k < 25; k++) {
+    if (!(await docNumberTaken(qbo, ref))) return ref;
+    ref = bumpReference(ref);
+  }
+  return null;
 }
 
 /** Bring an already-created QB bill payment in line: Ref no. = portal reference, not "Print later". */
