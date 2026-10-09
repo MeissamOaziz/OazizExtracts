@@ -18,10 +18,11 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   const out: Array<Record<string, unknown>> = [];
   const pick = (type: string, t: any) => ({
     type, id: t.Id, doc: t.DocNumber ?? null, date: t.TxnDate, amount: t.TotalAmt,
-    vendor: t.VendorRef?.name ?? t.EntityRef?.name ?? null, created: t.MetaData?.CreateTime ?? null, note: t.PrivateNote ?? null,
+    vendor: t.VendorRef?.name ?? t.EntityRef?.name ?? null, balance: t.Balance ?? null, created: t.MetaData?.CreateTime ?? null, note: t.PrivateNote ?? null,
     bills: (t.Line ?? []).flatMap((l: any) => (l.LinkedTxn ?? []).map((x: any) => `${x.TxnType}:${x.TxnId}`)),
   });
-  for (const entity of ['BillPayment', 'Purchase']) {
+  const entities = url.searchParams.get('bills') === '1' ? ['Bill'] : ['BillPayment', 'Purchase'];
+  for (const entity of entities) {
     if (docs.length) {
       const list = docs.map((d) => qstr(d)).join(', ');
       for (const t of await qbo.query(entity, `DocNumber IN (${list})`)) out.push(pick(entity, t));
