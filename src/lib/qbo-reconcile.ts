@@ -34,9 +34,9 @@ export interface RecResult {
   qbOther: number;
 }
 
-const docKey = (s: string | null | undefined) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '');
+export const docKey = (s: string | null | undefined) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^0+/, '');
 
-async function queryVendorDocs(qbo: Qbo, entity: 'Bill' | 'VendorCredit', vendorId: string) {
+export async function queryVendorDocs(qbo: Qbo, entity: 'Bill' | 'VendorCredit', vendorId: string) {
   // VendorRef is filterable on Bill; for VendorCredit some companies reject it, so fall back to a scan.
   try {
     return await qbo.query(entity, `VendorRef = ${qstr(vendorId)}`);

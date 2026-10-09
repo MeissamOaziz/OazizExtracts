@@ -97,6 +97,34 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         await logEvent(admin, { supplier_id: created.id, actor_staff_id: staff.id, action: 'supplier_created', details: { via: 'qbo_vendor', qbo_vendor_id: vid } });
         return redirect(`/portail/paiements/fournisseurs/${created.id}?ok=created`, 303);
       }
+      case 'link_payment_bill': {
+        // A paid, imported invoice whose QB bill could not be identified
+        // automatically: a person picks it, then the payment is created.
+        const paymentId = String(form.get('payment_id') ?? '');
+        const invoiceId = String(form.get('invoice_id') ?? '');
+        const billId = str('qbo_bill_id');
+        if (!isUuid(paymentId) || !isUuid(invoiceId) || !billId || !/^\d+$/.test(billId)) return go('error', 'Choisissez la facture QuickBooks.');
+
+        const { data: alloc } = await admin.from('ap_payment_allocations')
+          .select('invoice_id, ap_invoices(supplier_id, qbo_bill_id, invoice_number, ap_suppliers(qbo_vendor_id))')
+          .eq('payment_id', paymentId).eq('invoice_id', invoiceId).maybeSingle();
+        const inv = alloc?.ap_invoices as unknown as { supplier_id: string; qbo_bill_id: string | null; invoice_number: string | null; ap_suppliers: { qbo_vendor_id: string | null } } | null;
+        if (!inv) return go('error', 'Cette facture ne fait pas partie de ce paiement.');
+        if (inv.qbo_bill_id) return go('error', 'Cette facture est déjà liée à QuickBooks.');
+
+        // The bill must be this supplier's, open, and not claimed by another invoice.
+        const qbo = await getQbo(admin);
+        if (!qbo) return go('error', 'QuickBooks non connecté');
+        const bill = (await qbo.get(`/bill/${billId}`))?.Bill;
+        if (!bill || String(bill.VendorRef?.value) !== String(inv.ap_suppliers?.qbo_vendor_id)) return go('error', 'Cette facture QB n’appartient pas à ce fournisseur.');
+        const { data: dup } = await admin.from('ap_invoices').select('id').eq('qbo_bill_id', billId).limit(1);
+        if (dup?.length) return go('error', 'Cette facture QB est déjà liée à une autre facture du portail.');
+
+        await admin.from('ap_invoices').update({ qbo_bill_id: billId, in_quickbooks: true, qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', invoiceId);
+        await logEvent(admin, { supplier_id: inv.supplier_id, actor_staff_id: staff.id, action: 'qbo_bill_linked', details: { invoice: inv.invoice_number, qbo_bill_id: billId, qbo_number: bill.DocNumber ?? null, payment_id: paymentId } });
+        const r = await pushPayment(admin, paymentId);
+        return go(r.ok ? 'ok' : 'error', r.message);
+      }
       case 'refresh_payment': {
         const id = String(form.get('payment_id') ?? '');
         if (!isUuid(id)) return go('error', 'Paiement invalide');

@@ -11,6 +11,7 @@ import { localizeMsg } from '../../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../../i18n/portail/paiements';
 import { loadAccounts, money, n, nextPaymentReference, todayIso, PAYMENT_METHODS, type InvoiceBalance, type Supplier } from '../../../../lib/payables';
 import { connectionInfo } from '../../../../lib/qbo';
+import { BILL_NOT_FOUND, openBillsForSupplier } from '../../../../lib/qbo-sync';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -58,6 +59,22 @@ const okKey = sp.get('ok');
 const warnDup = sp.get('dup');
 const fmtDate = (iso: string) => new Date(iso).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { dateStyle: 'medium', timeStyle: 'short' });
 const qboOn = !!(await connectionInfo(admin));
+
+// Payments whose QB bill could not be identified automatically: offer this
+// supplier's open QB bills to pick from, one picker per unlinked paid invoice.
+// QB is only asked when such a payment exists, so normal page loads stay fast.
+const needsBill = (pays ?? []).filter((p) => !p.voided_at && !p.qbo_billpayment_id && String(p.qbo_error ?? '').startsWith(BILL_NOT_FOUND));
+const invById = new Map(invoices.map((i) => [i.id, i]));
+const unlinkedByPayment = new Map<string, Array<{ id: string; label: string }>>();
+for (const a of allocs ?? []) {
+  if (!needsBill.some((p) => p.id === a.payment_id)) continue;
+  const inv = invById.get(a.invoice_id);
+  if (!inv || inv.qbo_bill_id) continue;
+  const list = unlinkedByPayment.get(a.payment_id) ?? [];
+  list.push({ id: a.invoice_id, label: `${inv.invoice_number ?? T(`inv.kind.${inv.kind}` as keyof typeof frPaiements)} (${money(n(a.amount), locale)})` });
+  unlinkedByPayment.set(a.payment_id, list);
+}
+const openBills = qboOn && needsBill.length > 0 ? await openBillsForSupplier(admin, id).catch(() => []) : [];
 const nextRef = await nextPaymentReference(admin);
 const here = `/portail/paiements/fournisseurs/${id}`;
 const okText: Record<string, string> = {
@@ -254,8 +271,28 @@ const okText: Record<string, string> = {
                 {p.reference ?? ''}{p.source === 'import' && <span class="muted small"> · {T('pay.historical')}</span>}{p.source === 'qbo' && <span class="muted small"> · QuickBooks</span>}
                 {p.notes && <div class="muted small">{p.notes}</div>}
                 {p.qbo_billpayment_id && <div class="small ok-txt">{T('inv.qbo.linked')}</div>}
-                {!p.qbo_billpayment_id && p.qbo_synced_at && <div class="small ok-txt">{T('pay.qbExpense')}</div>}
+                {!p.qbo_billpayment_id && p.qbo_synced_at && !p.qbo_error && <div class="small ok-txt">{T('pay.qbExpense')}</div>}
                 {p.qbo_error && <div class="small err-txt">⚠ {localizeMsg(p.qbo_error, locale)}</div>}
+                {(unlinkedByPayment.get(p.id) ?? []).map((u) => (
+                  <form method="POST" action="/api/portail/paiements/qbo/action" class="bill-pick">
+                    <input type="hidden" name="_action" value="link_payment_bill" />
+                    <input type="hidden" name="payment_id" value={p.id} />
+                    <input type="hidden" name="invoice_id" value={u.id} />
+                    <input type="hidden" name="_back" value={here} />
+                    <label class="small">{u.label} →</label>
+                    {openBills.length > 0 ? (
+                      <>
+                        <select name="qbo_bill_id" required>
+                          <option value="">{T('pay.pickBill')}</option>
+                          {openBills.map((b) => (
+                            <option value={b.id}>{b.number ?? T('pay.billNoNumber')} · {b.date ?? ''} · {money(b.balance, locale)}</option>
+                          ))}
+                        </select>
+                        <button class="link-btn small" type="submit">{T('pay.linkAndSend')}</button>
+                      </>
+                    ) : <span class="small muted">{T('pay.noOpenBills')}</span>}
+                  </form>
+                ))}
                 {qboOn && !p.voided_at && !p.qbo_billpayment_id && !p.qbo_synced_at && p.source === 'portal' && (
                   <form method="POST" action="/api/portail/paiements/qbo/action" class="inline">
                     <input type="hidden" name="_action" value="push_payment" /><input type="hidden" name="payment_id" value={p.id} />
@@ -354,4 +391,6 @@ const okText: Record<string, string> = {
   .events code { font-size: .72rem; color: var(--p-muted); }
   .ok-txt { color: var(--p-success); }
   .err-txt { color: var(--p-danger); }
+  .bill-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .bill-pick select { width: auto; max-width: 280px; padding: 3px 6px; font-size: .8rem; }
 </style>

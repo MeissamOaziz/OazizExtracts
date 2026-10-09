@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getQbo, qstr, QboError, type Qbo } from './qbo';
 import { getSetting, n, round2 } from './payables';
+import { docKey, queryVendorDocs } from './qbo-reconcile';
 
 export interface QboDefaults {
   expense_account_id: string | null;
@@ -291,6 +292,125 @@ export async function pushInvoice(admin: SupabaseClient, invoiceId: string, opts
   }
 }
 
+// ------------------------------------------------------------------ imported invoices → their QB bill
+type AllocInvoice = { id: string; qbo_bill_id: string | null; in_quickbooks: boolean; source: string; invoice_number: string | null };
+
+/** Prefix of the error left on a payment whose bill could not be identified; the supplier page offers a picker for it. */
+export const BILL_NOT_FOUND = 'Facture QB à identifier';
+
+/**
+ * The QB vendor a supplier's bills live under — the existing link, or exactly
+ * one active vendor with the same name. Never creates one: a new vendor would
+ * hold none of the supplier's bills, and would duplicate the real one.
+ */
+async function existingVendor(admin: SupabaseClient, qbo: Qbo, s: SupplierRowLite): Promise<string | null> {
+  if (s.qbo_vendor_id) return s.qbo_vendor_id;
+  const keys = [s.qbo_vendor_name, s.name, s.legal_name].map(norm).filter(Boolean);
+  if (keys.length === 0) return null;
+  const vendors = await qbo.query('Vendor', 'Active = true');
+  const hits = vendors.filter((v) => [v.DisplayName, v.CompanyName].map(norm).some((k) => k && keys.includes(k)));
+  if (hits.length !== 1) return null;
+  const { data: taken } = await admin.from('ap_suppliers').select('id').eq('qbo_vendor_id', hits[0].Id).neq('id', s.id).limit(1);
+  if (taken?.length) return null;
+  await admin.from('ap_suppliers').update({ qbo_vendor_id: hits[0].Id }).eq('id', s.id);
+  s.qbo_vendor_id = hits[0].Id;
+  await log(admin, { direction: 'system', entity: 'vendor', portal_id: s.id, qbo_id: hits[0].Id, status: 'ok', message: `Fournisseur lié à QB par son nom : ${hits[0].DisplayName}` });
+  return hits[0].Id as string;
+}
+
+/**
+ * The open bill an imported invoice should be paid against, when there is no
+ * doubt: same number; else the only bill with exactly this open amount; else the
+ * vendor's only open bill, if it can absorb the payment. Returns every candidate
+ * at the deciding step — exactly one means "use it", anything else means "ask".
+ */
+export function pickBill<B extends { DocNumber?: string | null; Balance?: unknown }>(
+  pool: B[], invoiceNumber: string | null, amount: number,
+): B[] {
+  let pick = invoiceNumber
+    ? pool.filter((b) => docKey(b.DocNumber) && docKey(b.DocNumber) === docKey(invoiceNumber))
+    : [];
+  if (pick.length === 1) return pick;
+  // Two different numbers mean two different bills, whatever the amounts say:
+  // only bills that carry no number are eligible to be matched by amount when
+  // the invoice has one.
+  const eligible = invoiceNumber ? pool.filter((b) => !docKey(b.DocNumber)) : pool;
+  pick = eligible.filter((b) => Math.abs(n(b.Balance) - amount) < 0.01);
+  if (pick.length !== 1 && pool.length === 1 && eligible.length === 1 && n(pool[0].Balance) + 0.005 >= amount) pick = pool;
+  return pick;
+}
+
+/**
+ * Link each imported invoice being paid to its open bill in QB, so the bill
+ * payment can be created. A bill is only chosen when there is no doubt: the same
+ * number; else the only open bill with exactly that open amount; else the
+ * vendor's only open bill, if it can absorb this payment. Anything less certain
+ * is left for a person to pick, and nothing is paid until every invoice has its
+ * bill. Links that were found are kept either way — they are correct.
+ */
+async function resolveImportedBills(
+  admin: SupabaseClient, qbo: Qbo, sup: SupplierRowLite,
+  unlinked: Array<{ amount: number; inv: AllocInvoice | null }>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const vendorId = await existingVendor(admin, qbo, sup);
+  if (!vendorId) {
+    return { ok: false, message: `Fournisseur « ${sup.name} » non lié à un fournisseur QuickBooks — liez-le dans Paiements → QuickBooks, puis réessayez` };
+  }
+
+  const bills = (await queryVendorDocs(qbo, 'Bill', vendorId)).filter((b) => n(b.Balance) > 0.005);
+  // A bill already linked to another portal invoice is not available.
+  const ids = bills.map((b) => String(b.Id));
+  const { data: claimed } = ids.length
+    ? await admin.from('ap_invoices').select('qbo_bill_id').in('qbo_bill_id', ids)
+    : { data: [] };
+  const used = new Set((claimed ?? []).map((c) => String(c.qbo_bill_id)));
+  const free = () => bills.filter((b) => !used.has(String(b.Id)));
+
+  const missing: string[] = [];
+  for (const r of unlinked) {
+    const inv = r.inv!;
+    const pick = pickBill(free(), inv.invoice_number, r.amount);
+    if (pick.length !== 1) {
+      missing.push(`${inv.invoice_number ? `n° ${inv.invoice_number}` : 'sans numéro'} (${r.amount.toFixed(2)} $)`);
+      continue;
+    }
+    const billId = String(pick[0].Id);
+    const { error } = await admin.from('ap_invoices').update({ qbo_bill_id: billId, in_quickbooks: true, qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', inv.id);
+    if (error) { missing.push(`${inv.invoice_number ?? 'sans numéro'} (${error.message})`); continue; }
+    inv.qbo_bill_id = billId;
+    used.add(billId);
+    await log(admin, { direction: 'system', entity: 'bill', portal_id: inv.id, qbo_id: billId, status: 'ok', message: `Facture importée ${inv.invoice_number ?? ''} liée à la facture QB ${pick[0].DocNumber ?? billId}` });
+  }
+
+  if (missing.length > 0) {
+    const open = free().length;
+    return {
+      ok: false,
+      message: `${BILL_NOT_FOUND} : ${missing.join(', ')} — QB a ${open} facture(s) ouverte(s) pour ce fournisseur. Choisissez la bonne ci-dessous, puis réessayez`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Open QB bills of a supplier's vendor that no portal invoice has claimed yet —
+ * the choices offered when a paid invoice's bill could not be identified.
+ */
+export async function openBillsForSupplier(admin: SupabaseClient, supplierId: string): Promise<Array<{ id: string; number: string | null; date: string | null; balance: number }>> {
+  const qbo = await getQbo(admin);
+  if (!qbo) return [];
+  const { data: s } = await admin.from('ap_suppliers').select('qbo_vendor_id').eq('id', supplierId).maybeSingle();
+  if (!s?.qbo_vendor_id) return [];
+  const bills = (await queryVendorDocs(qbo, 'Bill', s.qbo_vendor_id)).filter((b) => n(b.Balance) > 0.005);
+  const ids = bills.map((b) => String(b.Id));
+  const { data: claimed } = ids.length ? await admin.from('ap_invoices').select('qbo_bill_id').in('qbo_bill_id', ids) : { data: [] };
+  const used = new Set((claimed ?? []).map((c) => String(c.qbo_bill_id)));
+  return bills
+    .filter((b) => !used.has(String(b.Id)))
+    .map((b) => ({ id: String(b.Id), number: b.DocNumber ?? null, date: b.TxnDate ?? null, balance: round2(n(b.Balance)) }))
+    .sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? '')));
+}
+
 // ------------------------------------------------------------------ push: payment → BillPayment
 export async function pushPayment(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
   const qbo = await getQbo(admin);
@@ -307,22 +427,41 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
   const bank = p.ap_bank_accounts as { name: string; qbo_account_id: string | null } | null;
   if (!bank?.qbo_account_id) return fail(`Compte bancaire « ${bank?.name ?? '?'} » non lié à un compte QB — voir Paiements → QuickBooks`, 'skipped');
 
-  const { data: allocs } = await admin.from('ap_payment_allocations').select('amount, ap_invoices(qbo_bill_id, in_quickbooks)').eq('payment_id', paymentId);
-  const lines = (allocs ?? [])
-    .map((a) => ({ amount: n(a.amount), bill: (a.ap_invoices as unknown as { qbo_bill_id: string | null } | null)?.qbo_bill_id }))
-    .filter((a): a is { amount: number; bill: string } => !!a.bill);
-  // Paying entries that are already in QB as expenses (reimbursements): QB has
-  // the money going out already, so no bill payment is created.
-  const invs = (allocs ?? []).map((a) => a.ap_invoices as unknown as { qbo_bill_id: string | null; in_quickbooks: boolean } | null);
-  if (lines.length === 0 && invs.length > 0 && invs.every((i) => i && i.in_quickbooks && !i.qbo_bill_id)) {
+  const { data: allocs } = await admin.from('ap_payment_allocations')
+    .select('amount, ap_invoices(id, qbo_bill_id, in_quickbooks, source, invoice_number)').eq('payment_id', paymentId);
+  const rows = (allocs ?? []).map((a) => ({ amount: n(a.amount), inv: a.ap_invoices as unknown as AllocInvoice | null }));
+
+  // Paying entries that were entered in the portal as "already in QB as an
+  // expense" (reimbursements): QB has the money going out already, so no bill
+  // payment is created. Only portal entries qualify. Imported invoices are also
+  // flagged in_quickbooks, but they are real open BILLS in QB that were simply
+  // never linked — treating them as expenses is what silently skipped 23
+  // payments on 2026-10-09 while reporting them as done.
+  if (rows.length > 0 && rows.every((r) => r.inv && r.inv.source === 'portal' && r.inv.in_quickbooks && !r.inv.qbo_bill_id)) {
     await admin.from('ap_payments').update({ qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', paymentId);
     await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, status: 'skipped', message: 'Déjà dans QB comme dépense — aucun paiement créé' });
     return { ok: true, message: 'Déjà dans QB comme dépense — aucun paiement créé' };
   }
+
+  // Imported invoices with no bill link yet: find each one's open bill in QB
+  // first. All or nothing — a bill payment is never created for only part of
+  // what was paid because one bill could not be identified.
+  const unlinked = rows.filter((r) => r.inv && !r.inv.qbo_bill_id && r.inv.source !== 'portal');
+  if (unlinked.length > 0) {
+    const found = await resolveImportedBills(admin, qbo, p.ap_suppliers as SupplierRowLite, unlinked);
+    if (!found.ok) return fail(found.message);
+  }
+
+  const lines = rows
+    .map((r) => ({ amount: r.amount, bill: r.inv?.qbo_bill_id ?? null }))
+    .filter((a): a is { amount: number; bill: string } => !!a.bill);
   if (lines.length === 0) return fail('Aucune des factures payées n’est liée à une facture QB — enregistrez ce paiement dans QB manuellement', 'skipped');
 
   try {
-    const vendorId = await ensureVendor(admin, qbo, p.ap_suppliers as SupplierRowLite);
+    const sup = p.ap_suppliers as SupplierRowLite;
+    // Bills already exist under a vendor, so pay that vendor; only fall back to
+    // ensureVendor (which can create one) when the supplier has no link at all.
+    const vendorId = sup.qbo_vendor_id ?? await ensureVendor(admin, qbo, sup);
     const total = round2(lines.reduce((s, l) => s + l.amount, 0));
     const res = await qbo.post('/billpayment', {
       VendorRef: { value: vendorId },

@@ -89,7 +89,7 @@ const totalPaid = view.rows.reduce((s, r) => s + (r.l?.payment_id ? n(paidMap.ge
 const totalApproved = view.rows.reduce((s, r) => s + n(r.l?.approved_amount), 0);
 
 // Audit trail of the week (who did what, when) — shown to staff.
-const AUDITED = ['payment_corrected', 'submitted', 'resent', 'recalled', 'approved', 'approved_manually', 'approved_amount_changed', 'approval_line_added', 'approval_edited', 'paid', 'payment_voided', 'remittance_sent', 'remittance_unmarked', 'closed', 'reopened'];
+const AUDITED = ['payment_corrected', 'submitted', 'resent', 'recalled', 'approved', 'approval_reopened', 'approved_manually', 'approved_amount_changed', 'approval_line_added', 'approval_edited', 'paid', 'payment_voided', 'remittance_sent', 'remittance_unmarked', 'closed', 'reopened'];
 const { data: events } = staffEdit
   ? await admin.from('ap_events').select('*').eq('run_id', run.id).in('action', AUDITED).order('created_at', { ascending: false }).limit(200)
   : { data: [] };
@@ -107,6 +107,7 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
     case 'paid': return `${sup} : ${T('audit.paid')} ${m(d.amount)} (${d.paid_on ?? ''})${d.bulk ? ` · ${T('audit.bulk')}` : ''}`;
     case 'payment_voided': return `${sup} : ${T('audit.voided')}${d.from ? ` (${m(d.from)})` : ''}${d.reason ? ` — « ${d.reason} »` : ''}`;
     case 'approved': return `${T('audit.approved')} ${m(d.total_approved)}`;
+    case 'approval_reopened': return `${T('audit.approval_reopened')}${d.reason ? ` — « ${d.reason} »` : ''}`;
     default: return sup ? `${sup} : ${T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action}` : (T(`audit.${e.action}` as keyof typeof frPaiements) ?? e.action);
   }
 };
@@ -297,7 +298,7 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
           </div>
         )}
       </form>
-      <script is:inline define:vars={{ submitUrl: postUrl, confirmTpl: editMode ? T('appr.editConfirm') : T('appr.confirm'), locale, editMode }}>
+      <script is:inline define:vars={{ submitUrl: postUrl, confirmTpl: editMode ? T('appr.editConfirm') : T('appr.confirmCounts'), locale, editMode }}>
         window.__APPR = { submitUrl, confirmTpl, locale, editMode };
       </script>
 
@@ -382,11 +383,53 @@ const fmtEvent = (e: { action: string; details: Record<string, unknown> | null; 
       recompute();
     });
 
-    document.getElementById('appr-form')?.addEventListener('submit', async (ev) => {
+    const form = document.getElementById('appr-form') as HTMLFormElement | null;
+
+    // Pressing Enter in an amount box used to submit the whole form: browsers do
+    // that for any form with a submit button. On 2026-10-09 Jorge typed one
+    // amount, pressed Enter, then Enter again on the confirmation, and the whole
+    // week was approved with every other line at $0. Enter now moves to the next
+    // box down, the way a spreadsheet does.
+    form?.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter') return;
+      const el = ev.target as HTMLElement;
+      if (!(el instanceof HTMLInputElement)) return;
       ev.preventDefault();
+      // Same column, next visible row: amount → next amount, note → next note.
+      const column = ['in-approved', 'in-note', 'in-paid', 'in-paid-date'].find((c) => el.classList.contains(c));
+      if (!column) return;
+      const boxes = [...form.querySelectorAll<HTMLInputElement>(`input.${column}`)].filter((b) => b.offsetParent !== null);
+      const next = boxes[boxes.indexOf(el) + 1];
+      next?.focus();
+      next?.select();
+    });
+
+    // Second guard, in case anything else ever submits the form implicitly. The
+    // browser reports the Approve button as the submitter even then, so that is
+    // not proof of intent. What is: the button was just pressed with a mouse or
+    // finger, or it has keyboard focus itself (Tab to it, then Enter or Space).
+    const approveBtn = form?.querySelector<HTMLButtonElement>('button[type=submit]') ?? null;
+    let pressedAt = 0;
+    approveBtn?.addEventListener('pointerdown', () => { pressedAt = Date.now(); });
+
+    form?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const submitter = (ev as SubmitEvent).submitter;
+      const deliberate = !!approveBtn && submitter === approveBtn
+        && (Date.now() - pressedAt < 3000 || document.activeElement === approveBtn);
+      if (!deliberate) return;
       const total = recompute();
       if (document.querySelector('.in-approved.invalid')) return;
-      if (!confirm(cfg.confirmTpl.replace('{total}', fmt.format(total)))) return;
+      // Say exactly what is about to happen: how many payments go through, and
+      // how many requested ones will be declined at $0 because nothing was typed.
+      const weekRows = rows().filter((r) => r.closest('details.others') === null && Number(r.dataset.suggested) > 0);
+      const approvedCount = rows().filter((r) => (parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0) > 0).length;
+      const zeroCount = weekRows.filter((r) => !((parse(r.querySelector<HTMLInputElement>('.in-approved')?.value ?? '') ?? 0) > 0)).length;
+      const message = cfg.confirmTpl
+        .replace('{total}', fmt.format(total))
+        .replace('{approved}', String(approvedCount))
+        .replace('{zero}', String(zeroCount));
+      if (!confirm(message)) return;
       const comment = (document.getElementById('comment') as HTMLTextAreaElement).value.trim();
       if (cfg.editMode && !comment) { (document.getElementById('comment') as HTMLTextAreaElement).focus(); return; }
       if (document.querySelector('.in-paid.invalid')) return;
