@@ -15,6 +15,16 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   const since = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('since') ?? '') ? url.searchParams.get('since')! : null;
   const qbo = await getQbo(getAdminClient());
   if (!qbo) return json({ error: 'QuickBooks non connecté' }, 409);
+  // ?raw=BillPayment:123,Vendor:45 → full QB objects (read-only, for diagnosis).
+  const raw = (url.searchParams.get('raw') ?? '').split(',').map((x) => x.trim()).filter((x) => /^(BillPayment|Bill|Vendor|Purchase):\d+$/.test(x)).slice(0, 10);
+  if (raw.length) {
+    const objs: Record<string, unknown> = {};
+    for (const r of raw) {
+      const [type, id] = r.split(':');
+      objs[r] = (await qbo.get(`/${type.toLowerCase()}/${id}`))?.[type] ?? null;
+    }
+    return json(objs);
+  }
   const out: Array<Record<string, unknown>> = [];
   const pick = (type: string, t: any) => ({
     type, id: t.Id, doc: t.DocNumber ?? null, date: t.TxnDate, amount: t.TotalAmt,
