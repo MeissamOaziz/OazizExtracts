@@ -297,6 +297,8 @@ type AllocInvoice = { id: string; qbo_bill_id: string | null; in_quickbooks: boo
 
 /** Prefix of the error left on a payment whose bill could not be identified; the supplier page offers a picker for it. */
 export const BILL_NOT_FOUND = 'Facture QB à identifier';
+/** Prefix of the error left when some paid invoices have no QB bill yet. */
+export const NOT_IN_QB = 'Facture(s) pas encore dans QB';
 
 /**
  * The QB vendor a supplier's bills live under — the existing link, or exactly
@@ -462,6 +464,12 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     .map((r) => ({ amount: r.amount, bill: r.inv?.qbo_bill_id ?? null }))
     .filter((a): a is { amount: number; bill: string } => !!a.bill);
   if (lines.length === 0) return fail('Aucune des factures payées n’est liée à une facture QB — enregistrez ce paiement dans QB manuellement', 'skipped');
+  // All or nothing: never create a short bill payment because some paid
+  // invoices are not in QB yet (Les Messagers, 2026-10-09).
+  const notInQb = rows.filter((r) => r.inv && !r.inv.qbo_bill_id);
+  if (notInQb.length > 0) {
+    return fail(`${NOT_IN_QB} : ${notInQb.map((r) => `${r.inv!.invoice_number ? `n° ${r.inv!.invoice_number}` : 'sans numéro'} (${r.amount.toFixed(2)} $)`).join(', ')} — envoyez-les à QB depuis la page du fournisseur, puis réessayez`);
+  }
 
   try {
     const sup = p.ap_suppliers as SupplierRowLite;
@@ -494,16 +502,40 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
 export async function refreshQboPayment(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
   const qbo = await getQbo(admin);
   if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
-  const { data: p } = await admin.from('ap_payments').select('reference, qbo_billpayment_id').eq('id', paymentId).maybeSingle();
+  const { data: p } = await admin.from('ap_payments').select('reference, qbo_billpayment_id, amount, ap_suppliers(*)').eq('id', paymentId).maybeSingle();
   if (!p?.qbo_billpayment_id) return { ok: false, message: 'Paiement introuvable ou annulé' };
   try {
     const cur = (await qbo.get(`/billpayment/${p.qbo_billpayment_id}`))?.BillPayment;
     if (!cur) return { ok: false, message: 'Paiement introuvable ou annulé' };
+    // A bill payment created short (some paid invoices had no QB bill then):
+    // match the missing bills safely and bring it to the full amount.
+    const { data: allocs } = await admin.from('ap_payment_allocations')
+      .select('amount, ap_invoices(id, qbo_bill_id, in_quickbooks, source, invoice_number)').eq('payment_id', paymentId);
+    const rows = (allocs ?? []).map((a) => ({ amount: n(a.amount), inv: a.ap_invoices as unknown as AllocInvoice | null }));
+    const unlinked = rows.filter((r) => r.inv && !r.inv.qbo_bill_id && r.inv.source !== 'portal');
+    if (unlinked.length > 0) {
+      const found = await resolveImportedBills(admin, qbo, p.ap_suppliers as unknown as SupplierRowLite, unlinked);
+      if (!found.ok) return { ok: false, message: found.message };
+    }
+    const missing = rows.filter((r) => r.inv && !r.inv.qbo_bill_id);
+    if (missing.length > 0) {
+      return { ok: false, message: `${NOT_IN_QB} : ${missing.map((r) => r.inv!.invoice_number ?? 'sans numéro').join(', ')}` };
+    }
+    const lines = rows.map((r) => ({ Amount: r.amount, LinkedTxn: [{ TxnId: r.inv!.qbo_bill_id!, TxnType: 'Bill' }] }));
+    const total = round2(rows.reduce((t, r) => t + r.amount, 0));
+    const complete = rows.length > 0 && Math.abs(total - n(cur.TotalAmt)) > 0.005;
     await qbo.post('/billpayment', {
-      Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, TotalAmt: cur.TotalAmt, PayType: cur.PayType,
+      Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, PayType: cur.PayType,
+      TotalAmt: complete ? total : cur.TotalAmt,
+      ...(complete ? { Line: lines } : {}),
       ...(p.reference ? { DocNumber: String(p.reference).slice(0, 21) } : {}),
       ...(cur.PayType === 'Check' ? { CheckPayment: { ...cur.CheckPayment, PrintStatus: 'NotSet' } } : {}),
     });
+    if (complete) {
+      await admin.from('ap_payments').update({ qbo_error: null, qbo_synced_at: new Date().toISOString() }).eq('id', paymentId);
+      await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'ok', message: `Paiement ${p.reference ?? ''} complété dans QB : ${n(cur.TotalAmt).toFixed(2)} $ → ${total.toFixed(2)} $` });
+      return { ok: true, message: `Paiement ${p.reference ?? ''} complété dans QB : ${n(cur.TotalAmt).toFixed(2)} $ → ${total.toFixed(2)} $` };
+    }
     await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'ok', message: `Paiement ${p.reference ?? ''} mis à jour dans QB` });
     return { ok: true, message: `Paiement ${p.reference ?? ''} mis à jour dans QB` };
   } catch (e) {
