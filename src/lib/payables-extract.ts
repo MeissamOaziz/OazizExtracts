@@ -3,6 +3,7 @@
 // existing suppliers. The person always reviews the result before it is saved.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { nameScore } from './name-match';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import * as z from 'zod/v4';
 import type { SupplierRow } from './payables';
@@ -72,30 +73,18 @@ const taxNo = (v: string | null | undefined) => (v ?? '').replace(/[^0-9]/g, '')
  * name, legal name, QB name and learned aliases ("Canadian Cannabis Exchange"
  * → CCX). Partial words never count ("Cannabis" must not match "BIS").
  */
+// Names compared with nameScore (spacing, "A / B", suffixes tolerated).
 export function matchSuppliers(x: InvoiceExtraction, suppliers: SupplierRow[]): Array<{ id: string; name: string; score: number }> {
   const gst = taxNo(x.vendor_gst_number);
   const qst = taxNo(x.vendor_qst_number);
-  const targets = [x.vendor_name, x.vendor_legal_name].filter(Boolean).map((v) => norm(v!)).filter(Boolean);
-  const words = (t: string) => new Set(t.split(' ').filter((w) => w.length > 1));
+  const targets = [x.vendor_name, x.vendor_legal_name].filter((v): v is string => !!v);
   const scored = suppliers.map((s) => {
     if ((gst && taxNo(s.gst_number) === gst) || (qst && taxNo(s.qst_number) === qst)) {
       return { id: s.id, name: s.name, score: 1 };
     }
-    const names = [s.name, s.legal_name, s.qbo_vendor_name, ...(s.aliases ?? [])].filter(Boolean).map((v) => norm(v!)).filter(Boolean);
+    const names = [s.name, s.legal_name, s.qbo_vendor_name, ...(s.aliases ?? [])].filter((v): v is string => !!v);
     let best = 0;
-    for (const t of targets) {
-      const tt = words(t);
-      for (const nme of names) {
-        if (nme === t) { best = 1; continue; }
-        const nn = words(nme);
-        // Whole-word containment ("ccx" inside "ccx canada" counts, "bis" inside "cannabis" doesn't).
-        const contained = [...nn].every((w) => tt.has(w)) || [...tt].every((w) => nn.has(w));
-        if (contained && nn.size && tt.size) best = Math.max(best, 0.85);
-        const inter = [...tt].filter((w) => nn.has(w)).length;
-        const union = new Set([...tt, ...nn]).size || 1;
-        best = Math.max(best, inter / union);
-      }
-    }
+    for (const t of targets) for (const nme of names) best = Math.max(best, nameScore(t, nme));
     return { id: s.id, name: s.name, score: Math.round(best * 100) / 100 };
   });
   return scored.filter((s) => s.score >= 0.34).sort((a, b) => b.score - a.score).slice(0, 5);

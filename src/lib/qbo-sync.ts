@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getQbo, qstr, QboError, type Qbo } from './qbo';
 import { bumpReference, getSetting, n, nextPaymentReference, round2 } from './payables';
 import { docKey, queryVendorDocs } from './qbo-reconcile';
+import { nameScore } from './name-match';
 
 export interface QboDefaults {
   expense_account_id: string | null;
@@ -103,21 +104,14 @@ export function matchVendor(
   vendors: Array<{ id: string; name: string }>,
   names: Array<string | null | undefined>,
 ): string | null {
-  const keys = names.map(norm).filter(Boolean);
+  const keys = names.filter((v): v is string => !!v && !!norm(v));
   if (!keys.length) return null;
-  const words = (t: string) => new Set(t.split(' ').filter((w) => w.length > 1));
   let best: { id: string; score: number } | null = null;
   for (const v of vendors) {
-    const vn = norm(v.name);
-    if (!vn) continue;
     for (const k of keys) {
-      let score = 0;
-      if (vn === k) score = 1;
-      else {
-        const a = words(vn), b = words(k);
-        if (a.size && b.size && ([...a].every((w) => b.has(w)) || [...b].every((w) => a.has(w)))) score = 0.8;
-      }
-      if (score && (!best || score > best.score)) best = { id: v.id, score };
+      const score = nameScore(v.name, k);
+      // Exact (spacing/suffix-insensitive) or whole-word containment only.
+      if (score >= 0.85 && (!best || score > best.score)) best = { id: v.id, score };
     }
   }
   return best?.id ?? null;
