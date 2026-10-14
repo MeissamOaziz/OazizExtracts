@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   'hr_employees',    // HR new-employee packages
   'hr_evaluations',  // HR employee evaluations + tracker
   'atelier',         // Atelier (production / orders)
+  'prod_schedule',   // Production scheduling: tasks by room, calendar/Gantt, plan-change reports (Simon)
   'payables',        // Supplier payments: invoices, weekly payment run, approvals
   'payables_approve', // Approve weekly supplier payments + see past approvals (Jorge)
   'admin',           // Admin panel: users and access
@@ -121,6 +122,9 @@ export const ROUTE_RULES: RouteRule[] = [
   { test: under('/portail/atelier'), any: ['atelier'] },
   { test: under('/api/portail/atelier'), any: ['atelier'] },
 
+  { test: under('/portail/production'), any: ['prod_schedule'] },
+  { test: under('/api/portail/production'), any: ['prod_schedule'] },
+
   { test: under('/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
   { test: under('/api/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
   { test: under('/portail/paiements'), any: ['payables'] },
@@ -163,6 +167,7 @@ export interface ModuleLink { key: string; href: string; perms: Permission[] }
 export const MODULES: ModuleLink[] = [
   { key: 'rnd', href: '/portail/formulaires', perms: ['rnd'] },
   { key: 'atelier', href: '/portail/atelier', perms: ['atelier'] },
+  { key: 'prod_schedule', href: '/portail/production', perms: ['prod_schedule'] },
   { key: 'payables', href: '/portail/paiements', perms: ['payables', 'payables_approve'] },
   { key: 'calculators', href: '/portail/calculatrices', perms: ['calculators'] },
   { key: 'vq', href: '/portail/fournisseurs', perms: ['vq', 'licenses'] },

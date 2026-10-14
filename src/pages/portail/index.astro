@@ -120,6 +120,13 @@ const allSections = [
     tag: null,
   },
   {
+    show: perms.has('prod_schedule'),
+    href: '/portail/production',
+    title: T('section.production.title'),
+    desc: T('section.production.desc'),
+    tag: null,
+  },
+  {
     show: can(perms, 'payables', 'payables_approve'),
     href: payablesHref(perms),
     title: Tc('nav.payables'),

@@ -1,0 +1,253 @@
+---
+// The production task form, for both a new task and editing one. On edit, the
+// "reason for the change" turns required as soon as the dates or room move, or
+// the status goes to on hold / cancelled — the database refuses those saves
+// without a reason anyway; this only says so before the round trip.
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../i18n/portail/production';
+import {
+  CHANGE_REASONS, CREATE_REASONS, STATUSES, UNITS, roomName, typeName,
+  type ProdType, type Room, type Task,
+} from '../../lib/production';
+
+interface Props {
+  mode: 'create' | 'edit';
+  rooms: Room[];
+  types: ProdType[];
+  task?: Task;
+  /** Prefill for a new task, e.g. the day picked on the calendar. */
+  defaults?: { start_date?: string; room_id?: string };
+}
+const { mode, rooms, types, task, defaults = {} } = Astro.props;
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+
+// Inactive rooms/types are not offered, except the one the task already uses.
+const roomOpts = rooms.filter((r) => r.is_active || r.id === task?.room_id);
+const typeOpts = types.filter((p) => p.is_active || p.id === task?.production_type_id);
+
+const qtyText = (q: number | null) => (q === null ? '' : locale === 'fr' ? String(q).replace('.', ',') : String(q));
+const inputRows = task && task.inputs.length > 0
+  ? task.inputs.map((i) => ({ material: i.material, lot: i.groweriq_lot_id ?? '', qty: qtyText(i.quantity), unit: i.unit }))
+  : [{ material: '', lot: '', qty: '', unit: 'g' }];
+const v = {
+  production_type_id: task?.production_type_id ?? '',
+  room_id: task?.room_id ?? defaults.room_id ?? '',
+  start_date: task?.start_date ?? defaults.start_date ?? '',
+  end_date: task?.end_date ?? defaults.start_date ?? '',
+};
+---
+<form method="POST" action="/api/portail/production/tasks" class="ps-form" data-mode={mode}>
+  <input type="hidden" name="_action" value={mode} />
+  {task && <input type="hidden" name="id" value={task.id} />}
+  {task && <input type="hidden" name="version" value={String(task.version)} />}
+
+  <div class="two-col">
+    <div class="form-row">
+      <label for="f-type">{T('f.type')} <em class="req">*</em></label>
+      <select id="f-type" name="production_type_id" required>
+        <option value="">{T('f.choose')}</option>
+        {typeOpts.map((p) => <option value={p.id} selected={p.id === v.production_type_id}>{typeName(p, locale)}</option>)}
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="f-room">{T('f.room')} <em class="req">*</em></label>
+      <select id="f-room" name="room_id" required data-orig={task ? v.room_id : undefined}>
+        <option value="">{T('f.choose')}</option>
+        {roomOpts.map((r) => <option value={r.id} selected={r.id === v.room_id}>{r.code} — {roomName(r, locale)}</option>)}
+      </select>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="form-row">
+      <label for="f-start">{T('f.start')} <em class="req">*</em></label>
+      <input type="date" id="f-start" name="start_date" value={v.start_date} required data-orig={task ? v.start_date : undefined} />
+    </div>
+    <div class="form-row">
+      <label for="f-end">{T('f.end')} <em class="req">*</em></label>
+      <input type="date" id="f-end" name="end_date" value={v.end_date} min={v.start_date || undefined} required data-orig={task ? v.end_date : undefined} />
+    </div>
+  </div>
+
+  {mode === 'edit' && task && (
+    <>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="f-status">{T('f.status')}</label>
+          <select id="f-status" name="status" data-orig={task.status}>
+            {STATUSES.map((s) => <option value={s} selected={s === task.status}>{T(K(`status.${s}`))}</option>)}
+          </select>
+        </div>
+        <div></div>
+      </div>
+      <div class="two-col">
+        <div class="form-row">
+          <label for="f-astart">{T('f.actualStart')}</label>
+          <input type="date" id="f-astart" name="actual_start_date" value={task.actual_start_date ?? ''} />
+        </div>
+        <div class="form-row">
+          <label for="f-aend">{T('f.actualEnd')}</label>
+          <input type="date" id="f-aend" name="actual_end_date" value={task.actual_end_date ?? ''} />
+        </div>
+      </div>
+      <p class="hint" style="margin: -10px 0 18px;">{T('f.actual.hint')}</p>
+    </>
+  )}
+
+  <div class="two-col">
+    <div class="form-row">
+      <label for="f-lot">{T('f.lot')}</label>
+      <input type="text" id="f-lot" name="groweriq_lot_id" value={task?.groweriq_lot_id ?? ''} autocomplete="off" />
+    </div>
+    <div class="form-row">
+      <label for="f-batch">{T('f.batch')}</label>
+      <input type="text" id="f-batch" name="groweriq_batch_id" value={task?.groweriq_batch_id ?? ''} autocomplete="off" />
+    </div>
+  </div>
+  <p class="hint" style="margin: -10px 0 18px;">{T('f.ids.hint')}</p>
+
+  <div class="form-row">
+    <div class="check-row">
+      <input type="checkbox" id="f-rush" name="rush" value="1" checked={task?.priority === 'rush'} />
+      <label for="f-rush">{T('f.rush')}</label>
+    </div>
+  </div>
+
+  <fieldset class="inputs form-row">
+    <legend>{T('f.inputs')}</legend>
+    <p class="hint" style="margin: 0 0 10px;">{T('f.inputs.hint')}</p>
+    <div class="in-head" aria-hidden="true">
+      <span>{T('in.material')}</span><span>{T('in.lot')}</span><span>{T('in.qty')}</span><span>{T('in.unit')}</span><span></span>
+    </div>
+    <div class="in-rows">
+      {inputRows.map((r) => (
+        <div class="in-row">
+          <input type="text" name="in_material" value={r.material} placeholder={T('in.material.ph')} aria-label={T('in.material')} />
+          <input type="text" name="in_lot" value={r.lot} aria-label={T('in.lot')} autocomplete="off" />
+          <input type="text" name="in_qty" value={r.qty} inputmode="decimal" aria-label={T('in.qty')} />
+          <select name="in_unit" aria-label={T('in.unit')}>
+            {UNITS.map((u) => <option value={u} selected={u === r.unit}>{T(K(`unit.${u}`))}</option>)}
+          </select>
+          <button type="button" class="in-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+        </div>
+      ))}
+    </div>
+    <template class="in-template">
+      <div class="in-row">
+        <input type="text" name="in_material" placeholder={T('in.material.ph')} aria-label={T('in.material')} />
+        <input type="text" name="in_lot" aria-label={T('in.lot')} autocomplete="off" />
+        <input type="text" name="in_qty" inputmode="decimal" aria-label={T('in.qty')} />
+        <select name="in_unit" aria-label={T('in.unit')}>
+          {UNITS.map((u) => <option value={u}>{T(K(`unit.${u}`))}</option>)}
+        </select>
+        <button type="button" class="in-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+      </div>
+    </template>
+    <button type="button" class="btn btn-secondary btn-sm in-add">{T('in.add')}</button>
+  </fieldset>
+
+  <div class="form-row">
+    <label for="f-notes">{T('f.notes')}</label>
+    <textarea id="f-notes" name="notes" rows="3">{task?.notes ?? ''}</textarea>
+  </div>
+
+  {mode === 'create' ? (
+    <fieldset class="reason form-row">
+      <legend>{T('origin.title')}</legend>
+      <p class="hint" style="margin: 0 0 10px;">{T('origin.hint')}</p>
+      <div class="radio-group">
+        {CREATE_REASONS.map((r, i) => (
+          <label><input type="radio" name="reason" value={r} checked={i === 0} /> {T(K(`reason.${r}`))}</label>
+        ))}
+      </div>
+      <div class="form-row" style="margin: 14px 0 0;">
+        <label for="f-note">{T('change.note')} <span class="opt">{T('change.optional')}</span></label>
+        <input type="text" id="f-note" name="reason_note" placeholder={T('change.note.ph')} />
+      </div>
+    </fieldset>
+  ) : (
+    <fieldset class="reason form-row" data-reason-block>
+      <legend>{T('change.title')} <em class="req" hidden>*</em></legend>
+      <p class="hint" style="margin: 0 0 10px;">{T('change.hint')}</p>
+      <div class="two-col">
+        <div class="form-row" style="margin: 0;">
+          <select name="reason" aria-label={T('change.title')}>
+            <option value="">{T('change.pick')}</option>
+            {CHANGE_REASONS.map((r) => <option value={r}>{T(K(`reason.${r}`))}</option>)}
+          </select>
+        </div>
+        <div class="form-row" style="margin: 0;">
+          <input type="text" name="reason_note" placeholder={T('change.note.ph')} aria-label={T('change.note')} />
+        </div>
+      </div>
+    </fieldset>
+  )}
+
+  <button type="submit" class="btn btn-primary">{mode === 'create' ? T('btn.create') : T('btn.save')}</button>
+</form>
+
+<style>
+  .req { color: var(--p-danger); font-style: normal; }
+  .opt { font-weight: 400; color: var(--p-muted); }
+  fieldset { border: 1px solid var(--p-border); border-radius: 8px; padding: 14px 16px 16px; }
+  legend { font-weight: 600; font-size: .9rem; padding: 0 6px; }
+  .reason.needs { border-color: var(--p-accent); background: rgba(208, 88, 38, .04); }
+  .in-head, .in-row { display: grid; grid-template-columns: 2.2fr 1.6fr 1fr 0.9fr 34px; gap: 8px; align-items: center; }
+  .in-head { font-size: .76rem; color: var(--p-muted); font-weight: 600; margin-bottom: 4px; }
+  .in-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .in-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 36px;
+               cursor: pointer; color: var(--p-muted); font-size: 1.1rem; }
+  .in-remove:hover { color: var(--p-danger); border-color: #fecaca; }
+  .btn-sm { padding: 6px 12px; font-size: .85rem; }
+  @media (max-width: 720px) {
+    .in-head { display: none; }
+    .in-row { grid-template-columns: 1fr 1fr; padding: 8px; border: 1px solid var(--p-border); border-radius: 8px; }
+    .in-row input[name="in_material"] { grid-column: 1 / -1; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('form.ps-form').forEach((form) => {
+    const rows = form.querySelector<HTMLElement>('.in-rows')!;
+    const tpl = form.querySelector<HTMLTemplateElement>('.in-template')!;
+    form.querySelector('.in-add')?.addEventListener('click', () => {
+      rows.appendChild(tpl.content.cloneNode(true));
+      rows.lastElementChild?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    rows.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.in-remove');
+      if (!btn) return;
+      const row = btn.closest('.in-row')!;
+      // Keep one row on screen: clear it instead of removing the last one.
+      if (rows.children.length > 1) row.remove();
+      else row.querySelectorAll<HTMLInputElement>('input').forEach((i) => { i.value = ''; });
+    });
+
+    const start = form.querySelector<HTMLInputElement>('[name="start_date"]')!;
+    const end = form.querySelector<HTMLInputElement>('[name="end_date"]')!;
+    start.addEventListener('change', () => {
+      end.min = start.value;
+      if (start.value && (!end.value || end.value < start.value)) end.value = start.value;
+      refresh();
+    });
+
+    // Edit mode: the reason becomes required once the schedule moves.
+    const block = form.querySelector<HTMLElement>('[data-reason-block]');
+    const reason = block?.querySelector<HTMLSelectElement>('select[name="reason"]');
+    const watched = [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-orig]')];
+    function refresh() {
+      if (!block || !reason) return;
+      const moved = watched.some((el) => el.name !== 'status' && el.value !== el.dataset.orig);
+      const status = form.querySelector<HTMLSelectElement>('[name="status"]');
+      const stopping = !!status && status.value !== status.dataset.orig && ['on_hold', 'cancelled'].includes(status.value);
+      const needs = moved || stopping;
+      reason.required = needs;
+      block.classList.toggle('needs', needs);
+      block.querySelector<HTMLElement>('.req')!.hidden = !needs;
+    }
+    watched.forEach((el) => el.addEventListener('change', refresh));
+    refresh();
+  });
+</script>

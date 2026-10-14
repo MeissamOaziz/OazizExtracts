@@ -1,0 +1,514 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
+import {
+  addDays, daysBetween, dayCount, fmtDay, isIsoDate, isLate, isOn, loadCatalog, loadTasks, missingInfo,
+  monthLabel, mondayOf, roomConflicts, roomName, spanOf, todayLocal, typeName, weekdayNames, fmtQty,
+  type Task,
+} from '../../../lib/production';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+
+const url = Astro.url;
+const VIEWS = ['liste', 'calendrier', 'gantt', 'salles'] as const;
+type View = (typeof VIEWS)[number];
+const view: View = (VIEWS as readonly string[]).includes(url.searchParams.get('vue') ?? '')
+  ? (url.searchParams.get('vue') as View) : 'liste';
+const viewKey: Record<View, string> = { liste: 'list', calendrier: 'calendar', gantt: 'gantt', salles: 'rooms' };
+const today = todayLocal();
+const anchor = isIsoDate(url.searchParams.get('d')) ? url.searchParams.get('d')! : today;
+const showClosed = url.searchParams.get('fermees') === '1';
+
+const [{ rooms, types }, tasks] = await Promise.all([
+  loadCatalog(admin),
+  loadTasks(admin, { includeCancelled: view === 'liste' && showClosed }),
+]);
+const roomById = new Map(rooms.map((r) => [r.id, r]));
+const typeById = new Map(types.map((p) => [p.id, p]));
+const conflicts = roomConflicts(tasks, rooms);
+
+const open = tasks.filter((t) => ['planned', 'in_progress', 'on_hold'].includes(t.status));
+const stats = {
+  inProgress: tasks.filter((t) => t.status === 'in_progress').length,
+  upcoming: tasks.filter((t) => t.status === 'planned' && t.start_date >= today && t.start_date <= addDays(today, 7)).length,
+  late: tasks.filter(isLate).length,
+  conflicts: conflicts.size,
+  missing: open.filter((t) => missingInfo(t).length > 0).length,
+};
+
+// Each task is labelled the same way everywhere.
+const typeOf = (t: Task) => typeName(typeById.get(t.production_type_id), locale);
+const roomOf = (t: Task) => roomById.get(t.room_id);
+const colourOf = (t: Task) => roomOf(t)?.colour ?? '#6b7280';
+const daysLabel = (n: number) => (n === 1 ? T('days.one') : T('days.long').replace('{n}', String(n)));
+const unitLabel = (u: string) => T(K(`unit.${u}`));
+const flagsOf = (t: Task) => {
+  const out: Array<{ cls: string; label: string; tip: string }> = [];
+  if (t.priority === 'rush' && t.status !== 'done' && t.status !== 'cancelled') out.push({ cls: 'rush', label: T('flag.rush'), tip: '' });
+  if (isLate(t)) out.push({ cls: 'late', label: T('flag.late'), tip: T('tip.late') });
+  if (conflicts.has(t.id)) out.push({ cls: 'conflict', label: T('flag.conflict'), tip: T('tip.conflict').replace('{list}', conflicts.get(t.id)!.join(', ')) });
+  const miss = missingInfo(t);
+  if (miss.length && t.status !== 'cancelled') out.push({ cls: 'missing', label: T('flag.missing'), tip: T('tip.missing').replace('{list}', miss.map((m) => T(K(`missing.${m}`))).join(', ')) });
+  return out;
+};
+
+// The one next step for a task, shown as a button on the list.
+const nextStep = (t: Task): { status: string; label: string } | null =>
+  t.status === 'planned' ? { status: 'in_progress', label: T('btn.start') }
+  : t.status === 'in_progress' ? { status: 'done', label: T('btn.finish') }
+  : t.status === 'on_hold' ? { status: 'in_progress', label: T('btn.resume') }
+  : null;
+const here = (() => {
+  const u = new URL(url); u.searchParams.delete('ok'); u.searchParams.delete('error');
+  return u.pathname + u.search;
+})();
+
+// ---------------------------------------------------------------- list view
+const byStart = (a: Task, b: Task) => a.start_date.localeCompare(b.start_date) || a.task_no.localeCompare(b.task_no);
+const listSections = [
+  { key: 'list.inProgress', rows: tasks.filter((t) => t.status === 'in_progress').sort(byStart) },
+  { key: 'list.onHold', rows: tasks.filter((t) => t.status === 'on_hold').sort(byStart) },
+  { key: 'list.upcoming', rows: tasks.filter((t) => t.status === 'planned').sort(byStart) },
+  showClosed
+    ? { key: 'list.closed', rows: tasks.filter((t) => t.status === 'done' || t.status === 'cancelled')
+        .sort((a, b) => spanOf(b).end.localeCompare(spanOf(a).end)) }
+    : { key: 'list.recentDone', rows: tasks.filter((t) => t.status === 'done' && (t.actual_end_date ?? t.end_date) >= addDays(today, -14))
+        .sort((a, b) => spanOf(b).end.localeCompare(spanOf(a).end)) },
+].filter((s) => s.rows.length > 0);
+
+// ----------------------------------------------------------- calendar view
+const [ay, am] = anchor.split('-').map(Number);
+const monthStart = `${ay}-${String(am).padStart(2, '0')}-01`;
+const monthEnd = new Date(Date.UTC(ay, am, 0)).toISOString().slice(0, 10);
+const calStart = mondayOf(monthStart);
+const calEnd = addDays(mondayOf(monthEnd), 6);
+const calDays: string[] = [];
+for (let d = calStart; d <= calEnd; d = addDays(d, 1)) calDays.push(d);
+const shiftMonth = (n: number) => new Date(Date.UTC(ay, am - 1 + n, 1)).toISOString().slice(0, 10);
+const tasksOn = (d: string) => tasks.filter((t) => isOn(t, d))
+  .sort((a, b) => (roomOf(a)?.sort_order ?? 0) - (roomOf(b)?.sort_order ?? 0) || byStart(a, b));
+
+// ------------------------------------------------------ gantt / room views
+const winStart = addDays(mondayOf(anchor), -7);
+const winEnd = addDays(winStart, 41);
+const winDays: string[] = [];
+for (let d = winStart; d <= winEnd; d = addDays(d, 1)) winDays.push(d);
+const inWindow = tasks.filter((t) => { const s = spanOf(t); return s.start <= winEnd && s.end >= winStart; });
+// Grid columns: 1 is the row label, days start at 2.
+const col = (iso: string) => Math.min(Math.max(daysBetween(winStart, iso), 0), winDays.length - 1) + 2;
+const gridSpan = (a: string, b: string) => `${col(a)} / ${col(b) + 1}`;
+const outside = (a: string, b: string) => b < winStart || a > winEnd;
+const isWeekend = (d: string) => [0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay());
+const ganttRows = [...inWindow].sort((a, b) => spanOf(a).start.localeCompare(spanOf(b).start) || byStart(a, b));
+const roomGroups = rooms
+  .map((r) => ({ room: r, rows: ganttRows.filter((t) => t.room_id === r.id) }))
+  .filter((g) => g.room.is_active || g.rows.length > 0);
+
+// Day board on the room view.
+const dayRooms = rooms.filter((r) => r.is_active || tasks.some((t) => t.room_id === r.id && isOn(t, anchor)))
+  .map((r) => ({ room: r, rows: tasks.filter((t) => t.room_id === r.id && isOn(t, anchor)).sort(byStart) }));
+
+const navHref = (d: string) => `?vue=${view}&d=${d}`;
+const flash = url.searchParams.get('ok') === 'status' ? T('msg.status') : null;
+const errCode = url.searchParams.get('error');
+const errMsg = errCode ? T(K(`err.${errCode}`)) ?? T('err.UNKNOWN') : null;
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <div class="head">
+    <div>
+      <h1>{T('title')}</h1>
+      <p class="sub-title">{T('board.subtitle')}</p>
+    </div>
+    <a href="/portail/production/nouvelle" class="btn btn-primary">{T('nav.new')}</a>
+  </div>
+  <ProductionNav active="board" />
+
+  {flash && <div class="flash flash-success">{flash}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <div class="stats">
+    <span class="st"><b>{stats.inProgress}</b> {T('stat.inProgress').replace('{n}', '').trim()}</span>
+    <span class="st"><b>{stats.upcoming}</b> {T('stat.upcoming').replace('{n}', '').trim()}</span>
+    {stats.late > 0 && <span class="st danger"><b>{stats.late}</b> {T('stat.late').replace('{n}', '').trim()}</span>}
+    {stats.conflicts > 0 && <span class="st warn"><b>{stats.conflicts}</b> {T('stat.conflicts').replace('{n}', '').trim()}</span>}
+    {stats.missing > 0 && <span class="st muted"><b>{stats.missing}</b> {T('stat.missing').replace('{n}', '').trim()}</span>}
+  </div>
+
+  <nav class="views">
+    {VIEWS.map((v) => (
+      <a href={`?vue=${v}${v === 'liste' ? '' : `&d=${anchor}`}`} class={view === v ? 'vtab active' : 'vtab'}>
+        <strong>{T(K(`view.${viewKey[v]}`))}</strong>
+        <span>{T(K(`view.${viewKey[v]}.q`))}</span>
+      </a>
+    ))}
+  </nav>
+
+  {tasks.length === 0 && view === 'liste' && !showClosed ? (
+    <div class="card empty-state">
+      <p style="margin-bottom: 14px;">{T('empty')}</p>
+      <a href="/portail/production/nouvelle" class="btn btn-primary">{T('nav.new')}</a>
+    </div>
+  ) : (
+    <>
+      <!-- ============================================================ LIST -->
+      {view === 'liste' && (
+        <>
+          {listSections.map((sec) => (
+            <section class="card list-card">
+              <h2>{T(K(sec.key))} <span class="count">{sec.rows.length}</span></h2>
+              <div class="table-wrap">
+                <table class="data tasks">
+                  <thead>
+                    <tr>
+                      <th>{T('col.no')}</th><th>{T('col.production')}</th><th>{T('col.room')}</th>
+                      <th>{T('col.dates')}</th><th>{T('col.ids')}</th><th>{T('col.inputs')}</th><th>{T('col.status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sec.rows.map((t) => {
+                      const step = nextStep(t);
+                      return (
+                        <tr>
+                          <td class="nowrap"><a href={`/portail/production/${t.id}`}><strong>{t.task_no}</strong></a></td>
+                          <td>
+                            <a href={`/portail/production/${t.id}`}>{typeOf(t)}</a>
+                            <div class="flags">{flagsOf(t).map((f) => <span class={`flag ${f.cls}`} title={f.tip}>{f.label}</span>)}</div>
+                          </td>
+                          <td class="room-cell"><span class="chip" style={`--room:${colourOf(t)}`} title={roomName(roomOf(t), locale)}>{roomOf(t)?.code}</span> <span class="muted small room-name">{roomName(roomOf(t), locale)}</span></td>
+                          <td class="nowrap small">
+                            {fmtDay(t.start_date, locale)} → {fmtDay(t.end_date, locale)}
+                            <div class="muted">{daysLabel(dayCount(t.start_date, t.end_date))}{t.actual_start_date && t.status !== 'planned' && t.actual_start_date !== t.start_date ? ` · ${T('detail.actual')} ${fmtDay(t.actual_start_date, locale)}` : ''}</div>
+                          </td>
+                          <td class="small mono nowrap">
+                            {t.groweriq_lot_id ?? <span class="muted">—</span>}
+                            <div>{t.groweriq_batch_id ?? <span class="muted">—</span>}</div>
+                          </td>
+                          <td class="small">
+                            {t.inputs.length === 0 ? <span class="muted">—</span> : t.inputs.slice(0, 3).map((i) => (
+                              <div>{i.material}{i.quantity !== null && <span class="muted"> · {fmtQty(i.quantity, i.unit, locale, unitLabel)}</span>}</div>
+                            ))}
+                            {t.inputs.length > 3 && <div class="muted">{T('more').replace('{n}', String(t.inputs.length - 3))}</div>}
+                          </td>
+                          <td class="nowrap">
+                            <span class={`st-badge st-${t.status}`}>{T(K(`status.${t.status}`))}</span>
+                            {step && (
+                              <form method="POST" action="/api/portail/production/status" class="inline">
+                                <input type="hidden" name="id" value={t.id} />
+                                <input type="hidden" name="version" value={String(t.version)} />
+                                <input type="hidden" name="status" value={step.status} />
+                                <input type="hidden" name="_back" value={here} />
+                                <button type="submit" class="btn btn-secondary btn-sm">{step.label}</button>
+                              </form>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+          {listSections.length === 0 && <div class="card empty-state">{T('emptyWindow')}</div>}
+          <p class="toggle">
+            <a href={showClosed ? '?vue=liste' : '?vue=liste&fermees=1'}>{showClosed ? T('list.hideClosed') : T('list.showClosed')}</a>
+          </p>
+        </>
+      )}
+
+      {view !== 'liste' && (
+        <div class="timenav">
+          <a href={navHref(view === 'calendrier' ? shiftMonth(-1) : addDays(anchor, -28))} class="btn btn-secondary btn-sm" title={T('nav.prev')}>&larr;</a>
+          <a href={navHref(today)} class="btn btn-secondary btn-sm">{T('nav.today')}</a>
+          <a href={navHref(view === 'calendrier' ? shiftMonth(1) : addDays(anchor, 28))} class="btn btn-secondary btn-sm" title={T('nav.next')}>&rarr;</a>
+          <span class="window">
+            {view === 'calendrier' ? monthLabel(monthStart, locale)
+              : T('nav.window').replace('{start}', fmtDay(winStart, locale)).replace('{end}', fmtDay(winEnd, locale))}
+          </span>
+          <span class="legend">
+            {rooms.filter((r) => r.is_active).map((r) => <span class="lg-room"><i style={`background:${r.colour}`}></i>{r.code}</span>)}
+            {view === 'gantt' && <span class="lg-room"><i class="ghost-sw"></i>{T('legend.original')}</span>}
+          </span>
+        </div>
+      )}
+
+      <!-- ======================================================== CALENDAR -->
+      {view === 'calendrier' && (
+        <div class="card cal">
+          <div class="calhead">{weekdayNames(locale).map((w) => <span>{w}</span>)}</div>
+          <div class="calgrid">
+            {calDays.map((d) => {
+              const list = tasksOn(d);
+              return (
+                <div class={`cell${d === today ? ' today' : ''}${d < monthStart || d > monthEnd ? ' other' : ''}${isWeekend(d) ? ' we' : ''}`}>
+                  <a class="dnum" href={`/portail/production/nouvelle?d=${d}`} title={T('nav.new')}>{Number(d.slice(-2))}</a>
+                  {list.slice(0, 4).map((t) => (
+                    <a href={`/portail/production/${t.id}`} class={`ev st-${t.status}`} style={`--room:${colourOf(t)}`}
+                       title={`${t.task_no} · ${typeOf(t)} · ${roomName(roomOf(t), locale)} · ${T(K(`status.${t.status}`))}`}>
+                      <b>{roomOf(t)?.code}</b> {typeOf(t)}
+                      {t.priority === 'rush' && <span class="rush-dot" aria-label={T('flag.rush')}>!</span>}
+                    </a>
+                  ))}
+                  {list.length > 4 && <a class="more" href={`?vue=salles&d=${d}`}>{T('more').replace('{n}', String(list.length - 4))}</a>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <!-- =========================================================== GANTT -->
+      {view === 'gantt' && (
+        inWindow.length === 0 ? <div class="card empty-state">{T('emptyWindow')}</div> : (
+          <div class="card tl-wrap">
+            <div class="tl" style={`--days:${winDays.length}`}>
+              <div class="tlhead">
+                <span class="lbl"></span>
+                {winDays.map((d) => (
+                  <span class={`dh${d === today ? ' today' : ''}${isWeekend(d) ? ' we' : ''}${new Date(`${d}T12:00:00Z`).getUTCDay() === 1 ? ' mon' : ''}`}
+                        title={fmtDay(d, locale)}>{Number(d.slice(-2))}</span>
+                ))}
+              </div>
+              {ganttRows.map((t) => {
+                const s = spanOf(t);
+                const moved = t.original_start_date !== t.start_date || t.original_end_date !== t.end_date;
+                return (
+                  <div class="tlrow">
+                    <a class="lbl" href={`/portail/production/${t.id}`} title={`${t.task_no} · ${typeOf(t)}`}>
+                      <span class="chip" style={`--room:${colourOf(t)}`}>{roomOf(t)?.code}</span>
+                      <span class="lbl-txt"><b>{t.task_no}</b> {typeOf(t)}</span>
+                    </a>
+                    {winDays.includes(today) && <span class="todayline" style={`grid-column:${col(today)} / ${col(today) + 1}`}></span>}
+                    {moved && !outside(t.original_start_date, t.original_end_date) && (
+                      <span class="ghost" style={`grid-column:${gridSpan(t.original_start_date, t.original_end_date)}`}
+                            title={`${T('legend.original')}${locale === 'fr' ? ' : ' : ': '}${fmtDay(t.original_start_date, locale)} → ${fmtDay(t.original_end_date, locale)}`}></span>
+                    )}
+                    <a href={`/portail/production/${t.id}`}
+                       class={`bar st-${t.status}${conflicts.has(t.id) ? ' conflict' : ''}${isLate(t) ? ' late' : ''}`}
+                       style={`grid-column:${gridSpan(s.start, s.end)}; --room:${colourOf(t)}`}
+                       title={`${t.task_no} · ${typeOf(t)} · ${fmtDay(s.start, locale)} → ${fmtDay(s.end, locale)} · ${T(K(`status.${t.status}`))}`}>
+                      <em>{T('days.short').replace('{n}', String(dayCount(s.start, s.end)))}</em>
+                      {t.priority === 'rush' && <b>!</b>}
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      )}
+
+      <!-- =========================================================== ROOMS -->
+      {view === 'salles' && (
+        <>
+          <section class="card dayboard">
+            <div class="daynav">
+              <a href={navHref(addDays(anchor, -1))} class="btn btn-secondary btn-sm" title={T('nav.prevDay')}>&larr;</a>
+              <h2>{T('rooms.dayTitle')} — {fmtDay(anchor, locale, true)}</h2>
+              <a href={navHref(addDays(anchor, 1))} class="btn btn-secondary btn-sm" title={T('nav.nextDay')}>&rarr;</a>
+              {anchor !== today && <a href={navHref(today)} class="btn btn-secondary btn-sm">{T('nav.today')}</a>}
+            </div>
+            <div class="rooms-grid">
+              {dayRooms.map((g) => (
+                <div class="room-card" style={`--room:${g.room.colour}`}>
+                  <header>
+                    <span class="chip">{g.room.code}</span>
+                    <strong>{roomName(g.room, locale)}</strong>
+                    <span class="muted small">{g.room.allows_concurrent ? T('room.concurrent') : T('room.exclusive')}</span>
+                  </header>
+                  {g.rows.length === 0 ? <p class="free">{T('room.free')}</p> : g.rows.map((t) => (
+                    <a href={`/portail/production/${t.id}`} class={`room-task${conflicts.has(t.id) ? ' conflict' : ''}`}>
+                      <span class="rt-top"><b>{typeOf(t)}</b> <span class={`st-badge st-${t.status}`}>{T(K(`status.${t.status}`))}</span></span>
+                      <span class="small muted">{t.task_no} · {fmtDay(t.start_date, locale)} → {fmtDay(t.end_date, locale)}</span>
+                      {(t.groweriq_lot_id || t.groweriq_batch_id) && (
+                        <span class="small mono">{[t.groweriq_lot_id, t.groweriq_batch_id].filter(Boolean).join(' / ')}</span>
+                      )}
+                      <span class="flags">{flagsOf(t).map((f) => <span class={`flag ${f.cls}`} title={f.tip}>{f.label}</span>)}</span>
+                    </a>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <h2 class="tl-title">{T('rooms.timeline')}</h2>
+          <div class="card tl-wrap">
+            <div class="tl" style={`--days:${winDays.length}`}>
+              <div class="tlhead">
+                <span class="lbl"></span>
+                {winDays.map((d) => (
+                  <a href={navHref(d)} class={`dh${d === today ? ' today' : ''}${d === anchor ? ' picked' : ''}${isWeekend(d) ? ' we' : ''}${new Date(`${d}T12:00:00Z`).getUTCDay() === 1 ? ' mon' : ''}`}
+                     title={fmtDay(d, locale)}>{Number(d.slice(-2))}</a>
+                ))}
+              </div>
+              {roomGroups.map((g) => (
+                <>
+                  <p class="grp">
+                    <span class="chip" style={`--room:${g.room.colour}`}>{g.room.code}</span>
+                    <strong>{roomName(g.room, locale)}</strong>
+                    <span class="muted small">{g.room.allows_concurrent ? T('room.concurrent') : T('room.exclusive')}{!g.room.is_active && ` · ${T('room.inactive')}`}</span>
+                  </p>
+                  {g.rows.length === 0 ? (
+                    <div class="tlrow"><span class="lbl muted small">{T('room.free')}</span></div>
+                  ) : g.rows.map((t) => {
+                    const s = spanOf(t);
+                    return (
+                      <div class="tlrow">
+                        <a class="lbl" href={`/portail/production/${t.id}`}><span class="lbl-txt"><b>{t.task_no}</b> {typeOf(t)}</span></a>
+                        {winDays.includes(anchor) && <span class="todayline picked" style={`grid-column:${col(anchor)} / ${col(anchor) + 1}`}></span>}
+                        <a href={`/portail/production/${t.id}`}
+                           class={`bar st-${t.status}${conflicts.has(t.id) ? ' conflict' : ''}`}
+                           style={`grid-column:${gridSpan(s.start, s.end)}; --room:${g.room.colour}`}
+                           title={conflicts.has(t.id) ? T('tip.conflict').replace('{list}', conflicts.get(t.id)!.join(', ')) : `${t.task_no} · ${typeOf(t)}`}>
+                          <em>{T('days.short').replace('{n}', String(dayCount(s.start, s.end)))}</em>
+                          {conflicts.has(t.id) && <b>&#9888;</b>}
+                        </a>
+                      </div>
+                    );
+                  })}
+                </>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  )}
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sub-title { color: var(--p-muted); font-size: .92rem; margin: 0; max-width: 72ch; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .8rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .nowrap { white-space: nowrap; }
+  .btn-sm { padding: 5px 11px; font-size: .84rem; }
+  form.inline { display: block; margin-top: 6px; }
+
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .st { background: var(--p-card); border: 1px solid var(--p-border); border-radius: 999px; padding: 4px 12px; font-size: .84rem; color: var(--p-muted); }
+  .st b { color: var(--p-text); margin-right: 2px; }
+  .st.danger { border-color: #fecaca; background: #fef2f2; color: var(--p-danger); } .st.danger b { color: var(--p-danger); }
+  .st.warn { border-color: #fde68a; background: #fffbeb; color: var(--p-warn); } .st.warn b { color: var(--p-warn); }
+
+  .views { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .vtab { display: flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: 8px; text-decoration: none;
+          border: 1px solid var(--p-border); background: var(--p-card); }
+  .vtab strong { font-size: .9rem; color: var(--p-text); }
+  .vtab span { font-size: .74rem; color: var(--p-muted); }
+  .vtab:hover { border-color: var(--p-accent); }
+  .vtab.active { border-color: var(--p-accent); background: rgba(208,88,38,.05); }
+  .vtab.active strong { color: var(--p-accent); }
+
+  /* ------------------------------------------------------------- list */
+  .list-card { padding: 18px 20px; margin-bottom: 16px; }
+  .list-card h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .count { font-size: .76rem; font-weight: 600; color: var(--p-muted); background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 0 8px; }
+  .table-wrap { overflow-x: auto; }
+  table.tasks th, table.tasks td { padding: 10px 10px; vertical-align: top; }
+  table.tasks td a { font-weight: 500; }
+  .flags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .flag { font-size: .66rem; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; cursor: default; }
+  .flag.rush { background: #fee2e2; color: #991b1b; }
+  .flag.late { background: #fef2f2; color: var(--p-danger); border: 1px solid #fecaca; }
+  .flag.conflict { background: #fffbeb; color: var(--p-warn); border: 1px solid #fde68a; }
+  .flag.missing { background: var(--p-bg); color: var(--p-muted); border: 1px solid var(--p-border); }
+  .chip { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+          color: var(--room, var(--p-muted)); border: 1px solid color-mix(in srgb, var(--room, var(--p-muted)) 45%, transparent);
+          background: color-mix(in srgb, var(--room, var(--p-muted)) 10%, transparent); }
+  .st-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .st-badge.st-planned { background: #eff6ff; color: #1e40af; }
+  .st-badge.st-in_progress { background: #fff7ed; color: #c2410c; }
+  .st-badge.st-on_hold { background: #fef3c7; color: #92400e; }
+  .st-badge.st-done { background: #dcfce7; color: #166534; }
+  .st-badge.st-cancelled { background: #f3f4f6; color: #6b7280; text-decoration: line-through; }
+  .toggle { font-size: .86rem; margin-top: 4px; }
+  .room-cell { white-space: nowrap; }
+  @media (max-width: 1100px) { .room-name { display: none; } }
+
+  /* ---------------------------------------------------------- timenav */
+  .timenav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .timenav .window { font-size: .9rem; font-weight: 600; margin-left: 6px; }
+  .legend { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; font-size: .76rem; color: var(--p-muted); }
+  .lg-room { display: inline-flex; align-items: center; gap: 4px; }
+  .lg-room i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .lg-room i.ghost-sw { background: transparent; height: 6px; width: 14px; border: 1.5px dashed var(--p-text); border-top: 0; border-radius: 0 0 3px 3px; opacity: .55; }
+
+  /* --------------------------------------------------------- calendar */
+  .cal { padding: 14px; overflow-x: auto; }
+  .calhead, .calgrid { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 4px; min-width: 780px; }
+  .calhead span { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--p-muted); padding: 0 4px 6px; }
+  .cell { min-height: 104px; border: 1px solid var(--p-border); border-radius: 6px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
+  .cell.we { background: #fafafa; }
+  .cell.other { opacity: .5; }
+  .cell.today { border-color: var(--p-accent); box-shadow: inset 0 0 0 1px var(--p-accent); }
+  .dnum { font-size: .74rem; color: var(--p-muted); text-decoration: none; align-self: flex-start; padding: 0 3px; border-radius: 4px; }
+  .dnum:hover { background: var(--p-bg); color: var(--p-accent); }
+  .ev { display: block; font-size: .72rem; text-decoration: none; color: var(--p-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        border-left: 3px solid var(--room); background: color-mix(in srgb, var(--room) 9%, #fff); border-radius: 3px; padding: 2px 5px; }
+  .ev b { color: var(--room); }
+  .ev:hover { background: color-mix(in srgb, var(--room) 18%, #fff); }
+  .ev.st-done { opacity: .55; }
+  .ev.st-on_hold { background: repeating-linear-gradient(45deg, #fff 0 4px, color-mix(in srgb, var(--room) 12%, #fff) 4px 8px); }
+  .rush-dot { display: inline-block; margin-left: 3px; color: #fff; background: var(--p-danger); border-radius: 50%; width: 13px; height: 13px; font-size: .62rem; text-align: center; line-height: 13px; font-weight: 700; }
+  .more { font-size: .7rem; color: var(--p-muted); padding-left: 4px; text-decoration: none; }
+  .more:hover { color: var(--p-accent); }
+
+  /* ------------------------------------------------- gantt / timelines */
+  .tl-wrap { overflow-x: auto; padding: 14px; }
+  .tl { min-width: 980px; }
+  .tlhead, .tlrow { display: grid; grid-template-columns: 230px repeat(var(--days), minmax(18px, 1fr)); }
+  .tlhead { border-bottom: 1px solid var(--p-border); padding-bottom: 5px; margin-bottom: 6px; }
+  .dh { font-size: .64rem; color: var(--p-muted); text-align: center; font-variant-numeric: tabular-nums; text-decoration: none; }
+  .dh.we { color: #c4c8cf; }
+  .dh.mon { border-left: 1px solid var(--p-border); }
+  .dh.today { color: var(--p-accent); font-weight: 700; }
+  .dh.picked { background: rgba(208,88,38,.12); border-radius: 3px; color: var(--p-accent); font-weight: 700; }
+  .tlrow { align-items: center; min-height: 32px; }
+  .tlrow > * { grid-row: 1; }
+  .tlrow .lbl { grid-column: 1; display: flex; align-items: center; gap: 6px; font-size: .78rem; padding-right: 10px; min-width: 0; text-decoration: none; color: var(--p-text); }
+  .lbl-txt { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .todayline { height: 100%; min-height: 28px; border-left: 2px solid rgba(208,88,38,.35); }
+  .todayline.picked { background: rgba(208,88,38,.06); }
+  /* The first-planned dates, as a dashed bracket under the bar so the two can be compared. */
+  .ghost { align-self: end; height: 6px; margin-bottom: 1px; border: 1.5px dashed var(--p-text); border-top: 0; border-radius: 0 0 4px 4px; opacity: .55; }
+  .bar { position: relative; z-index: 1; align-self: start; margin-top: 5px; height: 18px; border-radius: 4px; background: var(--room); display: flex; align-items: center; gap: 4px;
+         padding: 0 5px; overflow: hidden; text-decoration: none; }
+  .bar em { font-style: normal; font-size: .62rem; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar b { font-size: .7rem; color: #fff; }
+  .bar.st-planned { background: color-mix(in srgb, var(--room) 60%, #fff); }
+  .bar.st-done { opacity: .45; }
+  .bar.st-on_hold { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--room) 70%, #fff) 0 5px, color-mix(in srgb, var(--room) 30%, #fff) 5px 10px); }
+  .bar.late { outline: 2px solid var(--p-danger); outline-offset: 1px; }
+  .bar.conflict { outline: 2px solid var(--p-warn); outline-offset: 1px; }
+  .grp { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 14px 0 4px; padding-top: 10px; border-top: 1px solid var(--p-border); font-size: .86rem; }
+  .grp:first-of-type { border-top: 0; padding-top: 0; margin-top: 6px; }
+  .tl-title { margin: 22px 0 10px; }
+
+  /* -------------------------------------------------------- day board */
+  .dayboard { padding: 18px 20px; }
+  .daynav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .daynav h2 { margin: 0; }
+  .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .room-card { border: 1px solid var(--p-border); border-top: 4px solid var(--room); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .room-card header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .room-card .chip { --room: inherit; }
+  .free { color: var(--p-success); font-size: .86rem; font-weight: 500; }
+  .room-task { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--p-text); background: var(--p-bg);
+               border-radius: 6px; padding: 8px 10px; border: 1px solid transparent; }
+  .room-task:hover { border-color: var(--p-accent); }
+  .room-task.conflict { border-color: #fde68a; background: #fffbeb; }
+  .rt-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+</style>

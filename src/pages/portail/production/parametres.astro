@@ -1,0 +1,111 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frProduction, enProduction } from '../../../i18n/portail/production';
+import { loadCatalog } from '../../../lib/production';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const { rooms, types } = await loadCatalog(getAdminClient());
+
+const ok = Astro.url.searchParams.get('ok');
+const err = Astro.url.searchParams.get('error');
+const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' ? T('set.err.invalid') : err ? T('set.err.unknown') : null;
+---
+<PortailLayout title={`${T('set.title')} — ${T('title')}`} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <ProductionNav active="settings" />
+  <p class="lead">{T('set.subtitle')}</p>
+  {ok && <div class="flash flash-success">{T('set.saved')}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <section class="card block" id="salles">
+    <h2>{T('set.rooms')}</h2>
+    <p class="hint" style="margin: -6px 0 14px;">{T('set.rooms.hint')} {T('set.inactive.hint')}</p>
+    <div class="grid-head rooms" aria-hidden="true">
+      <span>{T('set.code')}</span><span>{T('set.nameFr')}</span><span>{T('set.nameEn')}</span><span>{T('set.colour')}</span>
+      <span>{T('set.concurrent')}</span><span>{T('set.order')}</span><span>{T('set.active')}</span><span></span>
+    </div>
+    {rooms.map((r) => (
+      <form method="POST" action="/api/portail/production/settings" class={`grid-row rooms${r.is_active ? '' : ' off'}`}>
+        <input type="hidden" name="_action" value="save_room" />
+        <input type="hidden" name="id" value={r.id} />
+        <input type="text" name="code" value={r.code} required aria-label={T('set.code')} />
+        <input type="text" name="name_fr" value={r.name_fr} required aria-label={T('set.nameFr')} />
+        <input type="text" name="name_en" value={r.name_en} aria-label={T('set.nameEn')} />
+        <input type="color" name="colour" value={r.colour} aria-label={T('set.colour')} />
+        <label class="cb"><input type="checkbox" name="allows_concurrent" value="1" checked={r.allows_concurrent} /><span class="sr">{T('set.concurrent')}</span></label>
+        <input type="number" name="sort_order" value={String(r.sort_order)} aria-label={T('set.order')} />
+        <label class="cb"><input type="checkbox" name="is_active" value="1" checked={r.is_active} /><span class="sr">{T('set.active')}</span></label>
+        <button type="submit" class="btn btn-secondary btn-sm">{T('set.save')}</button>
+      </form>
+    ))}
+    <h3>{T('set.newRoom')}</h3>
+    <form method="POST" action="/api/portail/production/settings" class="grid-row rooms new">
+      <input type="hidden" name="_action" value="add_room" />
+      <input type="text" name="code" required placeholder={T('set.code')} aria-label={T('set.code')} />
+      <input type="text" name="name_fr" required placeholder={T('set.nameFr')} aria-label={T('set.nameFr')} />
+      <input type="text" name="name_en" placeholder={T('set.nameEn')} aria-label={T('set.nameEn')} />
+      <input type="color" name="colour" value="#b45309" aria-label={T('set.colour')} />
+      <label class="cb"><input type="checkbox" name="allows_concurrent" value="1" /><span class="sr">{T('set.concurrent')}</span></label>
+      <input type="number" name="sort_order" value={String((rooms.at(-1)?.sort_order ?? 0) + 10)} aria-label={T('set.order')} />
+      <span></span>
+      <button type="submit" class="btn btn-primary btn-sm">{T('set.add')}</button>
+    </form>
+  </section>
+
+  <section class="card block" id="types">
+    <h2>{T('set.types')}</h2>
+    <div class="grid-head types" aria-hidden="true">
+      <span>{T('set.code')}</span><span>{T('set.nameFr')}</span><span>{T('set.nameEn')}</span>
+      <span>{T('set.order')}</span><span>{T('set.active')}</span><span></span>
+    </div>
+    {types.map((p) => (
+      <form method="POST" action="/api/portail/production/settings" class={`grid-row types${p.is_active ? '' : ' off'}`}>
+        <input type="hidden" name="_action" value="save_type" />
+        <input type="hidden" name="id" value={p.id} />
+        <input type="text" name="code" value={p.code} required aria-label={T('set.code')} />
+        <input type="text" name="name_fr" value={p.name_fr} required aria-label={T('set.nameFr')} />
+        <input type="text" name="name_en" value={p.name_en} aria-label={T('set.nameEn')} />
+        <input type="number" name="sort_order" value={String(p.sort_order)} aria-label={T('set.order')} />
+        <label class="cb"><input type="checkbox" name="is_active" value="1" checked={p.is_active} /><span class="sr">{T('set.active')}</span></label>
+        <button type="submit" class="btn btn-secondary btn-sm">{T('set.save')}</button>
+      </form>
+    ))}
+    <h3>{T('set.newType')}</h3>
+    <form method="POST" action="/api/portail/production/settings" class="grid-row types new">
+      <input type="hidden" name="_action" value="add_type" />
+      <input type="text" name="code" required placeholder={T('set.code')} aria-label={T('set.code')} />
+      <input type="text" name="name_fr" required placeholder={T('set.nameFr')} aria-label={T('set.nameFr')} />
+      <input type="text" name="name_en" placeholder={T('set.nameEn')} aria-label={T('set.nameEn')} />
+      <input type="number" name="sort_order" value={String((types.at(-1)?.sort_order ?? 0) + 10)} aria-label={T('set.order')} />
+      <span></span>
+      <button type="submit" class="btn btn-primary btn-sm">{T('set.add')}</button>
+    </form>
+  </section>
+</PortailLayout>
+
+<style>
+  .lead { color: var(--p-muted); font-size: .92rem; margin: -6px 0 16px; }
+  .block { margin-bottom: 18px; overflow-x: auto; }
+  h3 { font-size: .9rem; font-weight: 600; margin: 18px 0 8px; }
+  .grid-head, .grid-row { display: grid; gap: 8px; align-items: center; min-width: 760px; }
+  .rooms { grid-template-columns: 80px 1.4fr 1.4fr 56px 90px 70px 70px 110px; }
+  .types { grid-template-columns: 170px 1.6fr 1.6fr 70px 70px 110px; }
+  .grid-head { font-size: .74rem; font-weight: 600; color: var(--p-muted); margin-bottom: 6px; }
+  .grid-row { margin-bottom: 6px; }
+  .grid-row input[type="text"], .grid-row input[type="number"] { padding: 6px 8px; font-size: .88rem; }
+  .grid-row input[type="color"] { width: 44px; height: 34px; border: 1px solid var(--p-border); border-radius: 6px; padding: 2px; background: #fff; }
+  .grid-row.off input[type="text"] { color: var(--p-muted); background: var(--p-bg); }
+  .cb { display: flex; justify-content: center; margin: 0; }
+  .cb input { width: 18px; height: 18px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .btn-sm { padding: 6px 12px; font-size: .84rem; }
+</style>

@@ -1,0 +1,26 @@
+---
+// Sub-navigation shared by every /portail/production page.
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frProduction, enProduction } from '../../i18n/portail/production';
+
+type Key = 'board' | 'new' | 'reports' | 'settings';
+interface Props { active: Key }
+const { active } = Astro.props;
+const T = makeT(getPortailLocale(Astro.cookies), frProduction, enProduction);
+const items: Array<{ key: Key; href: string; label: string }> = [
+  { key: 'board', href: '/portail/production', label: T('nav.board') },
+  { key: 'new', href: '/portail/production/nouvelle', label: T('nav.new') },
+  { key: 'reports', href: '/portail/production/rapports', label: T('nav.reports') },
+  { key: 'settings', href: '/portail/production/parametres', label: T('nav.settings') },
+];
+---
+<nav class="ps-subnav no-print">
+  {items.map((i) => <a href={i.href} class={i.key === active ? 'active' : ''}>{i.label}</a>)}
+</nav>
+<style>
+  .ps-subnav { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--p-border); flex-wrap: wrap; }
+  .ps-subnav a { padding: 8px 14px; color: var(--p-muted); text-decoration: none; font-weight: 500; font-size: .92rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .ps-subnav a:hover { color: var(--p-text); }
+  .ps-subnav a.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  @media print { .no-print { display: none !important; } }
+</style>

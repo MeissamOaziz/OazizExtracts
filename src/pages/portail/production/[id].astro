@@ -1,0 +1,274 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../components/portail/ProductionNav.astro';
+import ProductionTaskForm from '../../../components/portail/ProductionTaskForm.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
+import {
+  CHANGE_REASONS, dayCount, fmtDateTime, fmtDay, fmtQty, isLate, loadCatalog, loadEvents, loadTask,
+  loadTasks, missingInfo, roomConflicts, roomName, slipDays, todayLocal, typeName,
+} from '../../../lib/production';
+import { colon, describeChanges, signedDays, type DescribeCtx } from '../../../lib/production-report';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/production');
+const task = await loadTask(admin, id);
+if (!task) return Astro.redirect('/portail/production?error=NOT_FOUND');
+
+const [{ rooms, types }, events, liveTasks] = await Promise.all([
+  loadCatalog(admin), loadEvents(admin, { taskId: id }), loadTasks(admin),
+]);
+const ctx: DescribeCtx = {
+  T, locale, rooms: new Map(rooms.map((r) => [r.id, r])), types: new Map(types.map((p) => [p.id, p])),
+};
+const room = ctx.rooms.get(task.room_id);
+const conflictWith = roomConflicts(liveTasks, rooms).get(task.id) ?? [];
+const created = events.find((e) => e.kind === 'created');
+const slip = slipDays(task);
+const missing = missingInfo(task);
+const today = todayLocal();
+const unitLabel = (u: string) => T(K(`unit.${u}`));
+const daysLabel = (n: number) => (n === 1 ? T('days.one') : T('days.long').replace('{n}', String(n)));
+
+const ok = Astro.url.searchParams.get('ok');
+const okMsg = ok === 'created' ? T('msg.created').replace('{no}', task.task_no)
+  : ok === 'saved' ? T('msg.saved') : ok === 'status' ? T('msg.status') : ok === 'nochange' ? T('msg.nochange') : null;
+const errCode = Astro.url.searchParams.get('error');
+const errMsg = errCode ? (T(K(`err.${errCode}`)) ?? T('err.UNKNOWN')) : null;
+const here = `/portail/production/${task.id}`;
+
+// Status buttons: the obvious next step first; pause and cancel ask why.
+const quick: Array<{ status: string; label: string; primary?: boolean }> =
+  task.status === 'planned' ? [{ status: 'in_progress', label: T('btn.start'), primary: true }]
+  : task.status === 'in_progress' ? [{ status: 'done', label: T('btn.finish'), primary: true }]
+  : task.status === 'on_hold' ? [{ status: 'in_progress', label: T('btn.resume'), primary: true }]
+  : [{ status: task.status === 'done' ? 'in_progress' : 'planned', label: T('btn.reopen') }];
+const canStop = task.status === 'planned' || task.status === 'in_progress' || task.status === 'on_hold';
+---
+<PortailLayout title={`${task.task_no} — ${typeName(ctx.types.get(task.production_type_id), locale)}`} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <ProductionNav active="board" />
+  <p style="margin: -8px 0 14px;"><a href="/portail/production" class="back">{T('btn.back')}</a></p>
+
+  {okMsg && <div class="flash flash-success">{okMsg}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <div class="task-head">
+    <div>
+      <p class="no">{task.task_no}</p>
+      <h2 class="ttl">{typeName(ctx.types.get(task.production_type_id), locale)}</h2>
+      <div class="flags">
+        <span class={`st-badge st-${task.status}`}>{T(K(`status.${task.status}`))}</span>
+        {task.priority === 'rush' && <span class="flag rush">{T('flag.rush')}</span>}
+        {isLate(task) && <span class="flag late" title={T('tip.late')}>{T('flag.late')}</span>}
+        {conflictWith.length > 0 && <span class="flag conflict">{T('tip.conflict').replace('{list}', conflictWith.join(', '))}</span>}
+        {missing.length > 0 && task.status !== 'cancelled' && (
+          <span class="flag missing">{T('tip.missing').replace('{list}', missing.map((m) => T(K(`missing.${m}`))).join(', '))}</span>
+        )}
+      </div>
+      {created && (
+        <p class="small muted" style="margin-top: 6px;">
+          {T('detail.created').replace('{date}', fmtDateTime(created.at, locale)).replace('{name}', created.staff_name ?? T('ev.unknownStaff'))}
+          {created.reason_code && created.reason_code !== 'planned' && <> · <strong>{T(K(`reason.${created.reason_code}`))}</strong></>}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <dl class="facts">
+        <dt>{T('f.room')}</dt>
+        <dd><span class="chip" style={`--room:${room?.colour ?? '#6b7280'}`}>{room?.code}</span> {roomName(room, locale)}</dd>
+        <dt>{T('f.lot')}</dt><dd class="mono">{task.groweriq_lot_id ?? <span class="muted">—</span>}</dd>
+        <dt>{T('f.batch')}</dt><dd class="mono">{task.groweriq_batch_id ?? <span class="muted">—</span>}</dd>
+      </dl>
+
+      <h3>{T('detail.plan')}</h3>
+      <table class="plan">
+        <tbody>
+          <tr>
+            <th>{T('detail.original')}</th>
+            <td>{fmtDay(task.original_start_date, locale)} → {fmtDay(task.original_end_date, locale)}</td>
+            <td class="muted">{daysLabel(dayCount(task.original_start_date, task.original_end_date))}</td>
+          </tr>
+          <tr>
+            <th>{T('detail.current')}</th>
+            <td>{fmtDay(task.start_date, locale)} → {fmtDay(task.end_date, locale)}</td>
+            <td class="muted">{daysLabel(dayCount(task.start_date, task.end_date))}</td>
+          </tr>
+          <tr>
+            <th>{T('detail.actual')}</th>
+            {task.actual_start_date ? (
+              <>
+                <td>{fmtDay(task.actual_start_date, locale)} → {task.actual_end_date ? fmtDay(task.actual_end_date, locale) : <em>{T('detail.running')}</em>}</td>
+                <td class="muted">{daysLabel(dayCount(task.actual_start_date, task.actual_end_date ?? today))}</td>
+              </>
+            ) : <td colspan="2" class="muted">{T('detail.notStarted')}</td>}
+          </tr>
+        </tbody>
+      </table>
+      <p class={`slip ${slip > 0 ? 'later' : slip < 0 ? 'earlier' : ''}`}>
+        {T('detail.slip')}{colon(locale)}
+        {slip > 0 ? T('detail.slip.later').replace('{n}', String(slip))
+          : slip < 0 ? T('detail.slip.earlier').replace('{n}', String(-slip)) : T('detail.slip.none')}
+      </p>
+
+      <h3>{T('f.inputs')}</h3>
+      {task.inputs.length === 0 ? <p class="muted small">{T('in.none')}</p> : (
+        <table class="data inputs">
+          <thead><tr><th>{T('in.material')}</th><th>{T('in.lot')}</th><th class="num">{T('in.qty')}</th></tr></thead>
+          <tbody>
+            {task.inputs.map((i) => (
+              <tr>
+                <td>{i.material}</td>
+                <td class="mono">{i.groweriq_lot_id ?? <span class="muted">—</span>}</td>
+                <td class="num">{fmtQty(i.quantity, i.unit, locale, unitLabel) || <span class="muted">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {task.notes && (<><h3>{T('f.notes')}</h3><p class="notes">{task.notes}</p></>)}
+    </section>
+
+    <section class="card status-card">
+      <h3 style="margin-top: 0;">{T('detail.quick')}</h3>
+      <div class="quick">
+        {quick.map((q) => (
+          <form method="POST" action="/api/portail/production/status">
+            <input type="hidden" name="id" value={task.id} />
+            <input type="hidden" name="version" value={String(task.version)} />
+            <input type="hidden" name="status" value={q.status} />
+            <input type="hidden" name="_back" value={here} />
+            <button type="submit" class={`btn ${q.primary ? 'btn-primary' : 'btn-secondary'}`}>{q.label}</button>
+          </form>
+        ))}
+      </div>
+
+      {canStop && (
+        <details class="stop">
+          <summary>{T('btn.pause')} / {T('btn.cancel')}</summary>
+          <form method="POST" action="/api/portail/production/status" class="details-body">
+            <input type="hidden" name="id" value={task.id} />
+            <input type="hidden" name="version" value={String(task.version)} />
+            <input type="hidden" name="_back" value={here} />
+            <p class="hint" style="margin: 0 0 10px;">{T('detail.quick.reason')}</p>
+            <div class="form-row">
+              <select name="reason" required aria-label={T('change.title')}>
+                <option value="">{T('change.pick')}</option>
+                {CHANGE_REASONS.map((r) => <option value={r}>{T(K(`reason.${r}`))}</option>)}
+              </select>
+            </div>
+            <div class="form-row">
+              <input type="text" name="reason_note" placeholder={T('change.note.ph')} aria-label={T('change.note')} />
+            </div>
+            <div class="quick">
+              {task.status !== 'on_hold' && <button type="submit" name="status" value="on_hold" class="btn btn-secondary">{T('btn.pause')}</button>}
+              <button type="submit" name="status" value="cancelled" class="btn btn-danger">{T('btn.cancel')}</button>
+            </div>
+          </form>
+        </details>
+      )}
+    </section>
+  </div>
+
+  <section class="card" id="modifier" style="margin-top: 18px;">
+    <h2>{T('detail.edit')}</h2>
+    <ProductionTaskForm mode="edit" rooms={rooms} types={types} task={task} />
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h2>{T('detail.history')}</h2>
+    <p class="hint" style="margin: -6px 0 16px;">{T('detail.history.hint')}</p>
+    <ol class="history">
+      {events.map((e) => (
+        <li class={`ev-${e.kind}`}>
+          <div class="ev-head">
+            <strong>{T(K(`ev.${e.kind}`))}</strong>
+            {e.reason_code && <span class="reason">{T(K(`reason.${e.reason_code}`))}</span>}
+            {e.end_shift_days !== null && e.end_shift_days !== 0 && (
+              <span class={`shift ${e.end_shift_days > 0 ? 'later' : 'earlier'}`}>{T('ev.shiftEnd').replace('{d}', `${signedDays(e.end_shift_days)} j`)}</span>
+            )}
+            {e.start_shift_days !== null && e.start_shift_days !== 0 && (
+              <span class="shift neutral">{T('ev.shiftStart').replace('{d}', `${signedDays(e.start_shift_days)} j`)}</span>
+            )}
+            <span class="muted small when">{fmtDateTime(e.at, locale)} · {e.staff_name ?? T('ev.unknownStaff')}</span>
+          </div>
+          {e.reason_note && <p class="ev-note">« {e.reason_note} »</p>}
+          <ul class="ev-lines">{describeChanges(e, ctx).map((l) => <li>{l}</li>)}</ul>
+        </li>
+      ))}
+    </ol>
+  </section>
+</PortailLayout>
+
+<style>
+  .back { color: var(--p-muted); font-size: .88rem; text-decoration: none; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
+  .ttl { font-size: 1.35rem; margin: 0 0 6px; }
+  .task-head { margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  h3 { font-size: .92rem; font-weight: 600; margin: 18px 0 8px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: .92rem; }
+  .facts dt { color: var(--p-muted); }
+  .plan { border-collapse: collapse; font-size: .9rem; }
+  .plan th { text-align: left; font-weight: 500; color: var(--p-muted); padding: 4px 16px 4px 0; white-space: nowrap; }
+  .plan td { padding: 4px 16px 4px 0; }
+  .slip { margin-top: 8px; font-size: .88rem; font-weight: 600; }
+  .slip.later { color: var(--p-danger); }
+  .slip.earlier { color: var(--p-success); }
+  table.inputs th, table.inputs td { padding: 8px 10px; }
+  .num { text-align: right; white-space: nowrap; }
+  .notes { white-space: pre-wrap; font-size: .92rem; }
+  .quick { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stop { margin-top: 16px; }
+  .chip { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+          color: var(--room); border: 1px solid color-mix(in srgb, var(--room) 45%, transparent);
+          background: color-mix(in srgb, var(--room) 10%, transparent); }
+  .flags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .flag { font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .flag.rush { background: #fee2e2; color: #991b1b; text-transform: uppercase; }
+  .flag.late { background: #fef2f2; color: var(--p-danger); border: 1px solid #fecaca; }
+  .flag.conflict { background: #fffbeb; color: var(--p-warn); border: 1px solid #fde68a; }
+  .flag.missing { background: var(--p-bg); color: var(--p-muted); border: 1px solid var(--p-border); }
+  .st-badge { display: inline-block; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .st-badge.st-planned { background: #eff6ff; color: #1e40af; }
+  .st-badge.st-in_progress { background: #fff7ed; color: #c2410c; }
+  .st-badge.st-on_hold { background: #fef3c7; color: #92400e; }
+  .st-badge.st-done { background: #dcfce7; color: #166534; }
+  .st-badge.st-cancelled { background: #f3f4f6; color: #6b7280; }
+
+  .history { list-style: none; display: flex; flex-direction: column; gap: 0; }
+  .history > li { border-left: 2px solid var(--p-border); padding: 0 0 16px 16px; position: relative; }
+  .history > li::before { content: ''; position: absolute; left: -6px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--p-border); }
+  .history > li.ev-rescheduled::before { background: var(--p-accent); }
+  .history > li.ev-created::before { background: #1e40af; }
+  .history > li.ev-status::before { background: var(--p-success); }
+  .ev-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+  .ev-head .when { margin-left: auto; }
+  .reason { font-size: .74rem; font-weight: 600; background: rgba(208,88,38,.08); color: var(--p-accent); border-radius: 4px; padding: 1px 7px; }
+  .shift { font-size: .74rem; font-weight: 600; border-radius: 4px; padding: 1px 7px; }
+  .shift.later { background: #fef2f2; color: var(--p-danger); }
+  .shift.earlier { background: #f0fdf4; color: var(--p-success); }
+  .shift.neutral { background: var(--p-bg); color: var(--p-muted); }
+  .ev-note { font-size: .86rem; font-style: italic; margin: 4px 0 2px; }
+  .ev-lines { list-style: none; font-size: .84rem; color: var(--p-muted); margin-top: 4px; }
+  .ev-lines li { padding: 1px 0; }
+</style>

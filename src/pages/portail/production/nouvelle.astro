@@ -1,0 +1,34 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../components/portail/ProductionNav.astro';
+import ProductionTaskForm from '../../../components/portail/ProductionTaskForm.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
+import { isIsoDate, loadCatalog } from '../../../lib/production';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const { rooms, types } = await loadCatalog(getAdminClient());
+
+// The calendar links here with the day that was clicked.
+const d = Astro.url.searchParams.get('d');
+const errCode = Astro.url.searchParams.get('error');
+const errMsg = errCode ? (T(`err.${errCode}` as keyof ProductionDict) ?? T('err.UNKNOWN')) : null;
+---
+<PortailLayout title={T('new.title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <ProductionNav active="new" />
+
+  <div class="card" style="max-width: 860px;">
+    <h2>{T('new.title')}</h2>
+    <p class="hint" style="margin: -6px 0 20px;">{T('new.subtitle')}</p>
+    {errMsg && <div class="flash flash-error">{errMsg}</div>}
+    <ProductionTaskForm mode="create" rooms={rooms} types={types} defaults={{ start_date: isIsoDate(d) ? d : undefined }} />
+  </div>
+</PortailLayout>

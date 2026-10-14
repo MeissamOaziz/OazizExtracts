@@ -1,0 +1,231 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
+import { fmtDateTime, fmtDay, isIsoDate, roomName, todayLocal, typeName } from '../../../lib/production';
+import { defaultReportPeriod, describeChanges, loadReport, signedDays, type DescribeCtx } from '../../../lib/production-report';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const q = (k: string) => Astro.url.searchParams.get(k);
+const def = defaultReportPeriod(todayLocal());
+let from = isIsoDate(q('from')) ? q('from')! : def.from;
+let to = isIsoDate(q('to')) ? q('to')! : def.to;
+if (to < from) [from, to] = [to, from];
+const roomId = UUID.test(q('room') ?? '') ? q('room') : null;
+const typeId = UUID.test(q('type') ?? '') ? q('type') : null;
+
+const r = await loadReport(getAdminClient(), { from, to, roomId, typeId });
+const ctx: DescribeCtx = {
+  T, locale, rooms: new Map(r.rooms.map((x) => [x.id, x])), types: new Map(r.types.map((x) => [x.id, x])),
+};
+const pct = r.kpi.created ? Math.round((r.kpi.unplanned / r.kpi.created) * 100) : 0;
+const onTimePct = r.kpi.done ? Math.round(((r.kpi.done - r.kpi.doneLate) / r.kpi.done) * 100) : null;
+const LOG_LIMIT = 300;
+const qs = new URLSearchParams({ from, to, ...(roomId ? { room: roomId } : {}), ...(typeId ? { type: typeId } : {}) }).toString();
+const taskOf = (taskId: string) => r.taskById.get(taskId);
+---
+<PortailLayout title={`${T('rep.title')} — ${T('title')}`} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <ProductionNav active="reports" />
+  <p class="lead">{T('rep.subtitle')}</p>
+
+  <form method="GET" class="card filters no-print">
+    <div><label for="r-from">{T('rep.from')}</label><input type="date" id="r-from" name="from" value={from} /></div>
+    <div><label for="r-to">{T('rep.to')}</label><input type="date" id="r-to" name="to" value={to} /></div>
+    <div>
+      <label for="r-room">{T('rep.room')}</label>
+      <select id="r-room" name="room">
+        <option value="">{T('rep.allRooms')}</option>
+        {r.rooms.map((x) => <option value={x.id} selected={x.id === roomId}>{x.code} — {roomName(x, locale)}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="r-type">{T('rep.type')}</label>
+      <select id="r-type" name="type">
+        <option value="">{T('rep.allTypes')}</option>
+        {r.types.map((x) => <option value={x.id} selected={x.id === typeId}>{typeName(x, locale)}</option>)}
+      </select>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">{T('rep.apply')}</button>
+      <button type="button" class="btn btn-secondary" onclick="window.print()">{T('rep.print')}</button>
+    </div>
+  </form>
+
+  <p class="print-only period">{fmtDay(from, locale, true)} → {fmtDay(to, locale, true)}</p>
+
+  <div class="kpis">
+    <div class="card kpi"><span>{T('rep.kpi.created')}</span><strong>{r.kpi.created}</strong></div>
+    <div class="card kpi">
+      <span>{T('rep.kpi.unplanned')}</span><strong>{r.kpi.unplanned}</strong>
+      <small>{T('rep.kpi.unplanned.sub').replace('{pct}', `${pct} %`)}</small>
+    </div>
+    <div class="card kpi">
+      <span>{T('rep.kpi.reschedules')}</span><strong>{r.kpi.reschedules}</strong>
+      <small>{T('rep.kpi.reschedules.sub').replace('{n}', String(r.kpi.rescheduledTasks))}</small>
+    </div>
+    <div class="card kpi">
+      <span>{T('rep.kpi.later')}</span><strong class={r.kpi.later ? 'later' : ''}>{r.kpi.later}</strong>
+      <small>{T('rep.kpi.shift.sub')}</small>
+    </div>
+    <div class="card kpi">
+      <span>{T('rep.kpi.earlier')}</span><strong class={r.kpi.earlier ? 'earlier' : ''}>{r.kpi.earlier}</strong>
+      <small>{T('rep.kpi.shift.sub')}</small>
+    </div>
+    <div class="card kpi">
+      <span>{T('rep.kpi.onTime')}</span><strong>{onTimePct === null ? '—' : `${onTimePct} %`}</strong>
+      <small>{T('rep.kpi.onTime.sub').replace('{late}', String(r.kpi.doneLate)).replace('{done}', String(r.kpi.done))}</small>
+    </div>
+  </div>
+
+  <section class="card block">
+    <h2>{T('rep.byReason')}</h2>
+    <p class="hint" style="margin: -6px 0 12px;">{T('rep.byReason.hint')}</p>
+    {r.reasons.length === 0 ? <p class="muted">{T('rep.empty')}</p> : (
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>{T('rep.col.reason')}</th><th class="num">{T('rep.col.events')}</th><th class="num">{T('rep.col.tasks')}</th>
+              <th class="num">{T('rep.col.later')}</th><th class="num">{T('rep.col.earlier')}</th><th class="num">{T('rep.col.rooms')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.reasons.map((x) => (
+              <tr>
+                <td>{x.reason === 'none' ? <span class="muted">{T('rep.noReason')}</span> : T(K(`reason.${x.reason}`))}</td>
+                <td class="num">{x.events}</td><td class="num">{x.tasks}</td>
+                <td class={`num${x.later ? ' later' : ''}`}>{x.later || '—'}</td>
+                <td class={`num${x.earlier ? ' earlier' : ''}`}>{x.earlier || '—'}</td>
+                <td class="num">{x.roomChanges || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+
+  <section class="card block">
+    <div class="block-head">
+      <h2>{T('rep.variance')}</h2>
+      <a href={`/api/portail/production/export?kind=ecarts&${qs}`} class="btn btn-secondary btn-sm no-print">{T('rep.csvVariance')}</a>
+    </div>
+    <p class="hint" style="margin: -6px 0 12px;">{T('rep.variance.hint')}</p>
+    {r.variance.length === 0 ? <p class="muted">{T('rep.emptyVariance')}</p> : (
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>{T('rep.col.task')}</th><th>{T('col.room')}</th><th>{T('rep.col.origin')}</th>
+              <th>{T('rep.col.origPlan')}</th><th>{T('rep.col.curPlan')}</th><th>{T('rep.col.actual')}</th>
+              <th class="num">{T('rep.col.slip')}</th><th class="num">{T('rep.col.moves')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.variance.map(({ task: t, slip, moves, origin }) => (
+              <tr>
+                <td>
+                  <a href={`/portail/production/${t.id}`}><strong>{t.task_no}</strong></a>
+                  <div class="small">{typeName(ctx.types.get(t.production_type_id), locale)}</div>
+                  <div class="small muted">{T(K(`status.${t.status}`))}{t.priority === 'rush' ? ` · ${T('flag.rush')}` : ''}</div>
+                </td>
+                <td class="small">{ctx.rooms.get(t.room_id)?.code}</td>
+                <td class="small">{origin ? T(K(`reason.${origin}`)) : '—'}</td>
+                <td class="small nowrap">{fmtDay(t.original_start_date, locale)} → {fmtDay(t.original_end_date, locale)}</td>
+                <td class="small nowrap">{fmtDay(t.start_date, locale)} → {fmtDay(t.end_date, locale)}</td>
+                <td class="small nowrap">{t.actual_start_date ? `${fmtDay(t.actual_start_date, locale)} → ${t.actual_end_date ? fmtDay(t.actual_end_date, locale) : '…'}` : '—'}</td>
+                <td class={`num${slip > 0 ? ' later' : slip < 0 ? ' earlier' : ''}`}>{slip === 0 ? '0' : `${signedDays(slip)} j`}</td>
+                <td class="num">{moves || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+
+  <section class="card block">
+    <div class="block-head">
+      <h2>{T('rep.log')}</h2>
+      <a href={`/api/portail/production/export?kind=journal&${qs}`} class="btn btn-secondary btn-sm no-print">{T('rep.csvLog')}</a>
+    </div>
+    <p class="hint" style="margin: -6px 0 12px;">{T('rep.log.hint')}</p>
+    {r.events.length > LOG_LIMIT && <p class="hint">{T('rep.truncated').replace('{n}', String(LOG_LIMIT))}</p>}
+    {r.events.length === 0 ? <p class="muted">{T('rep.empty')}</p> : (
+      <div class="table-wrap">
+        <table class="data log">
+          <thead>
+            <tr>
+              <th>{T('rep.col.when')}</th><th>{T('rep.col.task')}</th><th>{T('rep.col.event')}</th>
+              <th>{T('rep.col.reason')}</th><th>{T('rep.col.what')}</th><th>{T('rep.col.who')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.events.slice(0, LOG_LIMIT).map((e) => (
+              <tr>
+                <td class="small nowrap">{fmtDateTime(e.at, locale)}</td>
+                <td class="small"><a href={`/portail/production/${e.task_id}`}>{taskOf(e.task_id)?.task_no}</a></td>
+                <td class="small">
+                  {T(K(`ev.${e.kind}`))}
+                  {e.end_shift_days !== null && e.end_shift_days !== 0 && (
+                    <div class={e.end_shift_days > 0 ? 'later' : 'earlier'}>{T('ev.shiftEnd').replace('{d}', `${signedDays(e.end_shift_days)} j`)}</div>
+                  )}
+                </td>
+                <td class="small">
+                  {e.reason_code ? T(K(`reason.${e.reason_code}`)) : <span class="muted">—</span>}
+                  {e.reason_note && <div class="muted note">« {e.reason_note} »</div>}
+                </td>
+                <td class="small changes">{describeChanges(e, ctx).map((l) => <div>{l}</div>)}</td>
+                <td class="small nowrap">{e.staff_name ?? T('ev.unknownStaff')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+</PortailLayout>
+
+<style>
+  .lead { color: var(--p-muted); font-size: .92rem; margin: -6px 0 16px; max-width: 80ch; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .nowrap { white-space: nowrap; }
+  .btn-sm { padding: 6px 12px; font-size: .84rem; }
+  .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; padding: 16px 18px; margin-bottom: 18px; }
+  .filters > div { min-width: 150px; }
+  .filters label { font-size: .8rem; }
+  .filters .actions { display: flex; gap: 8px; min-width: 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .kpi { padding: 14px 16px; }
+  .kpi span { display: block; color: var(--p-muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi strong { display: block; font-size: 1.5rem; }
+  .kpi small { display: block; color: var(--p-muted); font-size: .76rem; line-height: 1.3; }
+  .block { margin-bottom: 18px; }
+  .block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .table-wrap { overflow-x: auto; }
+  table.data th, table.data td { padding: 9px 10px; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .later { color: var(--p-danger); font-weight: 600; }
+  .earlier { color: var(--p-success); font-weight: 600; }
+  .note { font-style: italic; }
+  .changes div { line-height: 1.35; }
+  .print-only { display: none; }
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block; font-weight: 600; margin-bottom: 10px; }
+    .card { box-shadow: none; break-inside: avoid; }
+  }
+</style>
