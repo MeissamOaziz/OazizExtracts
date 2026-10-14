@@ -33,7 +33,7 @@ export type InvoiceExtraction = z.infer<typeof InvoiceExtraction>;
 
 const PROMPT = `You are reading a supplier invoice received by Oaziz Extracts Inc. (a cannabis processor in Montréal) so it can be entered in accounts payable.
 Oaziz is the CUSTOMER on this document — never return Oaziz as the vendor.
-Extract the fields exactly as printed. Dates as YYYY-MM-DD. Amounts as plain numbers (no currency symbols, dot decimal).
+Extract the fields exactly as printed. Dates as YYYY-MM-DD. Québec/Canadian invoices often print dates as DD/MM/YYYY (12/10/2026 = 12 October 2026): use month names, the due date and the terms to decide, and never read an invoice date that would be months in the future. Amounts as plain numbers (no currency symbols, dot decimal).
 If a field is not on the document, return null rather than guessing. "total" is the amount the customer owes for this invoice including taxes.`;
 
 export function extractionAvailable(): boolean {
@@ -57,7 +57,28 @@ export async function extractInvoice(file: { data: Buffer; mediaType: string }):
   });
   if (response.stop_reason === 'refusal') throw new Error('Le document n’a pas pu être lu (refus du modèle).');
   if (!response.parsed_output) throw new Error('Lecture incomplète du document.');
-  return response.parsed_output;
+  return fixDayMonth(response.parsed_output);
+}
+
+/**
+ * Canadian invoices often print dates as DD/MM/YYYY ("12/10/2026" = Oct 12).
+ * A date read more than 45 days in the future is almost always day and month
+ * swapped: when swapping them gives a plausible date, use it (both dates
+ * together, so the due date stays consistent).
+ */
+export function fixDayMonth(x: InvoiceExtraction, today = new Date()): InvoiceExtraction {
+  const parse = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  const swap = (v: string) => `${v.slice(0, 4)}-${v.slice(8, 10)}-${v.slice(5, 7)}`;
+  const limit = new Date(today.getTime() + 45 * 86400_000).toISOString().slice(0, 10);
+  const inv = parse(x.invoice_date);
+  if (!inv || inv <= limit) return x;
+  const day = Number(inv.slice(8, 10));
+  if (day > 12) return x;
+  const swapped = swap(inv);
+  if (swapped > limit) return x;
+  const due = parse(x.due_date);
+  const dueSwapped = due && Number(due.slice(8, 10)) <= 12 ? swap(due) : due;
+  return { ...x, invoice_date: swapped, due_date: dueSwapped && dueSwapped >= swapped ? dueSwapped : due };
 }
 
 const norm = (s: string) => s.toLowerCase()
