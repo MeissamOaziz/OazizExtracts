@@ -1245,3 +1245,80 @@ export async function sendPaymentsApprovedNotice(
     return { status: 'error', detail: String(e) };
   }
 }
+
+// ============================================================
+// Production request — tells the production lead that someone asked for work
+// (customer PO, internal restock, packaging). Never sent from a dev server:
+// local testing uses the production database and real staff addresses.
+// ============================================================
+
+export interface ProductionRequestEmail {
+  toEmail: string;
+  toName: string;
+  requestNo: string;
+  kindLabel: string;
+  title: string;
+  requestedBy: string;
+  customer: string | null;
+  neededBy: string | null;
+  rush: boolean;
+  fileCount: number;
+  requestUrl: string;
+}
+
+export async function sendProductionRequestNotice(
+  n: ProductionRequestEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[production-email] dev server: not sending ${n.requestNo} notice to ${n.toEmail}`);
+    return { status: 'skipped_dev' };
+  }
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn(`[production-email] RESEND_API_KEY not set; would-have-notified ${n.toEmail} about ${n.requestNo}`);
+    return { status: 'skipped_no_key' };
+  }
+
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const rows = [
+    { label: 'Demande', value: `${n.requestNo} — ${n.kindLabel}` },
+    { label: 'Quoi', value: n.title },
+    ...(n.customer ? [{ label: 'Client', value: n.customer }] : []),
+    { label: 'Requise pour', value: n.neededBy ?? 'Non précisé' },
+    { label: 'Demandée par', value: n.requestedBy },
+    ...(n.fileCount ? [{ label: 'Fichiers joints', value: String(n.fileCount) }] : []),
+  ];
+
+  const html = renderEmailShell({
+    preheader: `${n.requestedBy} demande : ${n.title}`,
+    brandLine: 'Planification de production',
+    badge: n.rush ? 'Demande urgente — à planifier' : 'Nouvelle demande — à planifier',
+    greeting: `Bonjour ${n.toName.split(' ')[0] || n.toName},`,
+    intro: `<strong>${escapeHtml(n.requestedBy)}</strong> vient d'envoyer une demande de production. Ouvrez-la pour voir les lignes et les fichiers joints, puis planifiez-la.`,
+    rows,
+    ctaLabel: 'Voir la demande',
+    ctaUrl: n.requestUrl,
+    fallbackNote: 'La demande est aussi visible dans Production → Demandes, sur le portail.',
+    footerNote: 'Envoi automatique — nouvelle demande de production.',
+  });
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from,
+      to: [n.toEmail],
+      replyTo,
+      subject: `[Oaziz] ${n.rush ? 'URGENT - ' : ''}Demande de production ${n.requestNo} - ${n.title}`,
+      html,
+    });
+    if (error) {
+      console.error('[production-email] Resend error:', error);
+      return { status: 'error', detail: error.message };
+    }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[production-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}

@@ -17,8 +17,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const action = str(form, '_action') === 'edit' ? 'edit' : 'create';
   const id = str(form, 'id');
   if (action === 'edit' && !UUID.test(id)) return redirect('/portail/production', 303);
+  // A failed "plan this request" keeps the request on the form.
+  const fromRequest = UUID.test(str(form, 'request_id')) ? `&demande=${str(form, 'request_id')}` : '';
   const fail = (code: string) => redirect(
-    action === 'edit' ? `/portail/production/${id}?error=${code}#modifier` : `/portail/production/nouvelle?error=${code}`, 303);
+    action === 'edit' ? `/portail/production/${id}?error=${code}#modifier` : `/portail/production/nouvelle?error=${code}${fromRequest}`, 303);
 
   const data: Record<string, string> = {
     production_type_id: str(form, 'production_type_id'),
@@ -30,6 +32,11 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     notes: str(form, 'notes'),
     priority: form.get('rush') ? 'rush' : 'normal',
   };
+  // The request this task serves: set when planned from a request, editable after.
+  if (form.has('request_id')) {
+    const rid = str(form, 'request_id');
+    if (rid === '' || UUID.test(rid)) data.request_id = rid;
+  }
   if (!UUID.test(data.production_type_id) || !UUID.test(data.room_id)
       || !isIsoDate(data.start_date) || !isIsoDate(data.end_date)) return fail('MISSING_FIELDS');
 

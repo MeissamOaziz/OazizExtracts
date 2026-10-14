@@ -1,0 +1,178 @@
+---
+// The production request form, new and edit. Files are only taken on a new
+// request here; on an existing one they are added from the request page.
+import { getPortailLocale, makeT } from '../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../i18n/portail/production';
+import { typeName, type ProdType } from '../../lib/production';
+import { FILE_ACCEPT, REQUEST_KINDS, REQUEST_UNITS, type ProdRequest } from '../../lib/production-requests';
+
+interface Props {
+  mode: 'create' | 'edit';
+  types: ProdType[];
+  request?: ProdRequest;
+}
+const { mode, types, request } = Astro.props;
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+
+const kind = request?.kind ?? 'customer_po';
+const typeOpts = types.filter((p) => p.is_active || p.id === request?.production_type_id);
+const qtyText = (q: number | null) => (q === null ? '' : locale === 'fr' ? String(q).replace('.', ',') : String(q));
+const lines = request && request.lines.length > 0
+  ? request.lines.map((l) => ({ description: l.description, qty: qtyText(l.quantity), unit: l.unit }))
+  : [{ description: '', qty: '', unit: 'unit' }];
+---
+<form method="POST" action="/api/portail/production/requests" enctype="multipart/form-data" class="rq-form">
+  <input type="hidden" name="_action" value={mode} />
+  {request && <input type="hidden" name="id" value={request.id} />}
+
+  <fieldset class="form-row kinds">
+    <legend>{T('rq.f.kind')} <em class="req">*</em></legend>
+    <div class="kind-grid">
+      {REQUEST_KINDS.map((k) => (
+        <label class="kind">
+          <input type="radio" name="kind" value={k} checked={k === kind} required />
+          <span><strong>{T(K(`rq.kind.${k}`))}</strong><small>{T(K(`rq.kind.${k}.desc`))}</small></span>
+        </label>
+      ))}
+    </div>
+  </fieldset>
+
+  <div class="form-row">
+    <label for="rq-title">{T('rq.f.title')} <em class="req">*</em></label>
+    <input type="text" id="rq-title" name="title" required value={request?.title ?? ''} placeholder={T('rq.f.title.ph')} />
+  </div>
+
+  <div class="two-col">
+    <div class="form-row">
+      <label for="rq-customer">{T('rq.f.customer')} <em class="req" data-po-only>*</em></label>
+      <input type="text" id="rq-customer" name="customer_name" value={request?.customer_name ?? ''} />
+    </div>
+    <div class="form-row">
+      <label for="rq-po">{T('rq.f.po')}</label>
+      <input type="text" id="rq-po" name="customer_po" value={request?.customer_po ?? ''} autocomplete="off" />
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="form-row">
+      <label for="rq-needed">{T('rq.f.neededBy')}</label>
+      <input type="date" id="rq-needed" name="needed_by" value={request?.needed_by ?? ''} />
+      <p class="hint">{T('rq.f.neededBy.hint')}</p>
+    </div>
+    <div class="form-row">
+      <label for="rq-type">{T('rq.f.type')}</label>
+      <select id="rq-type" name="production_type_id">
+        <option value="">{T('rq.f.type.none')}</option>
+        {typeOpts.map((p) => <option value={p.id} selected={p.id === request?.production_type_id}>{typeName(p, locale)}</option>)}
+      </select>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="check-row">
+      <input type="checkbox" id="rq-rush" name="rush" value="1" checked={request?.priority === 'rush'} />
+      <label for="rq-rush">{T('rq.f.rush')}</label>
+    </div>
+  </div>
+
+  <fieldset class="form-row lines">
+    <legend>{T('rq.f.lines')}</legend>
+    <p class="hint" style="margin: 0 0 10px;">{T('rq.f.lines.hint')}</p>
+    <div class="ln-head" aria-hidden="true"><span>{T('rq.f.line.desc')}</span><span>{T('rq.f.line.qty')}</span><span>{T('rq.f.line.unit')}</span><span></span></div>
+    <div class="ln-rows">
+      {lines.map((l) => (
+        <div class="ln-row">
+          <input type="text" name="ln_desc" value={l.description} placeholder={T('rq.f.line.desc.ph')} aria-label={T('rq.f.line.desc')} />
+          <input type="text" name="ln_qty" value={l.qty} inputmode="decimal" aria-label={T('rq.f.line.qty')} />
+          <select name="ln_unit" aria-label={T('rq.f.line.unit')}>
+            {REQUEST_UNITS.map((u) => <option value={u} selected={u === l.unit}>{T(K(`unit.${u}`))}</option>)}
+          </select>
+          <button type="button" class="ln-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+        </div>
+      ))}
+    </div>
+    <template class="ln-template">
+      <div class="ln-row">
+        <input type="text" name="ln_desc" placeholder={T('rq.f.line.desc.ph')} aria-label={T('rq.f.line.desc')} />
+        <input type="text" name="ln_qty" inputmode="decimal" aria-label={T('rq.f.line.qty')} />
+        <select name="ln_unit" aria-label={T('rq.f.line.unit')}>
+          {REQUEST_UNITS.map((u) => <option value={u}>{T(K(`unit.${u}`))}</option>)}
+        </select>
+        <button type="button" class="ln-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+      </div>
+    </template>
+    <button type="button" class="btn btn-secondary btn-sm ln-add">{T('rq.f.addLine')}</button>
+  </fieldset>
+
+  <div class="form-row">
+    <label for="rq-notes">{T('rq.f.notes')}</label>
+    <textarea id="rq-notes" name="notes" rows="3">{request?.notes ?? ''}</textarea>
+  </div>
+
+  {mode === 'create' && (
+    <div class="form-row">
+      <label for="rq-files">{T('rq.f.files')}</label>
+      <input type="file" id="rq-files" name="files" multiple accept={FILE_ACCEPT} />
+      <p class="hint">{T('rq.f.files.hint')}</p>
+    </div>
+  )}
+
+  <button type="submit" class="btn btn-primary">{mode === 'create' ? T('rq.submit') : T('rq.save')}</button>
+</form>
+
+<style>
+  .req { color: var(--p-danger); font-style: normal; }
+  fieldset { border: 1px solid var(--p-border); border-radius: 8px; padding: 14px 16px 16px; }
+  fieldset.kinds { border: 0; padding: 0; }
+  legend { font-weight: 600; font-size: .9rem; padding: 0 6px; }
+  fieldset.kinds legend { padding: 0; margin-bottom: 8px; font-weight: 500; font-size: .88rem; }
+  .kind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .kind { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--p-border); border-radius: 8px;
+          padding: 12px; cursor: pointer; margin: 0; font-weight: 400; }
+  .kind:has(input:checked) { border-color: var(--p-accent); background: rgba(208, 88, 38, .05); }
+  .kind input { margin-top: 3px; }
+  .kind strong { display: block; font-size: .9rem; }
+  .kind small { display: block; color: var(--p-muted); font-size: .8rem; line-height: 1.35; margin-top: 2px; }
+  .ln-head, .ln-row { display: grid; grid-template-columns: 3fr 1fr 1fr 34px; gap: 8px; align-items: center; }
+  .ln-head { font-size: .76rem; color: var(--p-muted); font-weight: 600; margin-bottom: 4px; }
+  .ln-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .ln-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 36px; cursor: pointer; color: var(--p-muted); font-size: 1.1rem; }
+  .ln-remove:hover { color: var(--p-danger); border-color: #fecaca; }
+  .btn-sm { padding: 6px 12px; font-size: .85rem; }
+  input[type="file"] { display: block; font-size: .9rem; }
+  @media (max-width: 640px) {
+    .ln-head { display: none; }
+    .ln-row { grid-template-columns: 1fr 1fr 34px; }
+    .ln-row input[name="ln_desc"] { grid-column: 1 / -1; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('form.rq-form').forEach((form) => {
+    const rows = form.querySelector<HTMLElement>('.ln-rows')!;
+    const tpl = form.querySelector<HTMLTemplateElement>('.ln-template')!;
+    form.querySelector('.ln-add')?.addEventListener('click', () => {
+      rows.appendChild(tpl.content.cloneNode(true));
+      rows.lastElementChild?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    rows.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.ln-remove');
+      if (!btn) return;
+      const row = btn.closest('.ln-row')!;
+      if (rows.children.length > 1) row.remove();
+      else row.querySelectorAll<HTMLInputElement>('input').forEach((i) => { i.value = ''; });
+    });
+    // The customer is required on a customer PO only.
+    const customer = form.querySelector<HTMLInputElement>('[name="customer_name"]')!;
+    const star = form.querySelector<HTMLElement>('[data-po-only]')!;
+    const sync = () => {
+      const po = form.querySelector<HTMLInputElement>('[name="kind"]:checked')?.value === 'customer_po';
+      customer.required = po;
+      star.hidden = !po;
+    };
+    form.querySelectorAll('[name="kind"]').forEach((r) => r.addEventListener('change', sync));
+    sync();
+  });
+</script>

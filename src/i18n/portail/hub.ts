@@ -14,6 +14,7 @@ export const frHub = {
   'section.production.title': 'Planification de production',
   'section.production.desc':
     'Ce qui roule dans chaque salle : calendrier, Gantt, vue par salle et rapports sur les changements au plan.',
+  'section.production.tag': '{count} demande(s) à planifier',
 
   'section.payables.desc': 'Factures fournisseurs, paiements de la semaine, approbation de Jorge et flux de trésorerie.',
 
@@ -46,6 +47,7 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
   'section.production.title': 'Production scheduling',
   'section.production.desc':
     'What is running in each room: calendar, Gantt, room view and reports on plan changes.',
+  'section.production.tag': '{count} request(s) to plan',
 
   'section.payables.desc': "Supplier invoices, this week's payments, Jorge's approval and cash flow.",
 

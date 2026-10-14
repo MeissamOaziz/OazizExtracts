@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   'hr_evaluations',  // HR employee evaluations + tracker
   'atelier',         // Atelier (production / orders)
   'prod_schedule',   // Production scheduling: tasks by room, calendar/Gantt, plan-change reports (Simon)
+  'prod_request',    // Production requests only: ask for work (PO, restock, packaging) and follow it
   'payables',        // Supplier payments: invoices, weekly payment run, approvals
   'payables_approve', // Approve weekly supplier payments + see past approvals (Jorge)
   'admin',           // Admin panel: users and access
@@ -122,6 +123,9 @@ export const ROUTE_RULES: RouteRule[] = [
   { test: under('/portail/atelier'), any: ['atelier'] },
   { test: under('/api/portail/atelier'), any: ['atelier'] },
 
+  // Requests are open to requesters too; the rest of the module is the planners'.
+  { test: under('/portail/production/demandes'), any: ['prod_schedule', 'prod_request'] },
+  { test: under('/api/portail/production/requests'), any: ['prod_schedule', 'prod_request'] },
   { test: under('/portail/production'), any: ['prod_schedule'] },
   { test: under('/api/portail/production'), any: ['prod_schedule'] },
 
@@ -167,7 +171,7 @@ export interface ModuleLink { key: string; href: string; perms: Permission[] }
 export const MODULES: ModuleLink[] = [
   { key: 'rnd', href: '/portail/formulaires', perms: ['rnd'] },
   { key: 'atelier', href: '/portail/atelier', perms: ['atelier'] },
-  { key: 'prod_schedule', href: '/portail/production', perms: ['prod_schedule'] },
+  { key: 'prod_schedule', href: '/portail/production', perms: ['prod_schedule', 'prod_request'] },
   { key: 'payables', href: '/portail/paiements', perms: ['payables', 'payables_approve'] },
   { key: 'calculators', href: '/portail/calculatrices', perms: ['calculators'] },
   { key: 'vq', href: '/portail/fournisseurs', perms: ['vq', 'licenses'] },
@@ -179,6 +183,11 @@ export const MODULES: ModuleLink[] = [
 // Approver-only users land on their approvals list, not the payment workspace.
 export function payablesHref(perms: ReadonlySet<Permission>): string {
   return perms.has('payables') ? '/portail/paiements' : '/portail/paiements/approbations';
+}
+
+// Requesters without the planning access land straight on the requests.
+export function productionHref(perms: ReadonlySet<Permission>): string {
+  return perms.has('prod_schedule') ? '/portail/production' : '/portail/production/demandes';
 }
 
 export function vqHref(perms: ReadonlySet<Permission>): string {

@@ -8,7 +8,9 @@ import { frProduction, enProduction, type ProductionDict } from '../../i18n/port
 import {
   CHANGE_REASONS, CREATE_REASONS, STATUSES, UNITS, roomName, typeName,
   type ProdType, type Room, type Task,
+  fmtDay,
 } from '../../lib/production';
+import { poLabel, type ProdRequest } from '../../lib/production-requests';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -17,8 +19,12 @@ interface Props {
   task?: Task;
   /** Prefill for a new task, e.g. the day picked on the calendar. */
   defaults?: { start_date?: string; room_id?: string };
+  /** New task planned from a request: linked to it and prefilled from it. */
+  request?: ProdRequest;
+  /** Edit: requests the task can be linked to (open ones plus its current one). */
+  linkable?: Array<{ id: string; request_no: string; title: string }>;
 }
-const { mode, rooms, types, task, defaults = {} } = Astro.props;
+const { mode, rooms, types, task, defaults = {}, request, linkable = [] } = Astro.props;
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frProduction, enProduction);
 const K = (k: string) => k as keyof ProductionDict;
@@ -32,7 +38,7 @@ const inputRows = task && task.inputs.length > 0
   ? task.inputs.map((i) => ({ material: i.material, lot: i.groweriq_lot_id ?? '', qty: qtyText(i.quantity), unit: i.unit }))
   : [{ material: '', lot: '', qty: '', unit: 'g' }];
 const v = {
-  production_type_id: task?.production_type_id ?? '',
+  production_type_id: task?.production_type_id ?? request?.production_type_id ?? '',
   room_id: task?.room_id ?? defaults.room_id ?? '',
   start_date: task?.start_date ?? defaults.start_date ?? '',
   end_date: task?.end_date ?? defaults.start_date ?? '',
@@ -42,6 +48,28 @@ const v = {
   <input type="hidden" name="_action" value={mode} />
   {task && <input type="hidden" name="id" value={task.id} />}
   {task && <input type="hidden" name="version" value={String(task.version)} />}
+  {mode === 'create' && request && (
+    <>
+      <input type="hidden" name="request_id" value={request.id} />
+      <div class="for-request">
+        <span class="small">{T('rq.forRequest')}</span>
+        <strong>{request.request_no} — {request.title}</strong>
+        {(request.customer_name || request.customer_po) && (
+          <span class="small">{[request.customer_name, request.customer_po && poLabel(request.customer_po)].filter(Boolean).join(' · ')}</span>
+        )}
+        {request.needed_by && <span class="small">{T('rq.f.neededBy')} {fmtDay(request.needed_by, locale, true)}</span>}
+      </div>
+    </>
+  )}
+  {mode === 'edit' && linkable.length > 0 && (
+    <div class="form-row">
+      <label for="f-request">{T('rq.link')}</label>
+      <select id="f-request" name="request_id">
+        <option value="">{T('rq.link.none')}</option>
+        {linkable.map((q) => <option value={q.id} selected={q.id === task?.request_id}>{q.request_no} — {q.title}</option>)}
+      </select>
+    </div>
+  )}
 
   <div class="two-col">
     <div class="form-row">
@@ -110,7 +138,7 @@ const v = {
 
   <div class="form-row">
     <div class="check-row">
-      <input type="checkbox" id="f-rush" name="rush" value="1" checked={task?.priority === 'rush'} />
+      <input type="checkbox" id="f-rush" name="rush" value="1" checked={task ? task.priority === 'rush' : request?.priority === 'rush'} />
       <label for="f-rush">{T('f.rush')}</label>
     </div>
   </div>
@@ -158,8 +186,8 @@ const v = {
       <legend>{T('origin.title')}</legend>
       <p class="hint" style="margin: 0 0 10px;">{T('origin.hint')}</p>
       <div class="radio-group">
-        {CREATE_REASONS.map((r, i) => (
-          <label><input type="radio" name="reason" value={r} checked={i === 0} /> {T(K(`reason.${r}`))}</label>
+        {CREATE_REASONS.map((r) => (
+          <label><input type="radio" name="reason" value={r} checked={r === (request?.priority === 'rush' ? 'rush_order' : 'planned')} /> {T(K(`reason.${r}`))}</label>
         ))}
       </div>
       <div class="form-row" style="margin: 14px 0 0;">
@@ -190,6 +218,9 @@ const v = {
 
 <style>
   .req { color: var(--p-danger); font-style: normal; }
+  .for-request { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; margin-bottom: 18px;
+                 border-left: 3px solid var(--p-accent); background: rgba(208, 88, 38, .05); border-radius: 6px; }
+  .for-request .small { font-size: .8rem; color: var(--p-muted); }
   .opt { font-weight: 400; color: var(--p-muted); }
   fieldset { border: 1px solid var(--p-border); border-radius: 8px; padding: 14px 16px 16px; }
   legend { font-weight: 600; font-size: .9rem; padding: 0 6px; }

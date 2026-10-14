@@ -54,6 +54,7 @@ export interface Task {
   original_start_date: string; original_end_date: string;
   actual_start_date: string | null; actual_end_date: string | null;
   groweriq_lot_id: string | null; groweriq_batch_id: string | null; notes: string | null;
+  request_id: string | null;
   version: number; created_at: string; updated_at: string;
   inputs: TaskInput[];
 }
@@ -67,7 +68,7 @@ export interface TaskEvent {
 
 const TASK_COLS = 'id, task_no, production_type_id, room_id, status, priority, start_date, end_date, '
   + 'original_start_date, original_end_date, actual_start_date, actual_end_date, groweriq_lot_id, '
-  + 'groweriq_batch_id, notes, version, created_at, updated_at, '
+  + 'groweriq_batch_id, notes, request_id, version, created_at, updated_at, '
   + 'inputs:ps_task_inputs ( material, groweriq_lot_id, quantity, unit, sort_order )';
 
 function shapeTask(row: any): Task {

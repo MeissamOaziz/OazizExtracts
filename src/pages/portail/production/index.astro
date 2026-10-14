@@ -11,6 +11,7 @@ import {
   monthLabel, mondayOf, roomConflicts, roomName, spanOf, todayLocal, typeName, weekdayNames, fmtQty,
   type Task,
 } from '../../../lib/production';
+import { loadRequests, poLabel, requestState, tasksByRequest } from '../../../lib/production-requests';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -30,10 +31,21 @@ const today = todayLocal();
 const anchor = isIsoDate(url.searchParams.get('d')) ? url.searchParams.get('d')! : today;
 const showClosed = url.searchParams.get('fermees') === '1';
 
-const [{ rooms, types }, tasks] = await Promise.all([
+const [{ rooms, types }, tasks, requests] = await Promise.all([
   loadCatalog(admin),
   loadTasks(admin, { includeCancelled: view === 'liste' && showClosed }),
+  loadRequests(admin),
 ]);
+const requestById = new Map(requests.map((q) => [q.id, q]));
+const byRequest = tasksByRequest(tasks);
+const toPlan = requests.filter((q) => requestState(q, byRequest.get(q.id)) === 'to_plan');
+const rushToPlan = toPlan.filter((q) => q.priority === 'rush').length;
+/** "Client · PO 1234" for a task planned from a request. */
+const requestLabel = (t: Task) => {
+  const q = t.request_id ? requestById.get(t.request_id) : undefined;
+  if (!q) return null;
+  return [q.customer_name, q.customer_po && poLabel(q.customer_po)].filter(Boolean).join(' · ') || q.request_no;
+};
 const roomById = new Map(rooms.map((r) => [r.id, r]));
 const typeById = new Map(types.map((p) => [p.id, p]));
 const conflicts = roomConflicts(tasks, rooms);
@@ -137,6 +149,14 @@ const errMsg = errCode ? T(K(`err.${errCode}`)) ?? T('err.UNKNOWN') : null;
   {flash && <div class="flash flash-success">{flash}</div>}
   {errMsg && <div class="flash flash-error">{errMsg}</div>}
 
+  {toPlan.length > 0 && (
+    <a href="/portail/production/demandes?vue=to_plan" class={`req-banner${rushToPlan ? ' rush' : ''}`}>
+      <strong>{T('board.requests').replace('{n}', String(toPlan.length))}</strong>
+      {rushToPlan > 0 && <span class="flag rush">{rushToPlan} {T('flag.rush')}</span>}
+      <span class="cta">{T('board.requests.cta')} →</span>
+    </a>
+  )}
+
   <div class="stats">
     <span class="st"><b>{stats.inProgress}</b> {T('stat.inProgress').replace('{n}', '').trim()}</span>
     <span class="st"><b>{stats.upcoming}</b> {T('stat.upcoming').replace('{n}', '').trim()}</span>
@@ -183,6 +203,7 @@ const errMsg = errCode ? T(K(`err.${errCode}`)) ?? T('err.UNKNOWN') : null;
                           <td class="nowrap"><a href={`/portail/production/${t.id}`}><strong>{t.task_no}</strong></a></td>
                           <td>
                             <a href={`/portail/production/${t.id}`}>{typeOf(t)}</a>
+                            {requestLabel(t) && <div class="req-for">{requestLabel(t)}</div>}
                             <div class="flags">{flagsOf(t).map((f) => <span class={`flag ${f.cls}`} title={f.tip}>{f.label}</span>)}</div>
                           </td>
                           <td class="room-cell"><span class="chip" style={`--room:${colourOf(t)}`} title={roomName(roomOf(t), locale)}>{roomOf(t)?.code}</span> <span class="muted small room-name">{roomName(roomOf(t), locale)}</span></td>
@@ -397,6 +418,11 @@ const errMsg = errCode ? T(K(`err.${errCode}`)) ?? T('err.UNKNOWN') : null;
   .btn-sm { padding: 5px 11px; font-size: .84rem; }
   form.inline { display: block; margin-top: 6px; }
 
+  .req-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px;
+                border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; border-radius: 8px; text-decoration: none; font-size: .9rem; }
+  .req-banner.rush { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+  .req-banner .cta { margin-left: auto; font-weight: 600; }
+  .req-for { font-size: .76rem; color: var(--p-muted); }
   .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .st { background: var(--p-card); border: 1px solid var(--p-border); border-radius: 999px; padding: 4px 12px; font-size: .84rem; color: var(--p-muted); }
   .st b { color: var(--p-text); margin-right: 2px; }

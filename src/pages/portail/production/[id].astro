@@ -12,6 +12,7 @@ import {
   loadTasks, missingInfo, roomConflicts, roomName, slipDays, todayLocal, typeName,
 } from '../../../lib/production';
 import { colon, describeChanges, signedDays, type DescribeCtx } from '../../../lib/production-report';
+import { loadRequests, poLabel } from '../../../lib/production-requests';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -26,9 +27,13 @@ if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/production');
 const task = await loadTask(admin, id);
 if (!task) return Astro.redirect('/portail/production?error=NOT_FOUND');
 
-const [{ rooms, types }, events, liveTasks] = await Promise.all([
-  loadCatalog(admin), loadEvents(admin, { taskId: id }), loadTasks(admin),
+const [{ rooms, types }, events, liveTasks, requests] = await Promise.all([
+  loadCatalog(admin), loadEvents(admin, { taskId: id }), loadTasks(admin), loadRequests(admin),
 ]);
+const request = task.request_id ? requests.find((q) => q.id === task.request_id) ?? null : null;
+// A task can be linked to any open request, or keep the one it has.
+const linkable = requests.filter((q) => !q.cancelled_at || q.id === task.request_id)
+  .map((q) => ({ id: q.id, request_no: q.request_no, title: q.title }));
 const ctx: DescribeCtx = {
   T, locale, rooms: new Map(rooms.map((r) => [r.id, r])), types: new Map(types.map((p) => [p.id, p])),
 };
@@ -77,6 +82,15 @@ const canStop = task.status === 'planned' || task.status === 'in_progress' || ta
           <span class="flag missing">{T('tip.missing').replace('{list}', missing.map((m) => T(K(`missing.${m}`))).join(', '))}</span>
         )}
       </div>
+      {request && (
+        <p class="for-request">
+          {T('rq.forRequest')} <a href={`/portail/production/demandes/${request.id}`}><strong>{request.request_no}</strong> — {request.title}</a>
+          {(request.customer_name || request.customer_po) && (
+            <span class="muted"> · {[request.customer_name, request.customer_po && poLabel(request.customer_po)].filter(Boolean).join(' · ')}</span>
+          )}
+          {request.needed_by && <span class="muted"> · {T('rq.f.neededBy')} {fmtDay(request.needed_by, locale)}</span>}
+        </p>
+      )}
       {created && (
         <p class="small muted" style="margin-top: 6px;">
           {T('detail.created').replace('{date}', fmtDateTime(created.at, locale)).replace('{name}', created.staff_name ?? T('ev.unknownStaff'))}
@@ -187,7 +201,7 @@ const canStop = task.status === 'planned' || task.status === 'in_progress' || ta
 
   <section class="card" id="modifier" style="margin-top: 18px;">
     <h2>{T('detail.edit')}</h2>
-    <ProductionTaskForm mode="edit" rooms={rooms} types={types} task={task} />
+    <ProductionTaskForm mode="edit" rooms={rooms} types={types} task={task} linkable={linkable} />
   </section>
 
   <section class="card" style="margin-top: 18px;">
@@ -223,6 +237,8 @@ const canStop = task.status === 'planned' || task.status === 'in_progress' || ta
   .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
   .ttl { font-size: 1.35rem; margin: 0 0 6px; }
   .task-head { margin-bottom: 16px; }
+  .for-request { margin-top: 8px; font-size: .9rem; padding: 6px 12px; border-left: 3px solid var(--p-accent);
+                 background: rgba(208, 88, 38, .05); border-radius: 6px; }
   .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   h3 { font-size: .92rem; font-weight: 600; margin: 18px 0 8px; }

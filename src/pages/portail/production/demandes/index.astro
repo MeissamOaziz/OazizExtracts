@@ -1,0 +1,137 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import { fmtDay, loadTasks } from '../../../../lib/production';
+import { isOverdue, isSoon, poLabel, loadRequests, requestState, tasksByRequest, type RequestState } from '../../../../lib/production-requests';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+const planner = !!Astro.locals.access?.perms?.has('prod_schedule');
+
+const [requests, tasks] = await Promise.all([loadRequests(admin), loadTasks(admin)]);
+const byReq = tasksByRequest(tasks);
+const rows = requests.map((r) => ({ r, state: requestState(r, byReq.get(r.id)), tasks: byReq.get(r.id) ?? [] }));
+
+const TABS = ['open', 'to_plan', 'done', 'cancelled', 'all'] as const;
+type Tab = (typeof TABS)[number];
+const tabParam = Astro.url.searchParams.get('vue') as Tab | null;
+const tab: Tab = tabParam && (TABS as readonly string[]).includes(tabParam) ? tabParam : 'open';
+const inTab = (s: RequestState, t: Tab) =>
+  t === 'all' ? true : t === 'open' ? ['to_plan', 'planned', 'in_production'].includes(s) : s === t;
+const counts = Object.fromEntries(TABS.map((t) => [t, rows.filter((x) => inTab(x.state, t)).length])) as Record<Tab, number>;
+
+// Open work first by urgency: rush, then the nearest needed-by date.
+const shown = rows.filter((x) => inTab(x.state, tab)).sort((a, b) =>
+  tab === 'open' || tab === 'to_plan'
+    ? (a.state === 'to_plan' ? 0 : 1) - (b.state === 'to_plan' ? 0 : 1)
+      || (a.r.priority === 'rush' ? 0 : 1) - (b.r.priority === 'rush' ? 0 : 1)
+      || (a.r.needed_by ?? '9999').localeCompare(b.r.needed_by ?? '9999')
+    : b.r.created_at.localeCompare(a.r.created_at));
+---
+<PortailLayout title={T('rq.title')} staffName={staff.full_name} wide>
+  <div class="head">
+    <div>
+      <h1>{T('rq.title')}</h1>
+      <p class="sub-title">{T('rq.subtitle')}</p>
+    </div>
+    <a href="/portail/production/demandes/nouvelle" class="btn btn-primary">{T('rq.new')}</a>
+  </div>
+  <ProductionNav active="requests" />
+
+  <nav class="tabs">
+    {TABS.map((t) => (
+      <a href={`?vue=${t}`} class={t === tab ? 'active' : ''}>{T(K(`rq.tab.${t}`))} <span class="n">{counts[t]}</span></a>
+    ))}
+  </nav>
+
+  {requests.length === 0 ? (
+    <div class="card empty-state">
+      <p style="margin-bottom: 14px;">{T('rq.empty')}</p>
+      <a href="/portail/production/demandes/nouvelle" class="btn btn-primary">{T('rq.new')}</a>
+    </div>
+  ) : shown.length === 0 ? (
+    <div class="card empty-state">{T('rq.emptyTab')}</div>
+  ) : (
+    <div class="card list">
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>{T('rq.col.no')}</th><th>{T('rq.col.request')}</th><th>{T('rq.col.customer')}</th>
+              <th>{T('rq.col.neededBy')}</th><th>{T('rq.col.by')}</th><th>{T('rq.col.state')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map(({ r, state, tasks: ts }) => {
+              const files = r.files.filter((f) => !f.removed_at).length;
+              return (
+                <tr>
+                  <td class="nowrap"><a href={`/portail/production/demandes/${r.id}`}><strong>{r.request_no}</strong></a></td>
+                  <td>
+                    <a href={`/portail/production/demandes/${r.id}`}>{r.title}</a>
+                    <div class="small muted">{T(K(`rq.kind.${r.kind}`))}{files > 0 && ` · ${T('rq.files').replace('{n}', String(files))}`}</div>
+                    <div class="flags">
+                      {r.priority === 'rush' && state !== 'done' && state !== 'cancelled' && <span class="flag rush">{T('flag.rush')}</span>}
+                      {isOverdue(r, state) && <span class="flag late">{T('rq.flag.overdue')}</span>}
+                      {isSoon(r, state) && !isOverdue(r, state) && <span class="flag soon">{T('rq.flag.soon')}</span>}
+                    </div>
+                  </td>
+                  <td class="small">{r.customer_name ?? <span class="muted">—</span>}{r.customer_po && <div class="muted mono">{poLabel(r.customer_po)}</div>}</td>
+                  <td class="small nowrap">{r.needed_by ? fmtDay(r.needed_by, locale) : <span class="muted">—</span>}</td>
+                  <td class="small">{r.requested_by_name ?? '—'}<div class="muted">{fmtDay(r.created_at.slice(0, 10), locale)}</div></td>
+                  <td class="nowrap">
+                    <span class={`rq-badge rq-${state}`}>{T(K(`rq.state.${state}`))}</span>
+                    {ts.length > 0 && <div class="small muted">{ts.map((t) => t.task_no).join(', ')}</div>}
+                    {planner && state === 'to_plan' && (
+                      <div><a class="btn btn-secondary btn-sm plan" href={`/portail/production/nouvelle?demande=${r.id}`}>{T('rq.plan')}</a></div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sub-title { color: var(--p-muted); font-size: .92rem; margin: 0; max-width: 76ch; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .nowrap { white-space: nowrap; }
+  .btn-sm { padding: 5px 11px; font-size: .84rem; }
+  .plan { margin-top: 6px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs a { padding: 6px 12px; border: 1px solid var(--p-border); border-radius: 999px; text-decoration: none; color: var(--p-muted);
+            font-size: .86rem; background: var(--p-card); }
+  .tabs a.active { border-color: var(--p-accent); color: var(--p-accent); background: rgba(208,88,38,.05); }
+  .tabs .n { font-weight: 600; margin-left: 2px; }
+  .list { padding: 8px 12px; }
+  .table-wrap { overflow-x: auto; }
+  table.data th, table.data td { padding: 10px 10px; vertical-align: top; }
+  .flags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .flag { font-size: .66rem; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; }
+  .flag.rush { background: #fee2e2; color: #991b1b; }
+  .flag.late { background: #fef2f2; color: var(--p-danger); border: 1px solid #fecaca; }
+  .flag.soon { background: #fffbeb; color: var(--p-warn); border: 1px solid #fde68a; }
+  .rq-badge { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .rq-to_plan { background: #fff7ed; color: #c2410c; }
+  .rq-planned { background: #eff6ff; color: #1e40af; }
+  .rq-in_production { background: #fef3c7; color: #92400e; }
+  .rq-done { background: #dcfce7; color: #166534; }
+  .rq-cancelled { background: #f3f4f6; color: #6b7280; }
+</style>

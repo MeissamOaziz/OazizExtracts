@@ -1,0 +1,30 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../../components/portail/ProductionNav.astro';
+import ProductionRequestForm from '../../../../components/portail/ProductionRequestForm.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import { loadCatalog } from '../../../../lib/production';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const { types } = await loadCatalog(getAdminClient());
+const err = Astro.url.searchParams.get('error');
+const errMsg = err ? (T(`rq.err.${err}` as keyof ProductionDict) ?? T('rq.err.unknown')) : null;
+---
+<PortailLayout title={T('rq.newTitle')} staffName={staff.full_name} wide>
+  <h1>{T('rq.title')}</h1>
+  <ProductionNav active="requests" />
+  <div class="card" style="max-width: 860px;">
+    <h2>{T('rq.newTitle')}</h2>
+    <p class="hint" style="margin: -6px 0 20px;">{T('rq.newSubtitle')}</p>
+    {errMsg && <div class="flash flash-error">{errMsg}</div>}
+    <ProductionRequestForm mode="create" types={types} />
+  </div>
+</PortailLayout>

@@ -1,21 +1,26 @@
 ---
-// Sub-navigation shared by every /portail/production page.
+// Sub-navigation shared by every /portail/production page. People who can only
+// send requests (prod_request) see the requests tab alone.
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frProduction, enProduction } from '../../i18n/portail/production';
+import type { Permission } from '../../lib/access';
 
-type Key = 'board' | 'new' | 'reports' | 'settings';
+type Key = 'board' | 'requests' | 'new' | 'reports' | 'settings';
 interface Props { active: Key }
 const { active } = Astro.props;
 const T = makeT(getPortailLocale(Astro.cookies), frProduction, enProduction);
-const items: Array<{ key: Key; href: string; label: string }> = [
-  { key: 'board', href: '/portail/production', label: T('nav.board') },
-  { key: 'new', href: '/portail/production/nouvelle', label: T('nav.new') },
-  { key: 'reports', href: '/portail/production/rapports', label: T('nav.reports') },
-  { key: 'settings', href: '/portail/production/parametres', label: T('nav.settings') },
+const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Permission>();
+const planner = perms.has('prod_schedule');
+const items: Array<{ key: Key; href: string; label: string; show: boolean }> = [
+  { key: 'board', href: '/portail/production', label: T('nav.board'), show: planner },
+  { key: 'requests', href: '/portail/production/demandes', label: T('nav.requests'), show: true },
+  { key: 'new', href: '/portail/production/nouvelle', label: T('nav.new'), show: planner },
+  { key: 'reports', href: '/portail/production/rapports', label: T('nav.reports'), show: planner },
+  { key: 'settings', href: '/portail/production/parametres', label: T('nav.settings'), show: planner },
 ];
 ---
 <nav class="ps-subnav no-print">
-  {items.map((i) => <a href={i.href} class={i.key === active ? 'active' : ''}>{i.label}</a>)}
+  {items.filter((i) => i.show).map((i) => <a href={i.href} class={i.key === active ? 'active' : ''}>{i.label}</a>)}
 </nav>
 <style>
   .ps-subnav { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--p-border); flex-wrap: wrap; }

@@ -1,0 +1,279 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../../components/portail/ProductionNav.astro';
+import ProductionRequestForm from '../../../../components/portail/ProductionRequestForm.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import {
+  fmtDate, fmtDateTime, fmtDay, fmtQty, loadCatalog, loadTasks, roomName, typeName,
+} from '../../../../lib/production';
+import { colon } from '../../../../lib/production-report';
+import {
+  FILE_ACCEPT, fmtBytes, isOverdue, loadRequest, loadRequestEvents, requestState, tasksByRequest,
+} from '../../../../lib/production-requests';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+const planner = !!Astro.locals.access?.perms?.has('prod_schedule');
+
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/production/demandes');
+const r = await loadRequest(admin, id);
+if (!r) return Astro.redirect('/portail/production/demandes');
+
+const [{ rooms, types }, tasks, events] = await Promise.all([
+  loadCatalog(admin), loadTasks(admin, { includeCancelled: true }), loadRequestEvents(admin, id),
+]);
+const roomById = new Map(rooms.map((x) => [x.id, x]));
+const typeById = new Map(types.map((x) => [x.id, x]));
+const linked = tasks.filter((t) => t.request_id === id).sort((a, b) => a.start_date.localeCompare(b.start_date));
+const state = requestState(r, tasksByRequest(tasks).get(id));
+const mayChange = planner || r.requested_by === staff.id;
+const files = r.files.filter((f) => !f.removed_at);
+const unitLabel = (u: string) => T(K(`unit.${u}`));
+
+const q = Astro.url.searchParams;
+const ok = q.get('ok');
+const okMsg = ok === 'created' ? T('rq.msg.created').replace('{no}', r.request_no)
+  : ok === 'files' ? T('rq.msg.files').replace('{n}', q.get('n') ?? '0')
+  : ok ? T(K(`rq.msg.${ok}`)) ?? null : null;
+const refused = q.get('refused');
+const err = q.get('error');
+const errMsg = err ? (T(K(`rq.err.${err}`)) ?? T('rq.err.unknown')) : null;
+
+// History lines in plain words.
+const fieldVal = (f: string, v: any): string => {
+  if (v === null || v === undefined || v === '') return T('ev.empty');
+  if (f === 'kind') return T(K(`rq.kind.${v}`));
+  if (f === 'priority') return T(K(`priority.${v}`));
+  if (f === 'needed_by') return fmtDate(v, locale);
+  if (f === 'production_type_id') return typeName(typeById.get(v), locale);
+  if (f === 'lines') return (v as any[]).map((l) => [l.description, fmtQty(l.quantity, l.unit, locale, unitLabel)].filter(Boolean).join(' ')).join(' · ') || T('ev.empty');
+  return String(v);
+};
+const describe = (e: { kind: string; changes: Record<string, any> }): string[] => {
+  const c = e.changes ?? {};
+  if (e.kind === 'created') return [];
+  if (e.kind === 'file_added' || e.kind === 'file_removed') return [String(c.filename ?? '')];
+  if (e.kind === 'task_linked') return [String(c.task_no ?? '')];
+  if (e.kind === 'updated') return Object.keys(c).map((f) => `${T(K(`rq.field.${f}`))}${colon(locale)}${fieldVal(f, c[f]?.from)} → ${fieldVal(f, c[f]?.to)}`);
+  return [];
+};
+---
+<PortailLayout title={`${r.request_no} — ${r.title}`} staffName={staff.full_name} wide>
+  <h1>{T('rq.title')}</h1>
+  <ProductionNav active="requests" />
+  <p style="margin: -8px 0 14px;"><a href="/portail/production/demandes" class="back">← {T('rq.title')}</a></p>
+
+  {okMsg && <div class="flash flash-success">{okMsg}</div>}
+  {refused && <div class="flash flash-error">{T('rq.err.refused').replace('{list}', refused)}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <div class="rq-head">
+    <p class="no">{r.request_no} · {T(K(`rq.kind.${r.kind}`))}</p>
+    <h2 class="ttl">{r.title}</h2>
+    <div class="flags">
+      <span class={`rq-badge rq-${state}`}>{T(K(`rq.state.${state}`))}</span>
+      {r.priority === 'rush' && <span class="flag rush">{T('flag.rush')}</span>}
+      {isOverdue(r, state) && <span class="flag late">{T('rq.flag.overdue')}</span>}
+    </div>
+    <p class="small muted" style="margin-top: 6px;">
+      {T('rq.by').replace('{name}', r.requested_by_name ?? '—').replace('{date}', fmtDateTime(r.created_at, locale))}
+    </p>
+    {r.cancelled_at && (
+      <p class="cancelled">{T('rq.cancelled').replace('{date}', fmtDateTime(r.cancelled_at, locale)).replace('{reason}', r.cancel_reason ?? '')}</p>
+    )}
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <dl class="facts">
+        <dt>{T('rq.f.customer')}</dt><dd>{r.customer_name ?? <span class="muted">—</span>}</dd>
+        <dt>{T('rq.f.po')}</dt><dd class="mono">{r.customer_po ?? <span class="muted">—</span>}</dd>
+        <dt>{T('rq.f.neededBy')}</dt><dd>{r.needed_by ? fmtDay(r.needed_by, locale, true) : <span class="muted">—</span>}</dd>
+        <dt>{T('rq.f.type')}</dt><dd>{r.production_type_id ? typeName(typeById.get(r.production_type_id), locale) : <span class="muted">{T('rq.f.type.none')}</span>}</dd>
+      </dl>
+
+      <h3>{T('rq.lines.title')}</h3>
+      {r.lines.length === 0 ? <p class="muted small">{T('rq.lines.none')}</p> : (
+        <table class="data lines">
+          <thead><tr><th>{T('rq.f.line.desc')}</th><th class="num">{T('rq.f.line.qty')}</th></tr></thead>
+          <tbody>{r.lines.map((l) => <tr><td>{l.description}</td><td class="num">{fmtQty(l.quantity, l.unit, locale, unitLabel) || '—'}</td></tr>)}</tbody>
+        </table>
+      )}
+
+      {r.notes && (<><h3>{T('rq.notes.title')}</h3><p class="notes">{r.notes}</p></>)}
+
+      <h3>{T('rq.files.title')}</h3>
+      {files.length === 0 ? <p class="muted small">{T('rq.files.none')}</p> : (
+        <ul class="files">
+          {files.map((f) => (
+            <li>
+              <a href={`/api/portail/production/requests/file/${f.id}?view=1`} target="_blank" rel="noopener">{f.filename}</a>
+              <span class="muted small">{fmtBytes(f.size_bytes)} · {T('rq.files.by').replace('{name}', f.uploaded_by_name ?? '—').replace('{date}', fmtDay(f.uploaded_at.slice(0, 10), locale))}</span>
+              <a class="small" href={`/api/portail/production/requests/file/${f.id}`}>⤓</a>
+              {mayChange && (
+                <form method="POST" action="/api/portail/production/requests" class="inline" data-confirm={T('rq.files.removeConfirm')}>
+                  <input type="hidden" name="_action" value="remove_file" />
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="file_id" value={f.id} />
+                  <button type="submit" class="link-btn">{T('rq.files.remove')}</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!r.cancelled_at && (
+        <form method="POST" action="/api/portail/production/requests" enctype="multipart/form-data" class="add-files">
+          <input type="hidden" name="_action" value="add_files" />
+          <input type="hidden" name="id" value={r.id} />
+          <label for="more-files" class="small">{T('rq.files.add')}</label>
+          <div class="add-row">
+            <input type="file" id="more-files" name="files" multiple required accept={FILE_ACCEPT} />
+            <button type="submit" class="btn btn-secondary btn-sm">{T('rq.files.upload')}</button>
+          </div>
+        </form>
+      )}
+    </section>
+
+    <section class="card side">
+      <h3 style="margin-top: 0;">{T('rq.planned.title')}</h3>
+      {linked.length === 0 ? <p class="muted small">{T('rq.planned.none')}</p> : (
+        <ul class="tasks">
+          {linked.map((t) => (
+            <li>
+              {planner ? <a href={`/portail/production/${t.id}`}><strong>{t.task_no}</strong></a> : <strong>{t.task_no}</strong>}
+              {' '}{typeName(typeById.get(t.production_type_id), locale)}
+              <div class="small muted">
+                {roomById.get(t.room_id)?.code} · {roomName(roomById.get(t.room_id), locale)} · {fmtDay(t.start_date, locale)} → {fmtDay(t.end_date, locale)}
+              </div>
+              <span class={`st-badge st-${t.status}`}>{T(K(`status.${t.status}`))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {planner && !r.cancelled_at && (
+        <a href={`/portail/production/nouvelle?demande=${r.id}`} class={`btn ${linked.length ? 'btn-secondary' : 'btn-primary'}`} style="margin-top: 10px;">
+          {linked.length ? T('rq.planAnother') : T('rq.plan')}
+        </a>
+      )}
+
+      {mayChange && (
+        r.cancelled_at ? (
+          <form method="POST" action="/api/portail/production/requests" style="margin-top: 18px;">
+            <input type="hidden" name="_action" value="reopen" />
+            <input type="hidden" name="id" value={r.id} />
+            <button type="submit" class="btn btn-secondary">{T('rq.reopen')}</button>
+          </form>
+        ) : (
+          <details class="stop">
+            <summary>{T('rq.cancel')}</summary>
+            <form method="POST" action="/api/portail/production/requests" class="details-body">
+              <input type="hidden" name="_action" value="cancel" />
+              <input type="hidden" name="id" value={r.id} />
+              <div class="form-row">
+                <label for="cancel-reason">{T('rq.cancel.reason')}</label>
+                <input type="text" id="cancel-reason" name="reason" required placeholder={T('rq.cancel.ph')} />
+              </div>
+              <button type="submit" class="btn btn-danger">{T('rq.cancel')}</button>
+            </form>
+          </details>
+        )
+      )}
+    </section>
+  </div>
+
+  {mayChange && !r.cancelled_at && (
+    <section class="card" id="modifier" style="margin-top: 18px;">
+      <details open={err && err !== 'forbidden' && err !== 'reason' ? true : undefined}>
+        <summary>{T('rq.editTitle')}</summary>
+        <div class="details-body"><ProductionRequestForm mode="edit" types={types} request={r} /></div>
+      </details>
+    </section>
+  )}
+
+  <section class="card" style="margin-top: 18px;">
+    <h2>{T('rq.history')}</h2>
+    <ol class="history">
+      {events.map((e) => (
+        <li class={`ev-${e.kind}`}>
+          <div class="ev-head">
+            <strong>{T(K(`rq.ev.${e.kind}`))}</strong>
+            <span class="muted small when">{fmtDateTime(e.at, locale)} · {e.staff_name ?? T('ev.unknownStaff')}</span>
+          </div>
+          {e.note && <p class="ev-note">« {e.note} »</p>}
+          <ul class="ev-lines">{describe(e).map((l) => <li>{l}</li>)}</ul>
+        </li>
+      ))}
+    </ol>
+  </section>
+</PortailLayout>
+
+<style>
+  .back { color: var(--p-muted); font-size: .88rem; text-decoration: none; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
+  .ttl { font-size: 1.35rem; margin: 0 0 6px; }
+  .rq-head { margin-bottom: 16px; }
+  .cancelled { margin-top: 8px; color: var(--p-danger); font-size: .9rem; }
+  .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  h3 { font-size: .92rem; font-weight: 600; margin: 18px 0 8px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: .92rem; }
+  .facts dt { color: var(--p-muted); }
+  table.lines th, table.lines td { padding: 8px 10px; }
+  .num { text-align: right; white-space: nowrap; }
+  .notes { white-space: pre-wrap; font-size: .92rem; }
+  .files { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .files li { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .files a { font-weight: 500; }
+  form.inline { display: inline; }
+  .link-btn { background: none; border: 0; color: var(--p-danger); cursor: pointer; font-size: .8rem; padding: 0; font-family: inherit; }
+  .add-files { margin-top: 14px; }
+  .add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn-sm { padding: 6px 12px; font-size: .84rem; }
+  .tasks { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .stop { margin-top: 18px; }
+  .flags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .flag { font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .flag.rush { background: #fee2e2; color: #991b1b; text-transform: uppercase; }
+  .flag.late { background: #fef2f2; color: var(--p-danger); border: 1px solid #fecaca; }
+  .rq-badge, .st-badge { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .rq-to_plan { background: #fff7ed; color: #c2410c; }
+  .rq-planned { background: #eff6ff; color: #1e40af; }
+  .rq-in_production { background: #fef3c7; color: #92400e; }
+  .rq-done { background: #dcfce7; color: #166534; }
+  .rq-cancelled { background: #f3f4f6; color: #6b7280; }
+  .st-planned { background: #eff6ff; color: #1e40af; }
+  .st-in_progress { background: #fff7ed; color: #c2410c; }
+  .st-on_hold { background: #fef3c7; color: #92400e; }
+  .st-done { background: #dcfce7; color: #166534; }
+  .st-cancelled { background: #f3f4f6; color: #6b7280; }
+  .history { list-style: none; }
+  .history > li { border-left: 2px solid var(--p-border); padding: 0 0 14px 16px; position: relative; }
+  .history > li::before { content: ''; position: absolute; left: -6px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--p-border); }
+  .history > li.ev-created::before { background: #1e40af; }
+  .history > li.ev-task_linked::before { background: var(--p-success); }
+  .history > li.ev-cancelled::before { background: var(--p-danger); }
+  .ev-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+  .ev-head .when { margin-left: auto; }
+  .ev-note { font-size: .86rem; font-style: italic; margin: 4px 0 2px; }
+  .ev-lines { list-style: none; font-size: .84rem; color: var(--p-muted); margin-top: 2px; }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) => {
+    f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm ?? '')) e.preventDefault(); });
+  });
+</script>

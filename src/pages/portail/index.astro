@@ -6,7 +6,8 @@ import { createServerClient, currentStaff, getAdminClient } from '../../lib/supa
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frHub, enHub } from '../../i18n/portail/hub';
 import { frCommon, enCommon } from '../../i18n/portail/common';
-import { effectivePermissions, can, vqHref, payablesHref } from '../../lib/access';
+import { effectivePermissions, can, vqHref, payablesHref, productionHref } from '../../lib/access';
+import { countToPlan } from '../../lib/production-requests';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 
@@ -104,6 +105,7 @@ const { count: pendingWitnessCount } = await getAdminClient()
   .eq('status', 'awaiting_witness');
 
 const perms = effectivePermissions(staff);
+const requestsToPlan = perms.has('prod_schedule') ? await countToPlan(getAdminClient()) : 0;
 const allSections = [
   {
     show: perms.has('rnd'),
@@ -120,11 +122,11 @@ const allSections = [
     tag: null,
   },
   {
-    show: perms.has('prod_schedule'),
-    href: '/portail/production',
+    show: can(perms, 'prod_schedule', 'prod_request'),
+    href: productionHref(perms),
     title: T('section.production.title'),
     desc: T('section.production.desc'),
-    tag: null,
+    tag: requestsToPlan ? T('section.production.tag').replace('{count}', String(requestsToPlan)) : null,
   },
   {
     show: can(perms, 'payables', 'payables_approve'),
