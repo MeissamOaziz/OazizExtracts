@@ -139,6 +139,15 @@ export const frVendorForm = {
 
   'resumeHeading': 'Continuer un dossier en cours',
   'resumeIntro': 'Vos renseignements précédemment enregistrés sont pré-remplis ci-dessous.',
+  'shared.title': 'Formulaire partagé',
+  'shared.with': 'Cette invitation a été envoyée à :',
+  'shared.how': 'Vous remplissez tous le même formulaire. Enregistrez un brouillon et les autres verront vos réponses en ouvrant le lien.',
+  'shared.lastSaved': 'Dernier enregistrement :',
+  'shared.resumeIntro': 'Ce que votre équipe a déjà enregistré est pré-rempli ci-dessous. Complétez ce qui manque, puis enregistrez ou soumettez.',
+  'shared.savedFlash': 'Brouillon enregistré. Toute personne ayant reçu l’invitation peut continuer avec le même lien.',
+  'shared.mergedFlash': 'Brouillon enregistré. Un collègue avait enregistré entre-temps : ses réponses ont été conservées partout où vous n’aviez rien inscrit. Vérifiez le formulaire ci-dessous.',
+  'shared.submittedTitle': 'Formulaire déjà soumis',
+  'shared.submittedBody': 'Votre équipe a déjà soumis ce formulaire de qualification. Merci! Nous communiquerons avec vous au besoin.',
 } as const;
 
 export type VendorFormDict = typeof frVendorForm;
@@ -278,4 +287,13 @@ export const enVendorForm: Partial<Record<keyof VendorFormDict, string>> = {
 
   'resumeHeading': 'Resume your submission',
   'resumeIntro': 'Your previously saved information is pre-filled below.',
+  'shared.title': 'Shared form',
+  'shared.with': 'This invitation was sent to:',
+  'shared.how': 'You all fill in the same form. Save a draft and the others will see your answers when they open the link.',
+  'shared.lastSaved': 'Last saved:',
+  'shared.resumeIntro': 'What your team has already saved is filled in below. Complete what is missing, then save or submit.',
+  'shared.savedFlash': 'Draft saved. Anyone who received the invitation can carry on with the same link.',
+  'shared.mergedFlash': 'Draft saved. A colleague had saved in the meantime: their answers were kept wherever you left a field empty. Check the form below.',
+  'shared.submittedTitle': 'Form already submitted',
+  'shared.submittedBody': 'Your team has already submitted this qualification form. Thank you! We will be in touch if we need anything.',
 };

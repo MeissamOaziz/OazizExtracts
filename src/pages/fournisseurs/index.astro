@@ -3,6 +3,9 @@ export const prerender = false;
 
 import VendorFormLayout from '../../layouts/VendorFormLayout.astro';
 import VendorFormFields from '../../components/VendorFormFields.astro';
+import { getAdminClient } from '../../lib/supabase';
+import { findInviteByToken, inviteRecipients } from '../../lib/vendor-invites';
+import { blankVendorFormValues, vendorFormValuesFrom, vendorFormHasFiles } from '../../lib/vendor-form-values';
 import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frVendorForm, enVendorForm } from '../../i18n/vendor-form';
 
@@ -11,6 +14,7 @@ const T = makeT(locale, frVendorForm, enVendorForm);
 
 const url = new URL(Astro.request.url);
 const errCode = url.searchParams.get('error');
+const info = url.searchParams.get('info');
 const inviteToken = url.searchParams.get('invite') ?? '';
 const errorMessages: Record<string, string> = {
   missing: T('error.missing'),
@@ -26,38 +30,89 @@ const errorMessages: Record<string, string> = {
   unknown: T('error.unknown'),
 };
 
-const blankValues = {
-  vendor_type: null,
-  products_sold: '',
-  company_name: '', address: '', city: '', province: '', postal_code: '',
-  contact_person: '', phone: '', phone_ext: '', email: '',
-  shipping_same_as_billing: true, shipping_address: '', shipping_city: '',
-  shipping_province: '', shipping_postal_code: '',
-  sales_contact_name: '', sales_contact_email: '', sales_contact_phone: '', sales_contact_phone_ext: '',
-  qa_contact_name: '', qa_contact_email: '', qa_contact_phone: '', qa_contact_phone_ext: '',
-  accounting_contact_name: '', accounting_contact_email: '', accounting_contact_phone: '', accounting_contact_phone_ext: '',
-  business_number: '', gst_hst_number: '', qst_number: '',
-  bank_institution_number: '', bank_transit_number: '', bank_account_number: '', bank_address: '',
-  production_type: null, cultivation_methods: [], lighting_type: '', medium_type: '',
-  nutrient_type: '', cultivar_name: '', starting_material: [],
-  pesticides_used: '',
-  certified_by_name: '', certified_by_title: '',
-  file_cra_license_expiry: '', file_health_canada_license_expiry: '',
-};
+// An invite link is shared by everyone it was sent to, so it opens the same
+// form for all of them: blank until someone saves, then that saved draft for
+// everyone, and a thank-you once it has been submitted.
+const admin = getAdminClient();
+const invite = await findInviteByToken(admin, inviteToken);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let shared: Record<string, any> | null = null;
+let alreadySubmitted = false;
+if (invite?.vendor_submission_id) {
+  const { data } = await admin
+    .from('vendor_submissions')
+    .select('*')
+    .eq('id', invite.vendor_submission_id)
+    .maybeSingle();
+  if (data?.status === 'draft') shared = data;
+  else if (data?.status === 'submitted') alreadySubmitted = true;
+}
+
+const recipients = invite ? inviteRecipients(invite) : [];
+const hiddenFields: Record<string, string> = {};
+if (invite) {
+  hiddenFields.invite_token = inviteToken;
+  // The version of the shared draft this page shows (blank: none yet). If a
+  // colleague saves in the meantime, the save route sees this is out of date
+  // and keeps their answers instead of overwriting them with empty fields.
+  hiddenFields.loaded_version = shared ? String(shared.updated_at ?? '') : '';
+}
+if (shared) hiddenFields.submission_id = shared.id;
+
+const lastSaved = shared?.updated_at
+  ? new Date(shared.updated_at).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', {
+      timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short',
+    })
+  : null;
 ---
 <VendorFormLayout title={T('pageTitle')}>
-  <h1>{T('heading')}</h1>
-  <p style="color: var(--p-muted); margin-bottom: 24px;">{T('intro')}</p>
+  {alreadySubmitted ? (
+    <div class="card" style="text-align: center; padding: 48px 32px;">
+      <h1 style="margin-bottom: 8px;">{T('shared.submittedTitle')}</h1>
+      <p style="color: var(--p-muted);">{T('shared.submittedBody')}</p>
+    </div>
+  ) : (
+    <>
+      <h1>{shared ? T('resumeHeading') : T('heading')}</h1>
+      <p style="color: var(--p-muted); margin-bottom: 24px;">{shared ? T('shared.resumeIntro') : T('intro')}</p>
 
-  {errCode && (
-    <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+      {recipients.length > 1 && (
+        <div class="shared-note">
+          <strong>{T('shared.title')}</strong>
+          <span>{T('shared.with')} {recipients.join(', ')}.</span>
+          <span>{T('shared.how')}</span>
+          {lastSaved && <span class="when">{T('shared.lastSaved')} {lastSaved}</span>}
+        </div>
+      )}
+
+      {info === 'draft_saved' && invite && (
+        <div class="flash flash-success">{T('shared.savedFlash')}</div>
+      )}
+      {info === 'draft_merged' && invite && (
+        <div class="flash flash-success">{T('shared.mergedFlash')}</div>
+      )}
+      {errCode && (
+        <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>
+      )}
+
+      <VendorFormFields
+        T={T}
+        action="/api/vendor/submit"
+        values={shared ? vendorFormValuesFrom(shared) : blankVendorFormValues}
+        hasFiles={vendorFormHasFiles(shared)}
+        hiddenFields={hiddenFields}
+      />
+    </>
   )}
-
-  <VendorFormFields
-    T={T}
-    action="/api/vendor/submit"
-    values={blankValues}
-    hasFiles={{ cra: false, hc: false, bank: false }}
-    hiddenFields={inviteToken ? { invite_token: inviteToken } : {}}
-  />
 </VendorFormLayout>
+
+<style>
+  .shared-note {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 12px 14px; margin-bottom: 18px; border-radius: 8px;
+    background: var(--p-bg); border: 1px solid var(--p-border); border-left: 3px solid var(--p-accent);
+    font-size: .88rem;
+  }
+  .shared-note .when { color: var(--p-muted); font-size: .82rem; margin-top: 2px; }
+</style>

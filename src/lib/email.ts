@@ -639,7 +639,9 @@ export async function sendVendorDraftLink(
 // ============================================================
 
 export interface VendorInviteEmail {
-  toEmail: string;
+  /** Everyone the invite goes to. One message, all on the To line, so each
+   *  recipient can see who else holds the shared link. */
+  toEmails: string[];
   formUrl: string;
   attachments: Array<{ filename: string; content: Buffer }>;
 }
@@ -649,13 +651,14 @@ export async function sendVendorInviteEmail(
 ): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
   const apiKey = import.meta.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn(`[vendor-invite-email] RESEND_API_KEY not set; would-have-sent invite to ${n.toEmail}: ${n.formUrl}`);
+    console.warn(`[vendor-invite-email] RESEND_API_KEY not set; would-have-sent invite to ${n.toEmails.join(', ')}: ${n.formUrl}`);
     return { status: 'skipped_no_key' };
   }
 
   const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
   const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
 
+  const shared = n.toEmails.length > 1;
   const html = renderVendorEmailShell({
     preheaderFr: 'Oaziz Extracts vous invite à compléter le formulaire de qualification fournisseur.',
     preheaderEn: 'Oaziz Extracts invites you to complete the vendor qualification form.',
@@ -666,8 +669,12 @@ export async function sendVendorInviteEmail(
     ctaLabelFr: 'Remplir le formulaire',
     ctaLabelEn: 'Fill out the form',
     ctaUrl: n.formUrl,
-    fallbackNoteFr: 'Vous pouvez enregistrer votre progression et y revenir plus tard.',
-    fallbackNoteEn: 'You can save your progress and come back later.',
+    fallbackNoteFr: shared
+      ? `Vous pouvez enregistrer votre progression et y revenir plus tard. Ce lien est partagé avec : ${n.toEmails.join(', ')}. Vous remplissez tous le même formulaire, et chacun voit ce que les autres ont enregistré.`
+      : 'Vous pouvez enregistrer votre progression et y revenir plus tard.',
+    fallbackNoteEn: shared
+      ? `You can save your progress and come back later. This link is shared with: ${n.toEmails.join(', ')}. You all fill in the same form, and each of you sees what the others have saved.`
+      : 'You can save your progress and come back later.',
     footerNote: 'Oaziz Extracts Inc. — 322 rue de Port-Royal Ouest, Montréal, QC.',
   });
 
@@ -676,7 +683,7 @@ export async function sendVendorInviteEmail(
   try {
     const resend = new Resend(apiKey);
     const { data, error } = await resend.emails.send({
-      from, to: [n.toEmail], replyTo, subject, html, attachments: n.attachments,
+      from, to: n.toEmails, replyTo, subject, html, attachments: n.attachments,
     });
     if (error) {
       console.error('[vendor-invite-email] Resend error:', error);

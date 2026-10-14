@@ -3,25 +3,8 @@
 // the blank /fournisseurs page and the /fournisseurs/brouillon/[token]
 // resume page, so the (long) field markup isn't duplicated between the two.
 import type { VendorFormDict } from '../i18n/vendor-form';
+import type { VendorFormValues } from '../lib/vendor-form-values';
 
-interface VendorFormValues {
-  vendor_type: string | null;
-  company_name: string; address: string; city: string; province: string; postal_code: string;
-  contact_person: string; phone: string; phone_ext: string; email: string;
-  shipping_same_as_billing: boolean; shipping_address: string; shipping_city: string;
-  shipping_province: string; shipping_postal_code: string;
-  sales_contact_name: string; sales_contact_email: string; sales_contact_phone: string; sales_contact_phone_ext: string;
-  qa_contact_name: string; qa_contact_email: string; qa_contact_phone: string; qa_contact_phone_ext: string;
-  accounting_contact_name: string; accounting_contact_email: string; accounting_contact_phone: string; accounting_contact_phone_ext: string;
-  business_number: string; gst_hst_number: string; qst_number: string;
-  bank_institution_number: string; bank_transit_number: string; bank_account_number: string; bank_address: string;
-  products_sold: string;
-  production_type: string | null; cultivation_methods: string[]; lighting_type: string; medium_type: string;
-  nutrient_type: string; cultivar_name: string; starting_material: string[];
-  pesticides_used: string;
-  certified_by_name: string; certified_by_title: string;
-  file_cra_license_expiry: string; file_health_canada_license_expiry: string;
-}
 
 interface Props {
   T: (key: keyof VendorFormDict) => string;

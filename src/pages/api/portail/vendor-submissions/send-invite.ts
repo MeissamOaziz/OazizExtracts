@@ -3,20 +3,29 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../../li
 import { downloadCompanyLicenseBytes } from '../../../../lib/company-license-storage';
 import { sendVendorInviteEmail } from '../../../../lib/email';
 import { mintToken } from '../../../../lib/tokens';
+import { parseEmailList, MAX_INVITE_RECIPIENTS } from '../../../../lib/vendor-invites';
 
 export const prerender = false;
 
 // Staff-triggered: send a prospective vendor the public qualification form
 // link, with Oaziz's own current CRA + Health Canada licenses attached.
+//
+// One invite can go to several people at the vendor. They get one email between
+// them and one link, and that link opens the same form for all of them, so the
+// QA lead and the sales lead can each fill in their part.
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const supabase = createServerClient(request, cookies);
   const staff = await currentStaff(supabase);
   if (!staff) return redirect('/portail/connexion');
 
   const form = await request.formData();
-  const email = String(form.get('email') ?? '').trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return redirect('/portail/fournisseurs?error=invite_email_invalid', 303);
+  const { emails, invalid } = parseEmailList(String(form.get('email') ?? ''));
+  if (emails.length === 0 || invalid.length > 0) {
+    const bad = invalid.length > 0 ? `&bad=${encodeURIComponent(invalid.join(', '))}` : '';
+    return redirect(`/portail/fournisseurs?error=invite_email_invalid${bad}`, 303);
+  }
+  if (emails.length > MAX_INVITE_RECIPIENTS) {
+    return redirect('/portail/fournisseurs?error=invite_too_many', 303);
   }
 
   const admin = getAdminClient();
@@ -42,20 +51,23 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const { raw, hash } = mintToken();
   const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
   const result = await sendVendorInviteEmail({
-    toEmail: email,
+    toEmails: emails,
     formUrl: `${siteUrl}/fournisseurs?invite=${raw}`,
     attachments,
   });
 
   await admin.from('vendor_invites').insert({
-    email, invite_token_hash: hash, sent_by_staff_id: staff.id,
+    email: emails[0],
+    recipients: emails.map((e) => e.toLowerCase()),
+    invite_token_hash: hash,
+    sent_by_staff_id: staff.id,
   });
 
   await admin.from('audit_log').insert({
     submission_id: null,
     actor_email: staff.email,
     action: 'vendor_invite_sent',
-    metadata: { to: email, email_status: result.status },
+    metadata: { to: emails, email_status: result.status },
   });
 
   if (result.status === 'error') {

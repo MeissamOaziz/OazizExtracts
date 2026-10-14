@@ -1,15 +1,20 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { downloadCompanyLicenseBytes } from '../../../../lib/company-license-storage';
-import { sendVendorInviteEmail, sendVendorDraftLink } from '../../../../lib/email';
+import { sendVendorInviteEmail } from '../../../../lib/email';
 import { mintToken } from '../../../../lib/tokens';
+import { inviteRecipients } from '../../../../lib/vendor-invites';
 
 export const prerender = false;
 
-// Re-pings a vendor who hasn't acted on their qualification invite yet, or
-// who started a draft and left it unfinished. Re-mints a fresh token either
-// way (invite or resume) rather than trying to recover the original raw
-// token, which was never stored — only its hash.
+// Re-pings everyone on an invite that has not been submitted yet — whether
+// nobody has opened it or someone started the form and left it unfinished. The
+// invite link opens the group's shared draft when there is one, so the same
+// email covers both cases.
+//
+// Only a hash of the original link was ever stored, so a fresh link is minted.
+// It is ADDED to the invite rather than replacing the old one: with several
+// recipients, replacing it would break the link in everyone's earlier email.
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const supabase = createServerClient(request, cookies);
   const staff = await currentStaff(supabase);
@@ -22,67 +27,52 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const admin = getAdminClient();
   const { data: invite } = await admin
     .from('vendor_invites')
-    .select('id, email, vendor_submission_id')
+    .select('id, email, recipients, extra_token_hashes, vendor_submission_id')
     .eq('id', inviteId)
     .maybeSingle();
   if (!invite) return redirect('/portail/fournisseurs?error=unknown', 303);
 
-  const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
-
-  let submission: { id: string; status: string; company_name: string | null } | null = null;
   if (invite.vendor_submission_id) {
-    const { data } = await admin
+    const { data: sub } = await admin
       .from('vendor_submissions')
-      .select('id, status, company_name')
+      .select('status')
       .eq('id', invite.vendor_submission_id)
       .maybeSingle();
-    submission = data ?? null;
+    // Already submitted: nothing left to remind anyone about.
+    if (sub?.status === 'submitted') return redirect('/portail/fournisseurs?error=unknown', 303);
   }
 
-  let result: { status: 'sent' | 'skipped_no_key' | 'error' };
+  const { raw, hash } = mintToken();
+  await admin
+    .from('vendor_invites')
+    .update({ extra_token_hashes: [...(invite.extra_token_hashes ?? []), hash] })
+    .eq('id', invite.id);
 
-  if (submission && submission.status === 'draft') {
-    // In-progress draft — remint a resume token and send the resume link.
-    const { raw, hash } = mintToken();
-    await admin.from('vendor_submissions').update({ resume_token_hash: hash }).eq('id', submission.id);
-    result = await sendVendorDraftLink({
-      toEmail: invite.email,
-      companyName: submission.company_name || invite.email,
-      resumeUrl: `${siteUrl}/fournisseurs/brouillon/${raw}`,
-    });
-  } else if (!submission) {
-    // Never started — remint an invite token (the original was never stored
-    // in recoverable form) and resend the invite with our current licenses.
-    const { raw, hash } = mintToken();
-    await admin.from('vendor_invites').update({ invite_token_hash: hash }).eq('id', invite.id);
-
-    const { data: licenses } = await admin
-      .from('company_licenses')
-      .select('kind, file_path')
-      .in('kind', ['cra', 'health_canada']);
-    const attachments: Array<{ filename: string; content: Buffer }> = [];
-    for (const lic of licenses ?? []) {
-      if (!lic.file_path) continue;
-      try {
-        const bytes = await downloadCompanyLicenseBytes(lic.file_path);
-        attachments.push({
-          filename: lic.kind === 'cra' ? 'Oaziz-Licence-CRA.pdf' : 'Oaziz-Licence-Sante-Canada.pdf',
-          content: bytes,
-        });
-      } catch (e) {
-        console.warn('[vendor-remind] could not attach license', lic.kind, e);
-      }
+  const { data: licenses } = await admin
+    .from('company_licenses')
+    .select('kind, file_path')
+    .in('kind', ['cra', 'health_canada']);
+  const attachments: Array<{ filename: string; content: Buffer }> = [];
+  for (const lic of licenses ?? []) {
+    if (!lic.file_path) continue;
+    try {
+      const bytes = await downloadCompanyLicenseBytes(lic.file_path);
+      attachments.push({
+        filename: lic.kind === 'cra' ? 'Oaziz-Licence-CRA.pdf' : 'Oaziz-Licence-Sante-Canada.pdf',
+        content: bytes,
+      });
+    } catch (e) {
+      console.warn('[vendor-remind] could not attach license', lic.kind, e);
     }
-
-    result = await sendVendorInviteEmail({
-      toEmail: invite.email,
-      formUrl: `${siteUrl}/fournisseurs?invite=${raw}`,
-      attachments,
-    });
-  } else {
-    // Already submitted — nothing to remind the vendor about.
-    return redirect('/portail/fournisseurs?error=unknown', 303);
   }
+
+  const to = inviteRecipients(invite);
+  const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
+  const result = await sendVendorInviteEmail({
+    toEmails: to,
+    formUrl: `${siteUrl}/fournisseurs?invite=${raw}`,
+    attachments,
+  });
 
   await admin.from('vendor_invites').update({ last_reminder_sent_at: new Date().toISOString() }).eq('id', invite.id);
 
@@ -92,7 +82,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     submission_id: null,
     actor_email: staff.email,
     action: 'vendor_invite_reminder_sent',
-    metadata: { invite_id: invite.id, vendor_submission_id: submission?.id ?? null, to: invite.email, email_status: result.status },
+    metadata: { invite_id: invite.id, vendor_submission_id: invite.vendor_submission_id, to, email_status: result.status },
   });
 
   if (result.status === 'error') {
