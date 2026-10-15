@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { getQbo } from '../../../../../lib/qbo';
-import { draftFromForm, pushVendor, type VendorSubmission } from '../../../../../lib/vendor-qbo';
+import { completeVendor, draftFromForm, pushVendor, type VendorSubmission } from '../../../../../lib/vendor-qbo';
 
 export const prerender = false;
 
@@ -18,11 +18,25 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect, local
   const admin = getAdminClient();
   const { data: sub } = await admin.from('vendor_submissions').select('*').eq('id', id).maybeSingle();
   if (!sub || sub.status !== 'submitted') return redirect(`/portail/fournisseurs/${id}`, 303);
-  // Already done (a double click, or a colleague): never make a second vendor.
-  if (sub.qbo_vendor_id) return back('');
-
   const form = await request.formData();
   const action = String(form.get('_action') ?? '');
+
+  // Fill in, on the vendor already copied, what QuickBooks did not keep.
+  if (action === 'complete' && sub.qbo_vendor_id) {
+    try {
+      const qbo = await getQbo(admin);
+      if (!qbo) return back(`error=qb&msg=${encodeURIComponent('QuickBooks non connecté')}`);
+      const v = (k: string) => String(form.get(k) ?? '').trim() || null;
+      await completeVendor(admin, qbo, sub as never, staff.id, { businessNumber: v('business_number'), bankAcct: v('bank_acct') });
+      return back('info=qb_completed');
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e).slice(0, 300);
+      console.error('[vq→qbo] complete failed:', e);
+      return back(`error=qb&msg=${encodeURIComponent(msg)}`);
+    }
+  }
+  // Already done (a double click, or a colleague): never make a second vendor.
+  if (sub.qbo_vendor_id) return back('');
   const vendorId = String(form.get('vendor_id') ?? '').trim();
   if (action === 'link' && !/^\d+$/.test(vendorId)) return back('');
   if (action !== 'link' && action !== 'create') return back('');

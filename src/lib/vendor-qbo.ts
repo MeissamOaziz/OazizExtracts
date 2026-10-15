@@ -4,8 +4,13 @@
 // fail. So the vendor is created with the fields every QBO company accepts
 // (name, company, billing address, phone, one email), then each extra is tried
 // on its own as a sparse update — all contact emails, the shipping address,
-// the business number and the banking notes. Whatever QuickBooks refuses or
+// the business number and the bank details. Whatever QuickBooks refuses or
 // silently drops is reported on the VQ page instead of breaking the creation.
+//
+// Learned on the real books (2026-10-15, Aspire Infusions): the API ignores a
+// vendor's Notes (none of 496 vendors returns one) and "BusinessNumber"; the
+// business ID lives in TaxIdentifier (returned masked), and the team already
+// keeps bank details in "Account no." (AcctNum) as institution-transit-account.
 //
 // Nothing is created without an accountant pressing the button, and similar
 // existing vendors are offered first: a duplicate vendor in the real books is
@@ -28,7 +33,7 @@ export interface VendorSubmission {
   qbo_vendor_id: string | null; ap_supplier_id: string | null;
 }
 
-export type FieldKey = 'emails' | 'shipping' | 'business_number' | 'notes';
+export type FieldKey = 'emails' | 'shipping' | 'business_number' | 'bank';
 export interface PushReport {
   vendor_id: string; vendor_name: string; created: boolean;
   fields: Partial<Record<FieldKey, 'kept' | 'refused' | 'dropped' | 'skipped'>>;
@@ -57,14 +62,18 @@ export function joinEmails(list: string[], max = 100): string {
   return out;
 }
 
-/** The three lines asked for in the vendor's notes: institution, transit, account. */
-export function bankNotes(s: VendorSubmission): string | null {
-  if (!s.bank_institution_number && !s.bank_transit_number && !s.bank_account_number) return null;
-  return [
-    `Institution : ${s.bank_institution_number ?? ''}`.trim(),
-    `Transit : ${s.bank_transit_number ?? ''}`.trim(),
-    `Compte : ${s.bank_account_number ?? ''}`.trim(),
-  ].join('\n');
+/** Bank details the way the team writes them in QB "Account no.": 815-20030-2163715. */
+export function bankAcctNum(s: VendorSubmission): string | null {
+  const parts = [s.bank_institution_number, s.bank_transit_number, s.bank_account_number]
+    .map((x) => (x ?? '').replace(/\s+/g, '')).filter(Boolean);
+  return parts.length ? parts.join('-').slice(0, 100) : null;
+}
+
+/** Institution / transit / account on three lines, for the Paiements supplier. */
+export function bankLines(acct: string | null): string | null {
+  if (!acct) return null;
+  const m = /^(\d+)-(\d+)-(\d+)$/.exec(acct.trim());
+  return m ? `Institution : ${m[1]}\nTransit : ${m[2]}\nCompte : ${m[3]}` : acct;
 }
 
 // Vendors type the province freely ("qc", "Saskatchewan", "Québec"): send the code.
@@ -172,7 +181,7 @@ export function vendorPreview(s: VendorSubmission, displayName?: string) {
     billing: billingAddress(s),
     shipping: shippingAddress(s),
     businessNumber: businessNumber(s),
-    notes: bankNotes(s),
+    bankAcct: bankAcctNum(s),
   };
 }
 
@@ -202,7 +211,7 @@ export function draftFromForm(form: FormData): VendorDraft | { error: string } {
     billing: address('bill'),
     shipping: form.get('ship_same') ? null : address('ship'),
     businessNumber: clip(g('business_number'), 30) || null,
-    notes: g('notes').replace(/\r\n/g, '\n').slice(0, 2000) || null,
+    bankAcct: clip(g('bank_acct'), 100) || null,
   };
 }
 
@@ -231,6 +240,65 @@ async function tryUpdate(qbo: Qbo, id: string, fields: Record<string, unknown>):
 }
 
 /**
+ * Tries each extra field as its own sparse update, then reads the vendor back:
+ * an accepted field that does not come back was dropped by QuickBooks.
+ */
+async function applyExtras(qbo: Qbo, report: PushReport, p: VendorDraft, keys: FieldKey[]) {
+  const all: Record<FieldKey, Record<string, unknown> | null> = {
+    // QB accepts several addresses separated by commas in the email box (100 characters).
+    emails: p.emails.length > 1 ? { PrimaryEmailAddr: { Address: joinEmails(p.emails) } } : null,
+    shipping: p.shipping ? { ShipAddr: qbAddr(p.shipping) } : null,
+    business_number: p.businessNumber ? { TaxIdentifier: p.businessNumber } : null,
+    bank: p.bankAcct ? { AcctNum: p.bankAcct } : null,
+  };
+  for (const key of keys) {
+    const fields = all[key];
+    if (!fields) { report.fields[key] = 'skipped'; continue; }
+    const err = await tryUpdate(qbo, report.vendor_id, fields);
+    if (err) { report.fields[key] = 'refused'; report.errors[key] = err; } else { report.fields[key] = 'kept'; delete report.errors[key]; }
+  }
+  const back = (await qbo.get(`/vendor/${report.vendor_id}`)).Vendor;
+  const ok: Record<FieldKey, boolean> = {
+    emails: !!back.PrimaryEmailAddr?.Address && back.PrimaryEmailAddr.Address.includes(','),
+    shipping: !!back.ShipAddr,
+    // Returned masked (XXXXX1549): presence is all that can be checked.
+    business_number: !!back.TaxIdentifier,
+    bank: !!back.AcctNum && back.AcctNum === p.bankAcct,
+  };
+  for (const key of keys) if (report.fields[key] === 'kept' && !ok[key]) report.fields[key] = 'dropped';
+}
+
+/**
+ * For a vendor already copied: send again the extras QuickBooks did not keep
+ * (with the values shown on the page), and update the report.
+ */
+export async function completeVendor(
+  admin: SupabaseClient, qbo: Qbo, s: VendorSubmission & { qbo_push_report: PushReport | null }, staffId: string,
+  values: { businessNumber: string | null; bankAcct: string | null },
+): Promise<PushReport> {
+  if (!s.qbo_vendor_id) throw new Error('VQ not copied to QuickBooks yet');
+  const report: PushReport = s.qbo_push_report ?? {
+    vendor_id: s.qbo_vendor_id, vendor_name: '', created: false, fields: {}, errors: {}, supplier: 'linked',
+  };
+  const fields = { ...report.fields } as Record<string, string>;
+  delete fields.notes; // older reports tried Notes, which the API ignores
+  report.fields = fields as PushReport['fields'];
+  const p = { ...vendorPreview(s), businessNumber: values.businessNumber, bankAcct: values.bankAcct };
+  await applyExtras(qbo, report, p, ['business_number', 'bank']);
+  await admin.from('vendor_submissions').update({ qbo_push_report: report }).eq('id', s.id);
+  if (s.ap_supplier_id && values.bankAcct) {
+    const { data: sup } = await admin.from('ap_suppliers').select('payment_details').eq('id', s.ap_supplier_id).maybeSingle();
+    if (sup && !sup.payment_details) await admin.from('ap_suppliers').update({ payment_details: bankLines(values.bankAcct) }).eq('id', s.ap_supplier_id);
+  }
+  await admin.from('qbo_sync_log').insert({
+    direction: 'push', entity: 'vendor', portal_id: s.ap_supplier_id, qbo_id: s.qbo_vendor_id, status: 'ok',
+    message: `Fournisseur QB complété depuis la VQ : ${report.vendor_name || s.company_name}`,
+  });
+  void staffId;
+  return report;
+}
+
+/**
  * Creates the QB vendor (or links an existing one), then links or creates the
  * matching Paiements supplier, and records it all on the submission.
  */
@@ -256,29 +324,8 @@ export async function pushVendor(
     });
     report.vendor_id = String(res.Vendor.Id); report.vendor_name = String(res.Vendor.DisplayName); report.created = true;
 
-    // 2. Each extra on its own.
-    const steps: Array<[FieldKey, Record<string, unknown> | null]> = [
-      // QB accepts several addresses separated by commas in the email box (100 characters).
-      ['emails', p.emails.length > 1 ? { PrimaryEmailAddr: { Address: joinEmails(p.emails) } } : null],
-      ['shipping', p.shipping ? { ShipAddr: qbAddr(p.shipping) } : null],
-      ['business_number', p.businessNumber ? { BusinessNumber: p.businessNumber } : null],
-      ['notes', p.notes ? { Notes: p.notes } : null],
-    ];
-    for (const [key, fields] of steps) {
-      if (!fields) { report.fields[key] = 'skipped'; continue; }
-      const err = await tryUpdate(qbo, report.vendor_id, fields);
-      if (err) { report.fields[key] = 'refused'; report.errors[key] = err; } else report.fields[key] = 'kept';
-    }
-
-    // 3. Read back: an accepted field that does not come back was dropped.
-    const back = (await qbo.get(`/vendor/${report.vendor_id}`)).Vendor;
-    const check: Array<[FieldKey, boolean]> = [
-      ['emails', !!back.PrimaryEmailAddr?.Address && back.PrimaryEmailAddr.Address.includes(',')],
-      ['shipping', !!back.ShipAddr],
-      ['business_number', !!back.BusinessNumber],
-      ['notes', !!back.Notes],
-    ];
-    for (const [key, ok] of check) if (report.fields[key] === 'kept' && !ok) report.fields[key] = 'dropped';
+    // 2. + 3. Each extra on its own, then read back.
+    await applyExtras(qbo, report, p, ['emails', 'shipping', 'business_number', 'bank']);
   }
 
   // 4. The Paiements supplier: the one already linked to this vendor, else one
@@ -289,7 +336,7 @@ export async function pushVendor(
     contact_email: s.accounting_contact_email || s.email || p.emails[0] || null,
     remittance_email: s.accounting_contact_email || s.email || p.emails[0] || null,
     gst_number: s.gst_hst_number, qst_number: s.qst_number,
-    payment_details: p.notes,
+    payment_details: bankLines(p.bankAcct),
   };
   const { data: byVendor } = await admin.from('ap_suppliers').select('id, qbo_vendor_id').eq('qbo_vendor_id', report.vendor_id).maybeSingle();
   let supplierId: string;

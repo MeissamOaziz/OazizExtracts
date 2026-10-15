@@ -7,7 +7,7 @@ import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frFournisseursDetail, enFournisseursDetail } from '../../../i18n/portail/fournisseurs-detail';
 import { frVendorForm, enVendorForm } from '../../../i18n/vendor-form';
 import { getQbo } from '../../../lib/qbo';
-import { similarVendors, vendorPreview, type VendorSubmission } from '../../../lib/vendor-qbo';
+import { bankAcctNum, businessNumber as cleanBn, similarVendors, vendorPreview, type VendorSubmission } from '../../../lib/vendor-qbo';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
@@ -72,7 +72,7 @@ const fmtAddr = (a: { Line1: string; City: string; CountrySubDivisionCode: strin
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
 const errCode = url.searchParams.get('error');
-const infoMessages: Record<string, string> = { approved: T('info.approved'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked') };
+const infoMessages: Record<string, string> = { approved: T('info.approved'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked'), qb_completed: T('qb.ok.completed') };
 const errorMessages: Record<string, string> = {
   not_approver: T('error.not_approver'),
   unknown: T('error.unknown'),
@@ -216,7 +216,7 @@ function telHref(phone: string, ext?: string | null): string {
             <>
               <h3 class="qb-h">{T('qb.fields')}</h3>
               <table class="data qb-table"><tbody>
-                {(['emails', 'shipping', 'business_number', 'notes'] as const).map((k) => (
+                {(['emails', 'shipping', 'business_number', 'bank'] as const).map((k) => (
                   <tr>
                     <th>{T(`qb.field.${k}` as keyof typeof frFournisseursDetail)}</th>
                     <td><span class={`qb-st qb-${qbReport.fields[k]}`}>{T(`qb.state.${qbReport.fields[k] ?? 'skipped'}` as keyof typeof frFournisseursDetail)}</span>
@@ -226,6 +226,20 @@ function telHref(phone: string, ext?: string | null): string {
               </tbody></table>
               {Object.values(qbReport.fields).some((v) => v === 'refused' || v === 'dropped') && <p class="hint" style="margin-top: 8px;">{T('qb.manual')}</p>}
             </>
+          )}
+          {(qbReport?.fields?.business_number !== 'kept' || qbReport?.fields?.bank !== 'kept') && (cleanBn(submission as VendorSubmission) || bankAcctNum(submission as VendorSubmission)) && (
+            <form method="POST" action={`/api/portail/vendor-submissions/${id}/qbo`} class="qb-complete">
+              <input type="hidden" name="_action" value="complete" />
+              <h3 class="qb-h">{T('qb.complete.title')}</h3>
+              <p class="hint" style="margin-bottom: 8px;">{T('qb.complete.hint')}</p>
+              <div class="qb-grid">
+                <div class="form-row"><label for="qc-bank">{T('qb.f.bank')}</label>
+                  <input type="text" id="qc-bank" name="bank_acct" value={bankAcctNum(submission as VendorSubmission) ?? ''} maxlength="100" /></div>
+                <div class="form-row"><label for="qc-bn">{T('qb.f.bn')}</label>
+                  <input type="text" id="qc-bn" name="business_number" value={cleanBn(submission as VendorSubmission) ?? ''} maxlength="30" /></div>
+              </div>
+              <button type="submit" class="btn btn-primary">{T('qb.complete.btn')}</button>
+            </form>
           )}
         </>
       ) : !qbConnected ? (
@@ -298,8 +312,9 @@ function telHref(phone: string, ext?: string | null): string {
               );
             })}
 
-            <div class="form-row"><label for="qb-notes">{T('qb.f.notes')}</label>
-              <textarea id="qb-notes" name="notes" rows="3">{preview.notes ?? ''}</textarea></div>
+            <div class="form-row"><label for="qb-bank">{T('qb.f.bank')}</label>
+              <input type="text" id="qb-bank" name="bank_acct" value={preview.bankAcct ?? ''} maxlength="100" />
+              <p class="hint">{T('qb.f.bank.hint')}</p></div>
             <button type="submit" class="btn btn-primary" style="margin-top: 12px;">{T('qb.create')}</button>
           </form>
         </>
