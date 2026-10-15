@@ -5,7 +5,7 @@ import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frProduction, enProduction } from '../../i18n/portail/production';
 import type { Permission } from '../../lib/access';
 
-type Key = 'board' | 'requests' | 'new' | 'reports' | 'settings';
+type Key = 'board' | 'requests' | 'shipping' | 'new' | 'reports' | 'settings';
 interface Props { active: Key }
 const { active } = Astro.props;
 const T = makeT(getPortailLocale(Astro.cookies), frProduction, enProduction);
@@ -14,6 +14,7 @@ const planner = perms.has('prod_schedule');
 const items: Array<{ key: Key; href: string; label: string; show: boolean }> = [
   { key: 'board', href: '/portail/production', label: T('nav.board'), show: planner },
   { key: 'requests', href: '/portail/production/demandes', label: T('nav.requests'), show: true },
+  { key: 'shipping', href: '/portail/production/expeditions', label: T('nav.shipping'), show: true },
   { key: 'new', href: '/portail/production/nouvelle', label: T('nav.new'), show: planner },
   { key: 'reports', href: '/portail/production/rapports', label: T('nav.reports'), show: planner },
   { key: 'settings', href: '/portail/production/parametres', label: T('nav.settings'), show: planner },

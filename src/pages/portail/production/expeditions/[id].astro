@@ -1,0 +1,311 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import { fmtDateTime } from '../../../../lib/production';
+import { loadRequest, poLabel } from '../../../../lib/production-requests';
+import {
+  DEFAULT_COPY_TO, PRODUCTION_TEAM, SWO_HEADER_FIELDS, SWO_LINE_FIELDS, emptyLine, loadSwo, loadSwoEvents,
+  staffDirectory, type SwoLine,
+} from '../../../../lib/production-swo';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/production/expeditions');
+const swo = await loadSwo(admin, id);
+if (!swo) return Astro.redirect('/portail/production/expeditions');
+const [request, events, people] = await Promise.all([loadRequest(admin, swo.request_id), loadSwoEvents(admin, id), staffDirectory(admin)]);
+
+const live = swo.status !== 'cancelled';
+const sentEv = events.find((e) => e.kind === 'sent');
+const doneEv = events.find((e) => e.kind === 'completed');
+const step = swo.status === 'draft' ? 1 : swo.status === 'sent' ? (swo.sheet_paths.length ? 4 : 3) : swo.status === 'completed' ? 5 : 0;
+
+// Columns production writes by hand: shown greyed so the split is obvious.
+const HAND: readonly string[] = ['lot_no', 'packaging_run_id', 'excise_province', 'packaging_lot_no', 'final_quantity', 'box_no', 'box_size', 'box_weight'];
+const NUM: readonly string[] = ['sku_size_g', 'po_quantity', 'final_quantity'];
+const cell = (l: SwoLine, f: string) => {
+  const v = (l as any)[f];
+  if (v === null || v === undefined) return '';
+  return NUM.includes(f) && locale === 'fr' ? String(v).replace('.', ',') : String(v);
+};
+const lines = swo.lines.length ? swo.lines : [emptyLine()];
+
+const q = Astro.url.searchParams;
+const ok = q.get('ok');
+const okMsg = q.get('sheet') ? null : ok === 'created' ? T('sw.msg.created').replace('{no}', swo.swo_no) : ok ? (T(K(`sw.msg.${ok}`)) ?? null) : null;
+const err = q.get('error');
+const errMsg = err === 'qty' ? T('err.BAD_INPUT') : err ? (T(K(`sw.err.${err}`)) ?? T('sw.err.unknown')) : null;
+const sheetNote = q.get('sheet');
+const unreadable: string[] = swo.sheet_extraction?.unreadable ?? [];
+const nameOf = (email: string) => people.find((p) => p.email.toLowerCase() === email.toLowerCase())?.full_name ?? email;
+const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
+---
+<PortailLayout title={`${swo.swo_no} — ${T('sw.short')}`} staffName={staff.full_name} wide>
+  <h1>{T('sw.title')}</h1>
+  <ProductionNav active="shipping" />
+  <p style="margin: -8px 0 14px;"><a href="/portail/production/expeditions" class="back">← {T('sw.title')}</a></p>
+
+  {okMsg && <div class="flash flash-success">{okMsg}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+  {err === 'read' && <div class="flash flash-error">{T('sw.err.read')}</div>}
+  {sheetNote && <div class="flash flash-error">{T(sheetNote === 'noKey' ? 'sw.sheet.noKey' : 'sw.sheet.failed')}</div>}
+
+  <div class="sw-head">
+    <div>
+      <p class="no">{swo.swo_no}{request && <> · <a href={`/portail/production/demandes/${request.id}`}>{request.request_no}</a></>}</p>
+      <h2 class="ttl">{swo.customer_name ?? '—'}{swo.customer_po && <span class="muted"> · {poLabel(swo.customer_po)}</span>}</h2>
+      <span class={`sw-badge sw-${swo.status}`}>{T(K(`sw.status.${swo.status}`))}</span>
+      {swo.cancelled_at && <p class="cancelled">{swo.cancel_reason}</p>}
+    </div>
+    <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pdf`} target="_blank" rel="noopener">{T('sw.pdf')}</a>
+  </div>
+
+  {live && (
+    <ol class="steps">
+      {['verify', 'send', 'sheet', 'confirm'].map((k, i) => (
+        <li class={step > i + 1 ? 'done' : step === i + 1 ? 'now' : ''}>{T(K(`sw.step.${k}`))}</li>
+      ))}
+    </ol>
+  )}
+
+  {swo.sent_at && sentEv && <p class="small muted">{T('sw.sentOn').replace('{date}', fmtDateTime(swo.sent_at, locale)).replace('{name}', sentEv.staff_name ?? '—')}</p>}
+  {swo.completed_at && <p class="small done-note">{T('sw.completedOn').replace('{date}', fmtDateTime(swo.completed_at, locale)).replace('{name}', doneEv?.staff_name ?? '—').replace('{list}', swo.copy_sent_to.map(nameOf).join(', '))}</p>}
+
+  <!-- ============================================================ the form -->
+  <form method="POST" action="/api/portail/production/swo" class="card sw-form" id="bon">
+    <input type="hidden" name="id" value={swo.id} />
+    <input type="hidden" name="version" value={String(swo.version)} />
+    {swo.status === 'draft' && <p class="hint verify">{T('sw.verify.hint')}{swo.po_extraction && ` ${T('sw.fromPo').replace('{date}', fmtDateTime(swo.created_at, locale))}`}</p>}
+    {sheetReadAt && swo.status === 'sent' && <p class="hint verify">{T('sw.sheet.read').replace('{date}', fmtDateTime(sheetReadAt, locale))}</p>}
+    {unreadable.length > 0 && swo.status !== 'completed' && <div class="warn-banner">{T('sw.sheet.unreadable').replace('{list}', unreadable.join(', '))}</div>}
+
+    <div class="hdr">
+      {SWO_HEADER_FIELDS.filter((f) => f !== 'notes').map((f) => (
+        <div class="form-row">
+          <label for={`h-${f}`}>{T(K(`sw.h.${f}`))}</label>
+          <input id={`h-${f}`} name={f} type={f.endsWith('date') ? 'date' : 'text'} value={(swo as any)[f] ?? ''} />
+        </div>
+      ))}
+    </div>
+
+    <h3>{T('sw.lines')}</h3>
+    <p class="hint" style="margin: -4px 0 8px;">{T('sw.lines.hint')}</p>
+    <div class="table-wrap">
+      <table class="sw-lines">
+        <thead><tr>{SWO_LINE_FIELDS.map((f) => <th class={HAND.includes(f) ? 'hand' : ''}>{T(K(`sw.l.${f}`))}</th>)}<th></th></tr></thead>
+        <tbody class="ln-rows">
+          {lines.map((l) => (
+            <tr>
+              {SWO_LINE_FIELDS.map((f) => (
+                <td class={HAND.includes(f) ? 'hand' : ''}>
+                  <input type="text" name={`l_${f}`} value={cell(l, f)} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} />
+                </td>
+              ))}
+              <td><button type="button" class="ln-remove" title={T('sw.removeLine')} aria-label={T('sw.removeLine')}>&times;</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <template class="ln-template">
+      <tr>
+        {SWO_LINE_FIELDS.map((f) => (
+          <td class={HAND.includes(f) ? 'hand' : ''}><input type="text" name={`l_${f}`} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} /></td>
+        ))}
+        <td><button type="button" class="ln-remove" title={T('sw.removeLine')} aria-label={T('sw.removeLine')}>&times;</button></td>
+      </tr>
+    </template>
+    <button type="button" class="btn btn-secondary btn-sm ln-add">{T('sw.addLine')}</button>
+
+    <div class="form-row" style="margin-top: 14px;">
+      <label for="h-notes">{T('sw.h.notes')}</label>
+      <textarea id="h-notes" name="notes" rows="2">{swo.notes ?? ''}</textarea>
+    </div>
+
+    {live && <button type="submit" name="_action" value="save" class="btn btn-secondary">{T('sw.save')}</button>}
+
+    {swo.status === 'sent' && (
+      <fieldset class="confirm" id="confirmer">
+        <legend>{T('sw.confirm.title')}</legend>
+        <p class="hint" style="margin: 0 0 10px;">{T('sw.confirm.hint')}</p>
+        <div class="people">
+          {people.map((p) => (
+            <label><input type="checkbox" name="to" value={p.email} checked={DEFAULT_COPY_TO.includes(p.email.toLowerCase())} /> {p.full_name}</label>
+          ))}
+        </div>
+        <div class="form-row" style="margin: 10px 0;">
+          <input type="text" name="other" placeholder={T('sw.recipients.other')} aria-label={T('sw.recipients.other')} />
+        </div>
+        <button type="submit" name="_action" value="complete" class="btn btn-primary">{T('sw.confirm.btn')}</button>
+      </fieldset>
+    )}
+  </form>
+
+  <div class="grid">
+    {live && (
+      <section class="card" id="envoyer">
+        <h2>{T('sw.send.title')}</h2>
+        <form method="POST" action="/api/portail/production/swo">
+          <input type="hidden" name="_action" value="send" />
+          <input type="hidden" name="id" value={swo.id} />
+          <p class="hint" style="margin: -6px 0 10px;">{T('sw.send.hint')}</p>
+          <div class="people">
+            {people.map((p) => (
+              <label><input type="checkbox" name="to" value={p.email} checked={PRODUCTION_TEAM.includes(p.email.toLowerCase())} /> {p.full_name}</label>
+            ))}
+          </div>
+          <div class="form-row" style="margin: 10px 0;">
+            <input type="text" name="other" placeholder={T('sw.recipients.other')} aria-label={T('sw.recipients.other')} />
+          </div>
+          <div class="form-row">
+            <input type="text" name="note" placeholder={T('sw.send.note')} aria-label={T('sw.send.note')} />
+          </div>
+          <button type="submit" class={`btn ${swo.status === 'draft' ? 'btn-primary' : 'btn-secondary'}`}>{swo.status === 'draft' ? T('sw.send.btn') : T('sw.send.again')}</button>
+        </form>
+      </section>
+    )}
+
+    {live && swo.status !== 'draft' && (
+      <section class="card" id="feuille">
+        <h2>{T('sw.sheet.title')}</h2>
+        <p class="hint" style="margin: -6px 0 10px;">{T('sw.sheet.hint')}</p>
+        <form method="POST" action="/api/portail/production/swo" enctype="multipart/form-data" class="sheet-form">
+          <input type="hidden" name="_action" value="sheet" />
+          <input type="hidden" name="id" value={swo.id} />
+          <label for="sheet-photos" class="small">{T('sw.sheet.files')}</label>
+          <input type="file" id="sheet-photos" name="photos" multiple required accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" />
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px;">{T('sw.sheet.btn')}</button>
+          <p class="hint reading" hidden>…</p>
+        </form>
+        {swo.sheet_paths.length > 0 && (
+          <>
+            <h3>{T('sw.sheet.photos')}</h3>
+            <ul class="photos">
+              {swo.sheet_paths.map((_, i) => <li><a href={`/api/portail/production/swo/${swo.id}/sheet/${i}`} target="_blank" rel="noopener">{`${swo.swo_no} — ${i + 1}`}</a></li>)}
+            </ul>
+          </>
+        )}
+      </section>
+    )}
+  </div>
+
+  <section class="card" style="margin-top: 18px;">
+    <h2>{T('sw.history')}</h2>
+    <ol class="history">
+      {events.map((e) => (
+        <li>
+          <div class="ev-head"><strong>{T(K(`sw.ev.${e.kind}`))}</strong><span class="muted small when">{fmtDateTime(e.at, locale)} · {e.staff_name ?? '—'}</span></div>
+          {e.note && <p class="ev-note">« {e.note} »</p>}
+          {Array.isArray(e.changes?.to) && <p class="small muted">{e.changes.to.map(nameOf).join(', ')}</p>}
+          {e.kind === 'updated' && <p class="small muted">{Object.keys(e.changes ?? {}).map((f) => f === 'lines' ? T('sw.lines') : T(K(`sw.h.${f}`))).join(', ')}</p>}
+        </li>
+      ))}
+    </ol>
+    {live ? (
+      <details class="stop">
+        <summary>{T('sw.cancel')}</summary>
+        <form method="POST" action="/api/portail/production/swo" class="details-body">
+          <input type="hidden" name="_action" value="cancel" />
+          <input type="hidden" name="id" value={swo.id} />
+          <div class="form-row"><input type="text" name="reason" required placeholder={T('sw.cancel.reason')} aria-label={T('sw.cancel.reason')} /></div>
+          <button type="submit" class="btn btn-danger">{T('sw.cancel')}</button>
+        </form>
+      </details>
+    ) : (
+      <form method="POST" action="/api/portail/production/swo" style="margin-top: 14px;">
+        <input type="hidden" name="_action" value="reopen" />
+        <input type="hidden" name="id" value={swo.id} />
+        <button type="submit" class="btn btn-secondary">{T('sw.reopen')}</button>
+      </form>
+    )}
+  </section>
+</PortailLayout>
+
+<style>
+  .back { color: var(--p-muted); font-size: .88rem; text-decoration: none; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
+  .ttl { font-size: 1.35rem; margin: 2px 0 6px; }
+  .sw-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cancelled { color: var(--p-danger); font-size: .9rem; margin-top: 6px; }
+  .done-note { color: var(--p-success); font-weight: 500; }
+  .sw-badge { display: inline-block; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .sw-draft { background: #fff7ed; color: #c2410c; }
+  .sw-sent { background: #eff6ff; color: #1e40af; }
+  .sw-completed { background: #dcfce7; color: #166534; }
+  .sw-cancelled { background: #f3f4f6; color: #6b7280; }
+  .steps { list-style: none; display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .steps li { font-size: .82rem; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--p-border); color: var(--p-muted); background: var(--p-card); }
+  .steps li.now { border-color: var(--p-accent); color: var(--p-accent); font-weight: 600; background: rgba(208,88,38,.06); }
+  .steps li.done { color: var(--p-success); border-color: #bbf7d0; background: #f0fdf4; }
+  .sw-form { margin-bottom: 18px; }
+  .verify { margin: -4px 0 14px; padding: 8px 12px; border-left: 3px solid var(--p-accent); background: rgba(208,88,38,.05); border-radius: 6px; color: var(--p-text); }
+  .hdr { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 16px; }
+  h3 { font-size: .95rem; font-weight: 600; margin: 8px 0 8px; }
+  .table-wrap { overflow-x: auto; }
+  table.sw-lines { border-collapse: collapse; min-width: 1500px; }
+  .sw-lines th { font-size: .7rem; font-weight: 600; color: var(--p-muted); text-align: left; padding: 4px 4px 6px; text-transform: uppercase; letter-spacing: .3px; }
+  .sw-lines td { padding: 3px; }
+  .sw-lines input { padding: 6px 7px; font-size: .86rem; }
+  .sw-lines .hand input { background: #f6f7f9; }
+  .sw-lines th.hand { color: #8a8f9c; }
+  .f-product_name { min-width: 170px; }
+  .f-sku_size_g, .f-po_quantity, .f-final_quantity, .f-box_no, .f-excise_province { width: 80px; }
+  .ln-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 34px; width: 34px; cursor: pointer; color: var(--p-muted); }
+  .ln-remove:hover { color: var(--p-danger); border-color: #fecaca; }
+  .btn-sm { padding: 6px 12px; font-size: .85rem; }
+  .ln-add { margin: 8px 0 4px; }
+  fieldset.confirm { border: 1px solid var(--p-accent); border-radius: 8px; padding: 14px 16px; margin-top: 18px; background: rgba(208,88,38,.03); }
+  fieldset.confirm legend { font-weight: 600; padding: 0 6px; }
+  .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 14px; }
+  .people label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 0; font-size: .9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; align-items: start; }
+  input[type="file"] { display: block; font-size: .9rem; margin-top: 4px; }
+  .photos { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .history { list-style: none; }
+  .history > li { border-left: 2px solid var(--p-border); padding: 0 0 12px 14px; }
+  .ev-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+  .ev-head .when { margin-left: auto; }
+  .ev-note { font-size: .86rem; font-style: italic; margin: 3px 0; }
+  .stop { margin-top: 14px; }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('form.sw-form');
+  if (form) {
+    const rows = form.querySelector<HTMLElement>('.ln-rows')!;
+    const tpl = form.querySelector<HTMLTemplateElement>('.ln-template')!;
+    form.querySelector('.ln-add')?.addEventListener('click', () => {
+      rows.appendChild(tpl.content.cloneNode(true));
+      rows.lastElementChild?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    rows.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.ln-remove');
+      if (!btn) return;
+      const row = btn.closest('tr')!;
+      if (rows.children.length > 1) row.remove();
+      else row.querySelectorAll<HTMLInputElement>('input').forEach((i) => { i.value = ''; });
+    });
+  }
+  // Reading a sheet takes a little while: say so, and avoid a double submit.
+  document.querySelector<HTMLFormElement>('form.sheet-form')?.addEventListener('submit', (e) => {
+    const f = e.currentTarget as HTMLFormElement;
+    f.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled = true;
+    const p = f.querySelector<HTMLElement>('.reading')!;
+    p.hidden = false;
+    p.textContent = document.documentElement.lang === 'en' ? 'Reading the sheet…' : 'Lecture de la feuille…';
+  });
+</script>

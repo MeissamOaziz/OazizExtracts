@@ -223,6 +223,12 @@ export function todayLocal(): string {
     .format(new Date());
 }
 
+/** The Montréal calendar day of a timestamp (a UTC slice would be tomorrow after 8 p.m.). */
+export function localDay(ts: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(ts));
+}
+
 /** Midnight of a Montréal calendar day, as an ISO instant. */
 export function zonedDayStart(iso: string): string {
   // Offset at noon that day (EST/EDT), applied to midnight. DST switches at 2 a.m.,

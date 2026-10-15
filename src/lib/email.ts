@@ -1322,3 +1322,73 @@ export async function sendProductionRequestNotice(
     return { status: 'error', detail: String(e) };
   }
 }
+
+// ============================================================
+// Shipping work orders — to production (PDF to print), and the completed copy
+// (PDF + photos of the hand-filled sheet). Never sent from a dev server.
+// ============================================================
+
+export interface SwoEmail {
+  toEmails: string[];
+  swoNo: string;
+  customer: string | null;
+  customerPo: string | null;
+  sentBy: string;
+  swoUrl: string;
+  attachments: Array<{ filename: string; content: Buffer }>;
+  note?: string | null;
+}
+
+async function sendSwoEmail(
+  n: SwoEmail, subject: string, badge: string, intro: string, ctaLabel: string,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[swo-email] dev server: not sending "${subject}" to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_dev' };
+  }
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) return { status: 'skipped_no_key' };
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const html = renderEmailShell({
+    preheader: `${n.swoNo} — ${n.customer ?? ''} ${n.customerPo ?? ''}`.trim(),
+    brandLine: 'Production · Expéditions',
+    badge,
+    greeting: 'Bonjour,',
+    intro: intro + (n.note ? `<br/><br/><em>${escapeHtml(n.note)}</em>` : ''),
+    rows: [
+      { label: "Bon de travail d'expédition", value: n.swoNo },
+      ...(n.customer ? [{ label: 'Client', value: n.customer }] : []),
+      ...(n.customerPo ? [{ label: 'PO client', value: n.customerPo }] : []),
+      { label: 'Envoyé par', value: n.sentBy },
+    ],
+    ctaLabel,
+    ctaUrl: n.swoUrl,
+    footerNote: 'Envoi automatique — Production, bons de travail d’expédition.',
+  });
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: n.toEmails, replyTo, subject, html, attachments: n.attachments });
+    if (error) { console.error('[swo-email] Resend error:', error); return { status: 'error', detail: error.message }; }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[swo-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+export function sendSwoToProduction(n: SwoEmail) {
+  return sendSwoEmail(n,
+    `[Oaziz] Commande à préparer - ${n.swoNo}${n.customer ? ` - ${n.customer}` : ''}${n.customerPo ? ` (${n.customerPo})` : ''}`,
+    'Commande à préparer',
+    `Le bon de travail d'expédition est joint en PDF : <strong>imprimez-le</strong> et remplissez-le à la main pendant la préparation. Une fois la commande prête, photographiez la feuille complétée depuis le portail (bouton ci-dessous) : le portail la lit et envoie la copie.`,
+    'Ouvrir le bon de travail');
+}
+
+export function sendSwoCompletedCopy(n: SwoEmail) {
+  return sendSwoEmail(n,
+    `[Oaziz] Bon d'expédition complété - ${n.swoNo}${n.customer ? ` - ${n.customer}` : ''}${n.customerPo ? ` (${n.customerPo})` : ''}`,
+    'Commande préparée',
+    `La commande est préparée. Le bon de travail d'expédition complété est joint (version saisie et photo de la feuille remplie à la main), pour la réservation du transport.`,
+    'Voir dans le portail');
+}

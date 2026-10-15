@@ -126,6 +126,10 @@ export const ROUTE_RULES: RouteRule[] = [
   // Requests are open to requesters too; the rest of the module is the planners'.
   { test: under('/portail/production/demandes'), any: ['prod_schedule', 'prod_request'] },
   { test: under('/api/portail/production/requests'), any: ['prod_schedule', 'prod_request'] },
+  // Shipping work orders: entered and checked by requesters, filled by production.
+  { test: under('/portail/production/expeditions'), any: ['prod_schedule', 'prod_request'] },
+  { test: under('/api/portail/production/swo'), any: ['prod_schedule', 'prod_request'] },
+  { test: under('/api/portail/production/po-read'), any: ['prod_schedule', 'prod_request'] },
   { test: under('/portail/production'), any: ['prod_schedule'] },
   { test: under('/api/portail/production'), any: ['prod_schedule'] },
 

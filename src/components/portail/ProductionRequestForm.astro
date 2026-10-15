@@ -115,6 +115,13 @@ const lines = request && request.lines.length > 0
     <div class="form-row">
       <label for="rq-files">{T('rq.f.files')}</label>
       <input type="file" id="rq-files" name="files" multiple accept={FILE_ACCEPT} />
+      <input type="hidden" name="po_extraction" value="" />
+      <div class="po-read">
+        <button type="button" class="btn btn-secondary btn-sm" data-po-read
+                data-msg-reading={T('rq.po.reading')} data-msg-done={T('rq.po.done')}
+                data-msg-failed={T('rq.po.failed')} data-msg-pick={T('rq.po.pick')}>{T('rq.po.read')}</button>
+        <span class="po-msg small" aria-live="polite"></span>
+      </div>
       <p class="hint">{T('rq.f.files.hint')}</p>
     </div>
   )}
@@ -142,6 +149,10 @@ const lines = request && request.lines.length > 0
   .ln-remove:hover { color: var(--p-danger); border-color: #fecaca; }
   .btn-sm { padding: 6px 12px; font-size: .85rem; }
   input[type="file"] { display: block; font-size: .9rem; }
+  .po-read { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .po-msg { color: var(--p-muted); }
+  .po-msg.ok { color: var(--p-success); }
+  .po-msg.bad { color: var(--p-danger); }
   @media (max-width: 640px) {
     .ln-head { display: none; }
     .ln-row { grid-template-columns: 1fr 1fr 34px; }
@@ -174,5 +185,57 @@ const lines = request && request.lines.length > 0
     };
     form.querySelectorAll('[name="kind"]').forEach((r) => r.addEventListener('change', sync));
     sync();
+
+    // "Read the purchase order": Claude reads the chosen PDF/photo and the form
+    // is prefilled; the reading rides along so the shipping work order starts
+    // from it. The person still checks every field before sending.
+    const readBtn = form.querySelector<HTMLButtonElement>('[data-po-read]');
+    const msg = form.querySelector<HTMLElement>('.po-msg');
+    readBtn?.addEventListener('click', async () => {
+      const files = [...(form.querySelector<HTMLInputElement>('[name="files"]')?.files ?? [])];
+      const file = files.find((f) => ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(f.type));
+      const say = (t: string, cls = '') => { if (msg) { msg.textContent = t; msg.className = `po-msg small ${cls}`; } };
+      if (!file) return say(readBtn.dataset.msgPick ?? '', 'bad');
+      readBtn.disabled = true;
+      say(readBtn.dataset.msgReading ?? '');
+      try {
+        const body = new FormData();
+        body.append('file', file);
+        const res = await fetch('/api/portail/production/po-read', { method: 'POST', body });
+        const out = await res.json();
+        if (!res.ok || !out.extracted) throw new Error(out.error ?? 'failed');
+        const x = out.extracted;
+        const set = (name: string, v: unknown) => {
+          const el = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+          if (el && v !== null && v !== undefined && v !== '') el.value = String(v);
+        };
+        form.querySelector<HTMLInputElement>('[name="kind"][value="customer_po"]')?.click();
+        set('customer_name', x.customer_name);
+        set('customer_po', x.customer_po);
+        set('needed_by', x.requested_delivery_date);
+        if (!form.querySelector<HTMLInputElement>('[name="title"]')!.value && x.lines?.length) {
+          set('title', `${x.customer_name ?? ''}${x.customer_po ? ` — ${x.customer_po}` : ''}`.trim() || x.lines[0].product_name);
+        }
+        if (x.notes) set('notes', x.notes);
+        if (x.lines?.length) {
+          rows.innerHTML = '';
+          for (const l of x.lines) {
+            rows.appendChild(tpl.content.cloneNode(true));
+            const row = rows.lastElementChild!;
+            const size = l.sku_size_g ? ` ${String(l.sku_size_g).replace('.', ',')} g` : '';
+            row.querySelector<HTMLInputElement>('[name="ln_desc"]')!.value =
+              `${l.product_name}${l.cultivar && !l.product_name.includes(l.cultivar) ? ` — ${l.cultivar}` : ''}${size && !l.product_name.includes('g') ? size : ''}`;
+            row.querySelector<HTMLInputElement>('[name="ln_qty"]')!.value = l.quantity === null ? '' : String(l.quantity).replace('.', ',');
+            row.querySelector<HTMLSelectElement>('[name="ln_unit"]')!.value = 'unit';
+          }
+        }
+        form.querySelector<HTMLInputElement>('[name="po_extraction"]')!.value = JSON.stringify(x);
+        say(readBtn.dataset.msgDone ?? '', 'ok');
+      } catch {
+        say(readBtn.dataset.msgFailed ?? '', 'bad');
+      } finally {
+        readBtn.disabled = false;
+      }
+    });
   });
 </script>

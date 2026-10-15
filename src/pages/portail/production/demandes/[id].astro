@@ -8,12 +8,13 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../../li
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
 import {
-  fmtDate, fmtDateTime, fmtDay, fmtQty, loadCatalog, loadTasks, roomName, typeName,
+  fmtDate, fmtDateTime, fmtDay, fmtQty, localDay, loadCatalog, loadTasks, roomName, typeName,
 } from '../../../../lib/production';
 import { colon } from '../../../../lib/production-report';
 import {
   FILE_ACCEPT, fmtBytes, isOverdue, loadRequest, loadRequestEvents, requestState, tasksByRequest,
 } from '../../../../lib/production-requests';
+import { loadSwoForRequest } from '../../../../lib/production-swo';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -37,6 +38,9 @@ const typeById = new Map(types.map((x) => [x.id, x]));
 const linked = tasks.filter((t) => t.request_id === id).sort((a, b) => a.start_date.localeCompare(b.start_date));
 const state = requestState(r, tasksByRequest(tasks).get(id));
 const mayChange = planner || r.requested_by === staff.id;
+const swo = r.kind === 'customer_po' || r.kind === 'packaging' ? await loadSwoForRequest(admin, id) : null;
+const canSwo = (r.kind === 'customer_po' || r.kind === 'packaging') && !r.cancelled_at;
+const readableFiles = r.files.filter((f) => !f.removed_at).filter((f) => ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(f.content_type ?? ''));
 const files = r.files.filter((f) => !f.removed_at);
 const unitLabel = (u: string) => T(K(`unit.${u}`));
 
@@ -118,7 +122,7 @@ const describe = (e: { kind: string; changes: Record<string, any> }): string[] =
           {files.map((f) => (
             <li>
               <a href={`/api/portail/production/requests/file/${f.id}?view=1`} target="_blank" rel="noopener">{f.filename}</a>
-              <span class="muted small">{fmtBytes(f.size_bytes)} · {T('rq.files.by').replace('{name}', f.uploaded_by_name ?? '—').replace('{date}', fmtDay(f.uploaded_at.slice(0, 10), locale))}</span>
+              <span class="muted small">{fmtBytes(f.size_bytes)} · {T('rq.files.by').replace('{name}', f.uploaded_by_name ?? '—').replace('{date}', fmtDay(localDay(f.uploaded_at), locale))}</span>
               <a class="small" href={`/api/portail/production/requests/file/${f.id}`}>⤓</a>
               {mayChange && (
                 <form method="POST" action="/api/portail/production/requests" class="inline" data-confirm={T('rq.files.removeConfirm')}>
@@ -146,7 +150,26 @@ const describe = (e: { kind: string; changes: Record<string, any> }): string[] =
     </section>
 
     <section class="card side">
-      <h3 style="margin-top: 0;">{T('rq.planned.title')}</h3>
+      {canSwo && (
+        <div class="swo-box">
+          <h3 style="margin-top: 0;">{T('sw.ofRequest')}</h3>
+          {swo ? (
+            <p><a href={`/portail/production/expeditions/${swo.id}`}><strong>{swo.swo_no}</strong></a> <span class={`sw-badge sw-${swo.status}`}>{T(K(`sw.status.${swo.status}`))}</span></p>
+          ) : (
+            <form method="POST" action="/api/portail/production/swo">
+              <input type="hidden" name="_action" value="create" />
+              <input type="hidden" name="request_id" value={r.id} />
+              <p class="hint" style="margin: 0 0 8px;">{T('sw.create.hint')}</p>
+              <select name="file_id" aria-label={T('sw.create.fromFile')} style="margin-bottom: 8px;">
+                {readableFiles.map((f) => <option value={f.id}>{T('sw.create.fromFile')} : {f.filename}</option>)}
+                <option value="">{T('sw.create.noFile')}</option>
+              </select>
+              <button type="submit" class="btn btn-primary btn-sm">{T('sw.create')}</button>
+            </form>
+          )}
+        </div>
+      )}
+      <h3 style={canSwo ? '' : 'margin-top: 0;'}>{T('rq.planned.title')}</h3>
       {linked.length === 0 ? <p class="muted small">{T('rq.planned.none')}</p> : (
         <ul class="tasks">
           {linked.map((t) => (
@@ -243,6 +266,12 @@ const describe = (e: { kind: string; changes: Record<string, any> }): string[] =
   .add-files { margin-top: 14px; }
   .add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .btn-sm { padding: 6px 12px; font-size: .84rem; }
+  .swo-box { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid var(--p-border); }
+  .sw-badge { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .sw-draft { background: #fff7ed; color: #c2410c; }
+  .sw-sent { background: #eff6ff; color: #1e40af; }
+  .sw-completed { background: #dcfce7; color: #166534; }
+  .sw-cancelled { background: #f3f4f6; color: #6b7280; }
   .tasks { list-style: none; display: flex; flex-direction: column; gap: 10px; }
   .stop { margin-top: 18px; }
   .flags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

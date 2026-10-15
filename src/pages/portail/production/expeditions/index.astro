@@ -1,0 +1,84 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import ProductionNav from '../../../../components/portail/ProductionNav.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import { fmtDateTime } from '../../../../lib/production';
+import { loadRequests, poLabel } from '../../../../lib/production-requests';
+import { loadSwos, type SwoStatus } from '../../../../lib/production-swo';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frProduction, enProduction);
+const K = (k: string) => k as keyof ProductionDict;
+const admin = getAdminClient();
+const [swos, requests] = await Promise.all([loadSwos(admin), loadRequests(admin)]);
+const reqById = new Map(requests.map((r) => [r.id, r]));
+
+const TABS = ['open', 'draft', 'sent', 'completed', 'all'] as const;
+type Tab = (typeof TABS)[number];
+const p = Astro.url.searchParams.get('vue') as Tab | null;
+const tab: Tab = p && (TABS as readonly string[]).includes(p) ? p : 'open';
+const inTab = (s: SwoStatus, t: Tab) => (t === 'all' ? true : t === 'open' ? s === 'draft' || s === 'sent' : s === t);
+const counts = Object.fromEntries(TABS.map((t) => [t, swos.filter((w) => inTab(w.status, t)).length])) as Record<Tab, number>;
+const shown = swos.filter((w) => inTab(w.status, tab));
+---
+<PortailLayout title={T('sw.title')} staffName={staff.full_name} wide>
+  <h1>{T('sw.title')}</h1>
+  <p class="sub-title">{T('sw.subtitle')}</p>
+  <ProductionNav active="shipping" />
+
+  <nav class="tabs">
+    {TABS.map((t) => <a href={`?vue=${t}`} class={t === tab ? 'active' : ''}>{T(K(`sw.tab.${t}`))} <span class="n">{counts[t]}</span></a>)}
+  </nav>
+
+  {swos.length === 0 ? <div class="card empty-state">{T('sw.empty')}</div>
+    : shown.length === 0 ? <div class="card empty-state">{T('sw.emptyTab')}</div> : (
+    <div class="card list">
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>{T('sw.col.no')}</th><th>{T('sw.col.customer')}</th><th>{T('sw.col.lines')}</th><th>{T('sw.col.request')}</th><th>{T('sw.col.status')}</th><th>{T('sw.col.updated')}</th></tr></thead>
+          <tbody>
+            {shown.map((w) => {
+              const r = reqById.get(w.request_id);
+              return (
+                <tr>
+                  <td class="nowrap"><a href={`/portail/production/expeditions/${w.id}`}><strong>{w.swo_no}</strong></a></td>
+                  <td>{w.customer_name ?? '—'}{w.customer_po && <div class="small muted">{poLabel(w.customer_po)}</div>}</td>
+                  <td class="small">{w.lines.slice(0, 3).map((l) => <div>{l.product_name}{l.po_quantity !== null && <span class="muted"> · {l.po_quantity}</span>}</div>)}{w.lines.length > 3 && <div class="muted">{T('more').replace('{n}', String(w.lines.length - 3))}</div>}</td>
+                  <td class="small">{r ? <a href={`/portail/production/demandes/${r.id}`}>{r.request_no}</a> : '—'}</td>
+                  <td><span class={`sw-badge sw-${w.status}`}>{T(K(`sw.status.${w.status}`))}</span></td>
+                  <td class="small muted nowrap">{fmtDateTime(w.updated_at, locale)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .sub-title { color: var(--p-muted); font-size: .92rem; margin: -2px 0 14px; max-width: 80ch; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .nowrap { white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs a { padding: 6px 12px; border: 1px solid var(--p-border); border-radius: 999px; text-decoration: none; color: var(--p-muted); font-size: .86rem; background: var(--p-card); }
+  .tabs a.active { border-color: var(--p-accent); color: var(--p-accent); background: rgba(208,88,38,.05); }
+  .tabs .n { font-weight: 600; margin-left: 2px; }
+  .list { padding: 8px 12px; }
+  .table-wrap { overflow-x: auto; }
+  table.data th, table.data td { padding: 10px; vertical-align: top; }
+  .sw-badge { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .sw-draft { background: #fff7ed; color: #c2410c; }
+  .sw-sent { background: #eff6ff; color: #1e40af; }
+  .sw-completed { background: #dcfce7; color: #166534; }
+  .sw-cancelled { background: #f3f4f6; color: #6b7280; }
+</style>

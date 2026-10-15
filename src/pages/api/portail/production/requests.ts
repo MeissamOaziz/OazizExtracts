@@ -7,6 +7,7 @@ import {
   updateRequest, type RequestInput,
 } from '../../../../lib/production-requests';
 import { frProduction, type ProductionDict } from '../../../../i18n/portail/production';
+import { PoExtraction, createSwo } from '../../../../lib/production-swo';
 
 export const prerender = false;
 
@@ -87,6 +88,23 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
     }
     const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
     const { stored, refused } = await storeFiles(admin, created.id, staff.id, files);
+
+    // Orders to prepare get their shipping work order right away, from the PO
+    // reading when there is one (checked by the person on the form).
+    if (kind === 'customer_po' || kind === 'packaging') {
+      try {
+        let po: PoExtraction | null = null;
+        const raw = str(form, 'po_extraction');
+        if (raw) {
+          const parsed = PoExtraction.safeParse(JSON.parse(raw));
+          if (parsed.success) po = parsed.data;
+        }
+        const full = await loadRequest(admin, created.id);
+        if (full) await createSwo(admin, staff.id, full, po);
+      } catch (e) {
+        console.error('[production] work order on request create failed:', e);
+      }
+    }
 
     // Tell the planners. A failed email never fails the request.
     try {

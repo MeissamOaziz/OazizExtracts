@@ -6,7 +6,7 @@ import ProductionNav from '../../../../components/portail/ProductionNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../../../i18n/portail/production';
-import { fmtDay, loadTasks } from '../../../../lib/production';
+import { fmtDay, loadTasks, localDay } from '../../../../lib/production';
 import { isOverdue, isSoon, poLabel, loadRequests, requestState, tasksByRequest, type RequestState } from '../../../../lib/production-requests';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
@@ -88,7 +88,7 @@ const shown = rows.filter((x) => inTab(x.state, tab)).sort((a, b) =>
                   </td>
                   <td class="small">{r.customer_name ?? <span class="muted">—</span>}{r.customer_po && <div class="muted mono">{poLabel(r.customer_po)}</div>}</td>
                   <td class="small nowrap">{r.needed_by ? fmtDay(r.needed_by, locale) : <span class="muted">—</span>}</td>
-                  <td class="small">{r.requested_by_name ?? '—'}<div class="muted">{fmtDay(r.created_at.slice(0, 10), locale)}</div></td>
+                  <td class="small">{r.requested_by_name ?? '—'}<div class="muted">{fmtDay(localDay(r.created_at), locale)}</div></td>
                   <td class="nowrap">
                     <span class={`rq-badge rq-${state}`}>{T(K(`rq.state.${state}`))}</span>
                     {ts.length > 0 && <div class="small muted">{ts.map((t) => t.task_no).join(', ')}</div>}
