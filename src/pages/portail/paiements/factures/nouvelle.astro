@@ -217,6 +217,9 @@ const i18n = {
     $<HTMLSelectElement>('kind').value = x.is_credit_note ? 'credit' : 'invoice';
 
     const m = res.matches as Array<{ id: string; name: string; score: number }>;
+    // Only suppliers present in the list can be selected (never leave it blank).
+    const pickable = (m as Array<{ id: string }>).filter((o) => [...supSel.options].some((op) => op.value === o.id));
+    m.splice(0, m.length, ...(pickable as typeof m));
     if (m.length && m[0].score >= 0.6) {
       supSel.value = m[0].id;
       $('match-hint').textContent = L.matched.replace('{name}', m[0].name) + (m.length > 1 ? ` (${m.slice(1).map((o) => o.name).join(', ')})` : '');

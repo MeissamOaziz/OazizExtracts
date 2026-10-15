@@ -36,7 +36,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
   try {
     const extracted = await extractInvoice({ data, mediaType: file.type });
-    const suppliers = await loadSuppliers(admin, { includeInactive: true });
+    // Active suppliers only: the form's list has no inactive ones, so a match there would select nothing.
+    const suppliers = await loadSuppliers(admin, { includeInactive: false });
     const matches = matchSuppliers(extracted, suppliers);
     let duplicateOf: string | null = null;
     if (matches[0] && extracted.invoice_number) {
