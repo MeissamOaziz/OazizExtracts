@@ -236,7 +236,7 @@ const i18n = {
           // Choosing invoices / expense: while preparing, or after approval until paid.
           const canAlloc = (editableSuggest || editableApproved) && !l?.payment_id;
           const allocBy = new Map((l?.allocations ?? []).map((a) => [a.invoice_id, n(a.amount)]));
-          const isExpense = !!l?.is_expense;
+          const isExpense = l ? !!l.is_expense : !!s.payments_are_expenses;
           return (
             <>
               <tr class="ap-row" data-supplier={s.id} data-name={s.name.toLowerCase()} data-owed={s.bal.owed} data-overdue={s.bal.overdue}

@@ -42,18 +42,26 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const ref = String(form.get('reference') ?? '').trim();
   const d = await paymentWithReference(admin, ref);
   if (d) return redirect(`${back}?error=${encodeURIComponent(`Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}`)}`, 303);
-  const { data: newId, error } = await admin.rpc('ap_record_payment', {
+  // Expense: paid without a bill (DAS, taxes generated in QB, reimbursements
+  // already entered as expenses) — no credit is left on the supplier and
+  // nothing is sent to QuickBooks.
+  const isExpense = form.get('expense') === 'on';
+  const notes = String(form.get('notes') ?? '');
+  const { data: newId, error } = await admin.rpc('ap_record_payment_split', {
     p_supplier_id: supplierId, p_amount: amount, p_paid_on: paidOn,
     p_method: (PAYMENT_METHODS as readonly string[]).includes(method) ? method : null,
     p_bank_account_id: isUuid(form.get('bank_account_id')) ? form.get('bank_account_id') : null,
-    p_reference: ref, p_notes: String(form.get('notes') ?? ''),
-    p_staff_id: staff.id, p_run_line_id: null, p_invoice_ids: invoiceIds.length ? invoiceIds : null,
+    p_reference: ref, p_notes: notes,
+    p_staff_id: staff.id, p_run_line_id: null,
+    p_allocations: !isExpense && invoiceIds.length ? invoiceIds.map((id) => ({ invoice_id: id, amount })) : null,
+    p_expense: isExpense, p_expense_note: isExpense ? notes || null : null,
   });
   if (error) {
     console.error('[paiements] record payment failed:', error);
     return redirect(`${back}?error=missing`, 303);
   }
-  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_recorded', details: { amount, paid_on: paidOn, reference: ref || null } });
-  if (newId && form.get('already_in_qbo') !== 'on') await autoPushPayment(admin, newId as string);
+  await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_recorded', details: { amount, paid_on: paidOn, reference: ref || null, ...(isExpense ? { expense: true } : {}) } });
+  if (newId && !isExpense && form.get('already_in_qbo') !== 'on') await autoPushPayment(admin, newId as string);
+  if (newId && isExpense) await admin.from('ap_payments').update({ qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', newId as string);
   return redirect(`${back}?ok=pay`, 303);
 };

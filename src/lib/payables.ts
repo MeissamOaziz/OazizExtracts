@@ -29,6 +29,8 @@ export interface Supplier {
   qbo_vendor_name: string | null; sheet_tab: string | null; is_active: boolean; sort_order: number;
   aliases: string[]; gst_number: string | null; qst_number: string | null;
   due_status?: 'not_due' | 'unpaid' | 'paid' | null;
+  /** Paid without bills (DAS, taxes generated in QB): payments default to "expense", no credit left behind. */
+  payments_are_expenses?: boolean;
 }
 
 export interface SupplierBalance {

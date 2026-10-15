@@ -34,6 +34,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     contact_email: str('contact_email'),
     remittance_email: str('remittance_email'),
     qbo_vendor_name: str('qbo_vendor_name'),
+    payments_are_expenses: form.get('payments_are_expenses') === 'on',
     updated_at: new Date().toISOString(),
   };
 

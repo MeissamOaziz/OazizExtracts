@@ -59,7 +59,7 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
 
   const { data: line, error } = existing
     ? await admin.from('ap_run_lines').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', existing.id).select('*').single()
-    : await admin.from('ap_run_lines').insert({ run_id: runId, supplier_id: body.supplier_id, ...patch }).select('*').single();
+    : await admin.from('ap_run_lines').insert({ run_id: runId, supplier_id: body.supplier_id, is_expense: await expenseDefault(admin, String(body.supplier_id)), ...patch }).select('*').single();
   if (error) {
     console.error('[paiements] line save failed:', error);
     return json({ error: 'save failed' }, 500);
@@ -72,3 +72,9 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
   }
   return json({ line });
 };
+
+/** Suppliers paid without bills (DAS, taxes) start their weekly line as an expense. */
+async function expenseDefault(admin: ReturnType<typeof getAdminClient>, supplierId: string): Promise<boolean> {
+  const { data } = await admin.from('ap_suppliers').select('payments_are_expenses').eq('id', supplierId).maybeSingle();
+  return !!data?.payments_are_expenses;
+}

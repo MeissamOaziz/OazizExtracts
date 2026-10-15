@@ -34,6 +34,10 @@ const s = supplier;
       <label class="check-inline"><input type="checkbox" name="is_active" checked={s.is_active} /> {T('f.is_active')}</label>
     </div>
   )}
+  <div class="form-row wide">
+    <label class="check-inline"><input type="checkbox" name="payments_are_expenses" checked={!!s?.payments_are_expenses} /> {T('f.payments_are_expenses')}</label>
+    <p class="hint" style="margin:2px 0 0;">{T('f.payments_are_expenses.hint')}</p>
+  </div>
   <div class="form-row wide"><label>{T('f.payment_details')}</label><textarea name="payment_details" rows="3">{s?.payment_details ?? ''}</textarea></div>
   <div class="form-row wide"><label>{T('f.notes')}</label><textarea name="notes" rows="2">{s?.notes ?? ''}</textarea></div>
 </div>

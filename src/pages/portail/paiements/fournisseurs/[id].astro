@@ -156,6 +156,8 @@ const okText: Record<string, string> = {
           <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" value={nextRef ?? ''} /></div>
           <div class="form-row"><label>{T('pay.notes')}</label><input type="text" name="notes" /></div>
         </div>
+        <label class="check-inline" style="margin-bottom:6px;"><input type="checkbox" name="expense" id="pay-expense" checked={!!s.payments_are_expenses} /> {T('pay.expense')}</label>
+        <p class="hint" style="margin:0 0 12px;">{T('pay.expense.hint')}</p>
         {qboOn && <label class="check-inline" style="margin-bottom:12px;"><input type="checkbox" name="already_in_qbo" /> {T('pay.alreadyQbo')}</label>}
         {openInvoices.filter((i) => i.open_amount > 0).length > 0 && (
           <div class="form-row">
