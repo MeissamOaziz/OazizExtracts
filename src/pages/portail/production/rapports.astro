@@ -6,7 +6,7 @@ import ProductionNav from '../../../components/portail/ProductionNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
-import { fmtDateTime, fmtDay, isIsoDate, roomName, todayLocal, typeName } from '../../../lib/production';
+import { fmtDateTime, fmtDay, fmtMass, fmtPct, isIsoDate, roomName, todayLocal, typeName } from '../../../lib/production';
 import { defaultReportPeriod, describeChanges, loadReport, signedDays, type DescribeCtx } from '../../../lib/production-report';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
@@ -157,6 +157,50 @@ const taskOf = (taskId: string) => r.taskById.get(taskId);
   </section>
 
   <section class="card block">
+    <h2>{T('rep.yield')}</h2>
+    <p class="hint" style="margin: -6px 0 12px;">{T('rep.yield.hint')}</p>
+    {r.yields.length === 0 ? <p class="muted">{T('rep.yield.empty')}</p> : (
+      <>
+        <h3 class="sub-h">{T('rep.yield.byType')}</h3>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>{T('rep.type')}</th><th>{T('rep.col.product')}</th><th class="num">{T('rep.col.tasksN')}</th><th class="num">{T('rep.col.expected')}</th><th class="num">{T('rep.col.actualYield')}</th><th class="num">{T('rep.col.gap')}</th></tr></thead>
+            <tbody>
+              {r.yieldByType.map((y) => {
+                const gap = y.avgExpected === null ? null : y.avgActual - y.avgExpected;
+                return (
+                  <tr>
+                    <td>{typeName(ctx.types.get(y.typeId), locale)}</td><td>{y.product}</td><td class="num">{y.n}</td>
+                    <td class="num">{fmtPct(y.avgExpected, locale)}</td><td class="num"><strong>{fmtPct(y.avgActual, locale)}</strong></td>
+                    <td class={`num${gap === null ? '' : gap < 0 ? ' later' : ' earlier'}`}>{gap === null ? '—' : `${gap > 0 ? '+' : gap < 0 ? '−' : ''}${Math.abs(gap).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { maximumFractionDigits: 1 })} pts`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-top: 14px;">
+          <table class="data">
+            <thead><tr><th>{T('rep.col.task')}</th><th>{T('rep.col.product')}</th><th class="num">{T('rep.col.input')}</th><th class="num">{T('rep.col.output')}</th><th class="num">{T('rep.col.expected')}</th><th class="num">{T('rep.col.actualYield')}</th></tr></thead>
+            <tbody>
+              {r.yields.map((y) => (
+                <tr>
+                  <td><a href={`/portail/production/${y.task.id}`}><strong>{y.task.task_no}</strong></a><div class="small">{typeName(ctx.types.get(y.task.production_type_id), locale)} · {fmtDay(y.task.actual_end_date, locale)}</div></td>
+                  <td>{y.output.product}{y.output.is_byproduct && <span class="small muted"> · {T('out.byproduct')}</span>}</td>
+                  <td class="num">{fmtMass(y.inputG, locale)}</td>
+                  <td class="num">{fmtMass(y.outputG, locale)}</td>
+                  <td class="num">{fmtPct(y.output.expected_yield_pct, locale)}</td>
+                  <td class={`num${y.output.expected_yield_pct !== null && y.actualPct < y.output.expected_yield_pct ? ' later' : ''}`}><strong>{fmtPct(y.actualPct, locale)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
+    )}
+  </section>
+
+  <section class="card block">
     <div class="block-head">
       <h2>{T('rep.log')}</h2>
       <a href={`/api/portail/production/export?kind=journal&${qs}`} class="btn btn-secondary btn-sm no-print">{T('rep.csvLog')}</a>
@@ -221,6 +265,7 @@ const taskOf = (taskId: string) => r.taskById.get(taskId);
   .later { color: var(--p-danger); font-weight: 600; }
   .earlier { color: var(--p-success); font-weight: 600; }
   .note { font-style: italic; }
+  .sub-h { font-size: .9rem; font-weight: 600; margin: 4px 0 8px; }
   .changes div { line-height: 1.35; }
   .print-only { display: none; }
   @media print {

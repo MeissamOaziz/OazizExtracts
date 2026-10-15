@@ -7,7 +7,7 @@ import ProductionTaskForm from '../../../components/portail/ProductionTaskForm.a
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
-import { isIsoDate, loadCatalog } from '../../../lib/production';
+import { isIsoDate, loadCatalog, loadTypeOutputs } from '../../../lib/production';
 import { loadRequest } from '../../../lib/production-requests';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
@@ -16,7 +16,7 @@ if (!staff) return Astro.redirect('/portail/connexion');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frProduction, enProduction);
 const admin = getAdminClient();
-const { rooms, types } = await loadCatalog(admin);
+const [{ rooms, types }, typeOutputs] = await Promise.all([loadCatalog(admin), loadTypeOutputs(admin)]);
 
 // "Planifier" on a request lands here with ?demande=<id>.
 const rid = Astro.url.searchParams.get('demande');
@@ -35,7 +35,7 @@ const errMsg = errCode ? (T(`err.${errCode}` as keyof ProductionDict) ?? T('err.
     <h2>{T('new.title')}</h2>
     <p class="hint" style="margin: -6px 0 20px;">{T('new.subtitle')}</p>
     {errMsg && <div class="flash flash-error">{errMsg}</div>}
-    <ProductionTaskForm mode="create" rooms={rooms} types={types} request={request && !request.cancelled_at ? request : undefined}
+    <ProductionTaskForm mode="create" rooms={rooms} types={types} typeOutputs={typeOutputs} request={request && !request.cancelled_at ? request : undefined}
       defaults={{ start_date: isIsoDate(d) ? d : undefined }} />
   </div>
 </PortailLayout>

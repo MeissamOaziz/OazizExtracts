@@ -8,7 +8,8 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../../i18n/portail/production';
 import {
-  CHANGE_REASONS, dayCount, fmtDateTime, fmtDay, fmtQty, isLate, loadCatalog, loadEvents, loadTask,
+  CHANGE_REASONS, actualInputG, actualYieldPct, dayCount, expectedOutputG, fmtDateTime, fmtDay, fmtMass, fmtPct,
+  fmtQty, grams, isLate, loadCatalog, loadEvents, loadTask, loadTypeOutputs, plannedInputG, yieldComplete,
   loadTasks, missingInfo, roomConflicts, roomName, slipDays, todayLocal, typeName,
 } from '../../../lib/production';
 import { colon, describeChanges, signedDays, type DescribeCtx } from '../../../lib/production-report';
@@ -30,6 +31,7 @@ if (!task) return Astro.redirect('/portail/production?error=NOT_FOUND');
 const [{ rooms, types }, events, liveTasks, requests] = await Promise.all([
   loadCatalog(admin), loadEvents(admin, { taskId: id }), loadTasks(admin), loadRequests(admin),
 ]);
+const typeOutputs = await loadTypeOutputs(admin);
 const request = task.request_id ? requests.find((q) => q.id === task.request_id) ?? null : null;
 // A task can be linked to any open request, or keep the one it has.
 const linkable = requests.filter((q) => !q.cancelled_at || q.id === task.request_id)
@@ -44,11 +46,13 @@ const slip = slipDays(task);
 const missing = missingInfo(task);
 const today = todayLocal();
 const unitLabel = (u: string) => T(K(`unit.${u}`));
+const qtyText = (q: number | null) => (q === null ? '' : locale === 'fr' ? String(q).replace('.', ',') : String(q));
 const daysLabel = (n: number) => (n === 1 ? T('days.one') : T('days.long').replace('{n}', String(n)));
 
 const ok = Astro.url.searchParams.get('ok');
 const okMsg = ok === 'created' ? T('msg.created').replace('{no}', task.task_no)
-  : ok === 'saved' ? T('msg.saved') : ok === 'status' ? T('msg.status') : ok === 'nochange' ? T('msg.nochange') : null;
+  : ok === 'saved' ? T('msg.saved') : ok === 'status' ? T('msg.status') : ok === 'nochange' ? T('msg.nochange')
+  : ok === 'yield' ? T('y.saved') : null;
 const errCode = Astro.url.searchParams.get('error');
 const errMsg = errCode ? (T(K(`err.${errCode}`)) ?? T('err.UNKNOWN')) : null;
 const here = `/portail/production/${task.id}`;
@@ -199,9 +203,64 @@ const canStop = task.status === 'planned' || task.status === 'in_progress' || ta
     </section>
   </div>
 
+  <section class="card" id="rendement" style="margin-top: 18px;">
+    <h2>{T('y.title')} {task.status === 'done' && task.outputs.length > 0 && !yieldComplete(task) && <span class="flag missing">{T('y.missing')}</span>}</h2>
+    <p class="hint" style="margin: -6px 0 14px;">{T('y.hint')}</p>
+    {task.outputs.length === 0 ? <p class="muted small">{T('y.noOutputs')}</p> : (
+      <form method="POST" action="/api/portail/production/tasks" class="yield">
+        <input type="hidden" name="_action" value="yield" />
+        <input type="hidden" name="id" value={task.id} />
+        <input type="hidden" name="version" value={String(task.version)} />
+        {task.inputs.length > 0 && (
+          <table class="data ytable">
+            <thead><tr><th>{T('y.inputs')}</th><th class="num">{T('y.planned')}</th><th class="num">{T('y.used')}</th></tr></thead>
+            <tbody>
+              {task.inputs.map((i) => (
+                <tr>
+                  <td>{i.material}{i.groweriq_lot_id && <span class="muted small mono"> · {i.groweriq_lot_id}</span>}</td>
+                  <td class="num">{fmtQty(i.quantity, i.unit, locale, unitLabel) || '—'}</td>
+                  <td class="num"><span class="qty-in"><input type="text" name="used" inputmode="decimal" value={qtyText(i.actual_quantity)} placeholder={qtyText(i.quantity)} aria-label={`${T('y.used')} — ${i.material}`} /> <span class="muted">{unitLabel(i.unit)}</span></span></td>
+                </tr>
+              ))}
+              <tr class="tot"><td>{T('y.total')}</td><td class="num">{fmtMass(plannedInputG(task) || null, locale)}</td><td class="num">{fmtMass(actualInputG(task) || null, locale)}</td></tr>
+            </tbody>
+          </table>
+        )}
+        <table class="data ytable">
+          <thead><tr><th>{T('y.outputs')}</th><th class="num">{T('y.expectedPct')}</th><th class="num">{T('y.expected')}</th><th class="num">{T('y.obtained')}</th><th class="num">{T('y.actualPct')}</th></tr></thead>
+          <tbody>
+            {task.outputs.map((o) => {
+              const real = actualYieldPct(task, o);
+              const gap = real !== null && o.expected_yield_pct !== null ? real - o.expected_yield_pct : null;
+              return (
+                <tr>
+                  <td>{o.product}{o.is_byproduct && <span class="muted small"> · {T('out.byproduct')}</span>}</td>
+                  <td class="num">{fmtPct(o.expected_yield_pct, locale)}</td>
+                  <td class="num">{fmtMass(expectedOutputG(task, o), locale)}</td>
+                  <td class="num"><span class="qty-in"><input type="text" name="obtained" inputmode="decimal" value={qtyText(o.actual_quantity)} aria-label={`${T('y.obtained')} — ${o.product}`} /> <span class="muted">{unitLabel(o.unit)}</span></span></td>
+                  <td class="num">
+                    <strong>{fmtPct(real, locale)}</strong>
+                    {gap !== null && <div class={`small ${gap < 0 ? 'neg' : 'pos'}`}>{T('y.vs').replace('{d}', `${gap > 0 ? '+' : gap < 0 ? '−' : ''}${Math.abs(gap).toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { maximumFractionDigits: 1 })}`)}</div>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {[...task.inputs, ...task.outputs].some((l) => l.unit === 'unit') && <p class="hint">{T('y.units')}</p>}
+        <div class="quick" style="margin-top: 12px;">
+          <button type="submit" class="btn btn-secondary">{T('y.save')}</button>
+          {task.status !== 'done' && task.status !== 'cancelled' && (
+            <button type="submit" name="finish" value="1" class="btn btn-primary">{T('y.saveFinish')}</button>
+          )}
+        </div>
+      </form>
+    )}
+  </section>
+
   <section class="card" id="modifier" style="margin-top: 18px;">
     <h2>{T('detail.edit')}</h2>
-    <ProductionTaskForm mode="edit" rooms={rooms} types={types} task={task} linkable={linkable} />
+    <ProductionTaskForm mode="edit" rooms={rooms} types={types} task={task} linkable={linkable} typeOutputs={typeOutputs} />
   </section>
 
   <section class="card" style="margin-top: 18px;">
@@ -254,6 +313,13 @@ const canStop = task.status === 'planned' || task.status === 'in_progress' || ta
   .num { text-align: right; white-space: nowrap; }
   .notes { white-space: pre-wrap; font-size: .92rem; }
   .quick { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ytable { margin-bottom: 14px; }
+  .ytable th, .ytable td { padding: 8px 10px; }
+  .ytable tr.tot td { font-weight: 600; border-top: 2px solid var(--p-border); }
+  .qty-in { display: inline-flex; align-items: center; gap: 6px; }
+  .qty-in input { width: 110px; padding: 6px 8px; text-align: right; }
+  .neg { color: var(--p-danger); }
+  .pos { color: var(--p-success); }
   .stop { margin-top: 16px; }
   .chip { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;
           color: var(--room); border: 1px solid color-mix(in srgb, var(--room) 45%, transparent);

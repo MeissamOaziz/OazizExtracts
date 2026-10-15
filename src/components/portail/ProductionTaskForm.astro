@@ -7,7 +7,7 @@ import { getPortailLocale, makeT } from '../../lib/portail-i18n';
 import { frProduction, enProduction, type ProductionDict } from '../../i18n/portail/production';
 import {
   CHANGE_REASONS, CREATE_REASONS, STATUSES, UNITS, roomName, typeName,
-  type ProdType, type Room, type Task,
+  type ProdType, type Room, type Task, type TypeOutput,
   fmtDay,
 } from '../../lib/production';
 import { poLabel, type ProdRequest } from '../../lib/production-requests';
@@ -23,8 +23,10 @@ interface Props {
   request?: ProdRequest;
   /** Edit: requests the task can be linked to (open ones plus its current one). */
   linkable?: Array<{ id: string; request_no: string; title: string }>;
+  /** Default outputs per production type, to prefill a new task's outputs. */
+  typeOutputs?: TypeOutput[];
 }
-const { mode, rooms, types, task, defaults = {}, request, linkable = [] } = Astro.props;
+const { mode, rooms, types, task, defaults = {}, request, linkable = [], typeOutputs = [] } = Astro.props;
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frProduction, enProduction);
 const K = (k: string) => k as keyof ProductionDict;
@@ -35,14 +37,25 @@ const typeOpts = types.filter((p) => p.is_active || p.id === task?.production_ty
 
 const qtyText = (q: number | null) => (q === null ? '' : locale === 'fr' ? String(q).replace('.', ',') : String(q));
 const inputRows = task && task.inputs.length > 0
-  ? task.inputs.map((i) => ({ material: i.material, lot: i.groweriq_lot_id ?? '', qty: qtyText(i.quantity), unit: i.unit }))
-  : [{ material: '', lot: '', qty: '', unit: 'g' }];
+  ? task.inputs.map((i) => ({ material: i.material, lot: i.groweriq_lot_id ?? '', qty: qtyText(i.quantity), unit: i.unit, actual: qtyText(i.actual_quantity) }))
+  : [{ material: '', lot: '', qty: '', unit: 'g', actual: '' }];
+
+// Outputs: the task's own, or for a new task the defaults of its type.
+const pctText = (p: number | null) => (p === null ? '' : qtyText(p));
+const defaultsFor = (typeId: string) => typeOutputs.filter((o) => o.production_type_id === typeId)
+  .sort((a, b) => a.sort_order - b.sort_order)
+  .map((o) => ({ product: o.product, kind: o.is_byproduct ? 'by' : 'main', pct: pctText(o.default_yield_pct), unit: 'g', actual: '' }));
+// Read from the type map below by the page script when the type changes.
+const defaultsByType = Object.fromEntries(types.map((p) => [p.id, defaultsFor(p.id)]));
 const v = {
   production_type_id: task?.production_type_id ?? request?.production_type_id ?? '',
   room_id: task?.room_id ?? defaults.room_id ?? '',
   start_date: task?.start_date ?? defaults.start_date ?? '',
   end_date: task?.end_date ?? defaults.start_date ?? '',
 };
+const outputRows = task
+  ? task.outputs.map((o) => ({ product: o.product, kind: o.is_byproduct ? 'by' : 'main', pct: pctText(o.expected_yield_pct), unit: o.unit, actual: qtyText(o.actual_quantity) }))
+  : defaultsFor(v.production_type_id);
 ---
 <form method="POST" action="/api/portail/production/tasks" class="ps-form" data-mode={mode}>
   <input type="hidden" name="_action" value={mode} />
@@ -155,6 +168,7 @@ const v = {
           <input type="text" name="in_material" value={r.material} placeholder={T('in.material.ph')} aria-label={T('in.material')} />
           <input type="text" name="in_lot" value={r.lot} aria-label={T('in.lot')} autocomplete="off" />
           <input type="text" name="in_qty" value={r.qty} inputmode="decimal" aria-label={T('in.qty')} />
+          <input type="hidden" name="in_actual" value={r.actual} />
           <select name="in_unit" aria-label={T('in.unit')}>
             {UNITS.map((u) => <option value={u} selected={u === r.unit}>{T(K(`unit.${u}`))}</option>)}
           </select>
@@ -167,6 +181,7 @@ const v = {
         <input type="text" name="in_material" placeholder={T('in.material.ph')} aria-label={T('in.material')} />
         <input type="text" name="in_lot" aria-label={T('in.lot')} autocomplete="off" />
         <input type="text" name="in_qty" inputmode="decimal" aria-label={T('in.qty')} />
+        <input type="hidden" name="in_actual" value="" />
         <select name="in_unit" aria-label={T('in.unit')}>
           {UNITS.map((u) => <option value={u}>{T(K(`unit.${u}`))}</option>)}
         </select>
@@ -174,6 +189,47 @@ const v = {
       </div>
     </template>
     <button type="button" class="btn btn-secondary btn-sm in-add">{T('in.add')}</button>
+  </fieldset>
+
+  <fieldset class="outputs form-row" data-defaults={JSON.stringify(defaultsByType)} data-touched={task ? '1' : ''}>
+    <legend>{T('out.title')}</legend>
+    <p class="hint" style="margin: 0 0 10px;">{T('out.hint')}</p>
+    <div class="out-head" aria-hidden="true">
+      <span>{T('out.product')}</span><span>{T('out.kind')}</span><span>{T('out.yield')}</span><span>{T('in.unit')}</span><span></span>
+    </div>
+    <div class="out-rows">
+      {outputRows.map((r) => (
+        <div class="out-row">
+          <input type="text" name="out_product" value={r.product} placeholder={T('out.product.ph')} aria-label={T('out.product')} />
+          <select name="out_kind" aria-label={T('out.kind')}>
+            <option value="main" selected={r.kind === 'main'}>{T('out.main')}</option>
+            <option value="by" selected={r.kind === 'by'}>{T('out.byproduct')}</option>
+          </select>
+          <input type="text" name="out_pct" value={r.pct} inputmode="decimal" aria-label={T('out.yield')} />
+          <select name="out_unit" aria-label={T('in.unit')}>
+            {UNITS.map((u) => <option value={u} selected={u === r.unit}>{T(K(`unit.${u}`))}</option>)}
+          </select>
+          <input type="hidden" name="out_actual" value={r.actual} />
+          <button type="button" class="out-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+        </div>
+      ))}
+    </div>
+    <template class="out-template">
+      <div class="out-row">
+        <input type="text" name="out_product" placeholder={T('out.product.ph')} aria-label={T('out.product')} />
+        <select name="out_kind" aria-label={T('out.kind')}>
+          <option value="main">{T('out.main')}</option>
+          <option value="by">{T('out.byproduct')}</option>
+        </select>
+        <input type="text" name="out_pct" inputmode="decimal" aria-label={T('out.yield')} />
+        <select name="out_unit" aria-label={T('in.unit')}>
+          {UNITS.map((u) => <option value={u}>{T(K(`unit.${u}`))}</option>)}
+        </select>
+        <input type="hidden" name="out_actual" value="" />
+        <button type="button" class="out-remove" title={T('in.remove')} aria-label={T('in.remove')}>&times;</button>
+      </div>
+    </template>
+    <button type="button" class="btn btn-secondary btn-sm out-add">{T('out.add')}</button>
   </fieldset>
 
   <div class="form-row">
@@ -227,6 +283,12 @@ const v = {
   .reason.needs { border-color: var(--p-accent); background: rgba(208, 88, 38, .04); }
   .in-head, .in-row { display: grid; grid-template-columns: 2.2fr 1.6fr 1fr 0.9fr 34px; gap: 8px; align-items: center; }
   .in-head { font-size: .76rem; color: var(--p-muted); font-weight: 600; margin-bottom: 4px; }
+  .out-head, .out-row { display: grid; grid-template-columns: 2.2fr 1.2fr 1fr 0.9fr 34px; gap: 8px; align-items: center; }
+  .out-head { font-size: .76rem; color: var(--p-muted); font-weight: 600; margin-bottom: 4px; }
+  .out-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .out-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 36px;
+                cursor: pointer; color: var(--p-muted); font-size: 1.1rem; }
+  .out-remove:hover { color: var(--p-danger); border-color: #fecaca; }
   .in-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
   .in-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 36px;
                cursor: pointer; color: var(--p-muted); font-size: 1.1rem; }
@@ -254,6 +316,40 @@ const v = {
       // Keep one row on screen: clear it instead of removing the last one.
       if (rows.children.length > 1) row.remove();
       else row.querySelectorAll<HTMLInputElement>('input').forEach((i) => { i.value = ''; });
+    });
+
+    // Outputs: same add/remove as the inputs. While nobody has touched them,
+    // changing the production type swaps in that type's default products.
+    const outBox = form.querySelector<HTMLElement>('fieldset.outputs')!;
+    const outRows = outBox.querySelector<HTMLElement>('.out-rows')!;
+    const outTpl = outBox.querySelector<HTMLTemplateElement>('.out-template')!;
+    const addOut = (r?: { product: string; kind: string; pct: string; unit: string }) => {
+      outRows.appendChild(outTpl.content.cloneNode(true));
+      const row = outRows.lastElementChild!;
+      if (r) {
+        row.querySelector<HTMLInputElement>('[name="out_product"]')!.value = r.product;
+        row.querySelector<HTMLSelectElement>('[name="out_kind"]')!.value = r.kind;
+        row.querySelector<HTMLInputElement>('[name="out_pct"]')!.value = r.pct;
+        row.querySelector<HTMLSelectElement>('[name="out_unit"]')!.value = r.unit;
+      }
+      return row;
+    };
+    outBox.querySelector('.out-add')?.addEventListener('click', () => {
+      outBox.dataset.touched = '1';
+      addOut().querySelector<HTMLInputElement>('input')?.focus();
+    });
+    outRows.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.out-remove');
+      if (!btn) return;
+      outBox.dataset.touched = '1';
+      btn.closest('.out-row')!.remove();
+    });
+    outRows.addEventListener('input', () => { outBox.dataset.touched = '1'; });
+    const defaultsByType = JSON.parse(outBox.dataset.defaults ?? '{}');
+    form.querySelector<HTMLSelectElement>('[name="production_type_id"]')?.addEventListener('change', (e) => {
+      if (outBox.dataset.touched) return;
+      outRows.innerHTML = '';
+      for (const r of defaultsByType[(e.target as HTMLSelectElement).value] ?? []) addOut(r);
     });
 
     const start = form.querySelector<HTMLInputElement>('[name="start_date"]')!;

@@ -6,7 +6,8 @@ import type { PortailLocale } from './portail-i18n';
 import type { ProductionDict } from '../i18n/portail/production';
 import {
   loadCatalog, loadEvents, loadTasks, spanOf, slipDays, fmtDate, fmtQty, roomName, typeName, zonedDayStart, addDays,
-  type ProdType, type Room, type Task, type TaskEvent, type TaskInput,
+  actualYieldPct, actualInputG, fmtPct, grams,
+  type ProdType, type Room, type Task, type TaskEvent, type TaskInput, type TaskOutput,
 } from './production';
 
 export type ProdT = (key: keyof ProductionDict) => string;
@@ -20,7 +21,7 @@ export interface DescribeCtx {
 
 const FIELD_ORDER = [
   'status', 'production_type_id', 'room_id', 'start_date', 'end_date', 'actual_start_date',
-  'actual_end_date', 'priority', 'groweriq_lot_id', 'groweriq_batch_id', 'inputs', 'notes',
+  'actual_end_date', 'priority', 'groweriq_lot_id', 'groweriq_batch_id', 'inputs', 'outputs', 'notes',
 ] as const;
 
 export function describeInputs(inputs: TaskInput[] | null | undefined, ctx: DescribeCtx): string {
@@ -28,7 +29,19 @@ export function describeInputs(inputs: TaskInput[] | null | undefined, ctx: Desc
   return inputs.map((i) => {
     const qty = fmtQty(i.quantity === null ? null : Number(i.quantity), i.unit, ctx.locale,
       (u) => ctx.T(`unit.${u}` as keyof ProductionDict));
-    return [i.material, i.groweriq_lot_id ? `(${i.groweriq_lot_id})` : '', qty].filter(Boolean).join(' ');
+    const used = i.actual_quantity === null || i.actual_quantity === undefined ? ''
+      : `(${ctx.T('y.used').toLowerCase()} ${fmtQty(Number(i.actual_quantity), i.unit, ctx.locale, (u) => ctx.T(`unit.${u}` as keyof ProductionDict))})`;
+    return [i.material, i.groweriq_lot_id ? `(${i.groweriq_lot_id})` : '', qty, used].filter(Boolean).join(' ');
+  }).join(' · ');
+}
+
+export function describeOutputs(outputs: TaskOutput[] | null | undefined, ctx: DescribeCtx): string {
+  if (!outputs || outputs.length === 0) return ctx.T('ev.empty');
+  return outputs.map((o) => {
+    const pct = o.expected_yield_pct === null || o.expected_yield_pct === undefined ? '' : fmtPct(Number(o.expected_yield_pct), ctx.locale);
+    const got = o.actual_quantity === null || o.actual_quantity === undefined ? ''
+      : `(${ctx.T('y.obtained').toLowerCase()} ${fmtQty(Number(o.actual_quantity), o.unit, ctx.locale, (u) => ctx.T(`unit.${u}` as keyof ProductionDict))})`;
+    return [o.product, o.is_byproduct ? `(${ctx.T('out.byproduct').toLowerCase()})` : '', pct, got].filter(Boolean).join(' ');
   }).join(' · ');
 }
 
@@ -42,6 +55,7 @@ function describeValue(field: string, v: unknown, ctx: DescribeCtx): string {
     case 'start_date': case 'end_date': case 'actual_start_date': case 'actual_end_date':
       return fmtDate(String(v), ctx.locale);
     case 'inputs': return describeInputs(v as TaskInput[], ctx);
+    case 'outputs': return describeOutputs(v as TaskOutput[], ctx);
     default: return String(v);
   }
 }
@@ -72,6 +86,8 @@ export interface ReportParams { from: string; to: string; roomId: string | null;
 export interface ReasonRow {
   reason: string; events: number; tasks: number; later: number; earlier: number; roomChanges: number;
 }
+
+export interface YieldRow { task: Task; output: TaskOutput; inputG: number; outputG: number; actualPct: number }
 
 export interface VarianceRow { task: Task; slip: number; moves: number; origin: string | null }
 
@@ -128,8 +144,25 @@ export async function loadReport(admin: SupabaseClient, p: ReportParams) {
     .map((t) => ({ task: t, slip: slipDays(t), moves: movesByTask.get(t.id) ?? 0, origin: originByTask.get(t.id) ?? null }))
     .sort((a, b) => b.slip - a.slip || a.task.start_date.localeCompare(b.task.start_date));
 
+  // Yields: outputs of tasks finished in the period whose result is entered.
+  const yields: YieldRow[] = doneInPeriod.flatMap((t) => t.outputs
+    .filter((o) => o.actual_quantity !== null && grams(o.actual_quantity, o.unit) !== null && actualInputG(t) > 0)
+    .map((o) => ({ task: t, output: o, inputG: actualInputG(t), outputG: grams(o.actual_quantity, o.unit)!, actualPct: actualYieldPct(t, o)! })));
+  const byTypeMap = new Map<string, { typeId: string; product: string; n: number; sumActual: number; sumExpected: number; nExpected: number }>();
+  for (const y of yields) {
+    const key = `${y.task.production_type_id}|${y.output.product.toLowerCase()}`;
+    const row = byTypeMap.get(key) ?? { typeId: y.task.production_type_id, product: y.output.product, n: 0, sumActual: 0, sumExpected: 0, nExpected: 0 };
+    row.n++; row.sumActual += y.actualPct;
+    if (y.output.expected_yield_pct !== null) { row.sumExpected += y.output.expected_yield_pct; row.nExpected++; }
+    byTypeMap.set(key, row);
+  }
+  const yieldByType = [...byTypeMap.values()].map((r) => ({
+    typeId: r.typeId, product: r.product, n: r.n, avgActual: r.sumActual / r.n,
+    avgExpected: r.nExpected ? r.sumExpected / r.nExpected : null,
+  }));
+
   return {
-    rooms, types, taskById, events, reasons, variance,
+    rooms, types, taskById, events, reasons, variance, yields, yieldByType,
     kpi: {
       created: created.length,
       unplanned: unplanned.length,

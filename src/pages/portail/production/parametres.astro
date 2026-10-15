@@ -6,14 +6,16 @@ import ProductionNav from '../../../components/portail/ProductionNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frProduction, enProduction } from '../../../i18n/portail/production';
-import { loadCatalog } from '../../../lib/production';
+import { loadCatalog, loadTypeOutputs, typeName } from '../../../lib/production';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
 
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frProduction, enProduction);
-const { rooms, types } = await loadCatalog(getAdminClient());
+const admin = getAdminClient();
+const [{ rooms, types }, typeOutputs] = await Promise.all([loadCatalog(admin), loadTypeOutputs(admin)]);
+const pctText = (p: number | null) => (p === null ? '' : locale === 'fr' ? String(p).replace('.', ',') : String(p));
 
 const ok = Astro.url.searchParams.get('ok');
 const err = Astro.url.searchParams.get('error');
@@ -90,6 +92,45 @@ const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' 
       <button type="submit" class="btn btn-primary btn-sm">{T('set.add')}</button>
     </form>
   </section>
+
+  <section class="card block" id="rendements">
+    <h2>{T('set.yields')}</h2>
+    <p class="hint" style="margin: -6px 0 14px;">{T('set.yields.hint')}</p>
+    <div class="grid-head yields" aria-hidden="true">
+      <span>{T('set.yields.type')}</span><span>{T('out.product')}</span><span>{T('out.kind')}</span><span>{T('out.yield')}</span><span></span><span></span>
+    </div>
+    {types.filter((p) => p.is_active || typeOutputs.some((o) => o.production_type_id === p.id)).flatMap((p) =>
+      typeOutputs.filter((o) => o.production_type_id === p.id).map((o) => (
+        <form method="POST" action="/api/portail/production/settings" class="grid-row yields">
+          <input type="hidden" name="_action" value="save_yield" />
+          <input type="hidden" name="id" value={o.id} />
+          <span class="type-name">{typeName(p, locale)}</span>
+          <input type="text" name="product" value={o.product} required aria-label={T('out.product')} />
+          <select name="kind" aria-label={T('out.kind')}>
+            <option value="main" selected={!o.is_byproduct}>{T('out.main')}</option>
+            <option value="by" selected={o.is_byproduct}>{T('out.byproduct')}</option>
+          </select>
+          <input type="text" name="pct" value={pctText(o.default_yield_pct)} inputmode="decimal" aria-label={T('out.yield')} />
+          <button type="submit" class="btn btn-secondary btn-sm">{T('set.save')}</button>
+          <button type="submit" name="remove" value="1" class="btn btn-danger btn-sm">{T('set.yields.remove')}</button>
+        </form>
+      )))}
+    <h3>{T('set.yields.add')}</h3>
+    <form method="POST" action="/api/portail/production/settings" class="grid-row yields new">
+      <input type="hidden" name="_action" value="add_yield" />
+      <select name="production_type_id" required aria-label={T('set.yields.type')}>
+        {types.filter((p) => p.is_active).map((p) => <option value={p.id}>{typeName(p, locale)}</option>)}
+      </select>
+      <input type="text" name="product" required placeholder={T('out.product.ph')} aria-label={T('out.product')} />
+      <select name="kind" aria-label={T('out.kind')}>
+        <option value="main">{T('out.main')}</option>
+        <option value="by">{T('out.byproduct')}</option>
+      </select>
+      <input type="text" name="pct" inputmode="decimal" aria-label={T('out.yield')} />
+      <button type="submit" class="btn btn-primary btn-sm">{T('set.add')}</button>
+      <span></span>
+    </form>
+  </section>
 </PortailLayout>
 
 <style>
@@ -99,6 +140,9 @@ const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' 
   .grid-head, .grid-row { display: grid; gap: 8px; align-items: center; min-width: 760px; }
   .rooms { grid-template-columns: 80px 1.4fr 1.4fr 56px 90px 70px 70px 110px; }
   .types { grid-template-columns: 170px 1.6fr 1.6fr 70px 70px 110px; }
+  .yields { grid-template-columns: 1.6fr 1.4fr 130px 110px 110px 90px; }
+  .type-name { font-size: .88rem; }
+  .grid-row select { padding: 6px 8px; font-size: .88rem; }
   .grid-head { font-size: .74rem; font-weight: 600; color: var(--p-muted); margin-bottom: 6px; }
   .grid-row { margin-bottom: 6px; }
   .grid-row input[type="text"], .grid-row input[type="number"] { padding: 6px 8px; font-size: .88rem; }

@@ -10,6 +10,7 @@ import {
   addDays, daysBetween, dayCount, fmtDay, isIsoDate, isLate, isOn, loadCatalog, loadTasks, missingInfo,
   monthLabel, mondayOf, roomConflicts, roomName, spanOf, todayLocal, typeName, weekdayNames, fmtQty,
   type Task,
+  yieldComplete,
 } from '../../../lib/production';
 import { loadRequests, poLabel, requestState, tasksByRequest } from '../../../lib/production-requests';
 
@@ -70,6 +71,7 @@ const flagsOf = (t: Task) => {
   if (t.priority === 'rush' && t.status !== 'done' && t.status !== 'cancelled') out.push({ cls: 'rush', label: T('flag.rush'), tip: '' });
   if (isLate(t)) out.push({ cls: 'late', label: T('flag.late'), tip: T('tip.late') });
   if (conflicts.has(t.id)) out.push({ cls: 'conflict', label: T('flag.conflict'), tip: T('tip.conflict').replace('{list}', conflicts.get(t.id)!.join(', ')) });
+  if (t.status === 'done' && t.outputs.length > 0 && !yieldComplete(t)) out.push({ cls: 'missing', label: T('y.missing'), tip: T('y.hint') });
   const miss = missingInfo(t);
   if (miss.length && t.status !== 'cancelled') out.push({ cls: 'missing', label: T('flag.missing'), tip: T('tip.missing').replace('{list}', miss.map((m) => T(K(`missing.${m}`))).join(', ')) });
   return out;

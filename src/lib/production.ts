@@ -46,6 +46,17 @@ export interface ProdType {
 }
 export interface TaskInput {
   material: string; groweriq_lot_id: string | null; quantity: number | null; unit: Unit;
+  /** How much was really used, entered when the work is done. */
+  actual_quantity: number | null;
+}
+export interface TaskOutput {
+  product: string; is_byproduct: boolean; expected_yield_pct: number | null;
+  actual_quantity: number | null; unit: Unit;
+}
+/** Default outputs of a production type (Settings), copied onto new tasks. */
+export interface TypeOutput {
+  id: string; production_type_id: string; sort_order: number; product: string;
+  is_byproduct: boolean; default_yield_pct: number | null;
 }
 export interface Task {
   id: string; task_no: string; production_type_id: string; room_id: string;
@@ -57,6 +68,7 @@ export interface Task {
   request_id: string | null;
   version: number; created_at: string; updated_at: string;
   inputs: TaskInput[];
+  outputs: TaskOutput[];
 }
 export interface TaskEvent {
   id: number; task_id: string; at: string; staff_id: string | null; staff_name: string | null;
@@ -69,16 +81,81 @@ export interface TaskEvent {
 const TASK_COLS = 'id, task_no, production_type_id, room_id, status, priority, start_date, end_date, '
   + 'original_start_date, original_end_date, actual_start_date, actual_end_date, groweriq_lot_id, '
   + 'groweriq_batch_id, notes, request_id, version, created_at, updated_at, '
-  + 'inputs:ps_task_inputs ( material, groweriq_lot_id, quantity, unit, sort_order )';
+  + 'inputs:ps_task_inputs ( material, groweriq_lot_id, quantity, actual_quantity, unit, sort_order ), '
+  + 'outputs:ps_task_outputs ( product, is_byproduct, expected_yield_pct, actual_quantity, unit, sort_order )';
+
+const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
 function shapeTask(row: any): Task {
-  const inputs = [...(row.inputs ?? [])]
-    .sort((a: any, b: any) => a.sort_order - b.sort_order)
-    .map((i: any) => ({
-      material: i.material, groweriq_lot_id: i.groweriq_lot_id,
-      quantity: i.quantity === null ? null : Number(i.quantity), unit: i.unit,
-    }));
-  return { ...row, inputs };
+  const bySort = (a: any, b: any) => a.sort_order - b.sort_order;
+  const inputs = [...(row.inputs ?? [])].sort(bySort).map((i: any) => ({
+    material: i.material, groweriq_lot_id: i.groweriq_lot_id,
+    quantity: num(i.quantity), actual_quantity: num(i.actual_quantity), unit: i.unit,
+  }));
+  const outputs = [...(row.outputs ?? [])].sort(bySort).map((o: any) => ({
+    product: o.product, is_byproduct: !!o.is_byproduct, expected_yield_pct: num(o.expected_yield_pct),
+    actual_quantity: num(o.actual_quantity), unit: o.unit,
+  }));
+  return { ...row, inputs, outputs };
+}
+
+export async function loadTypeOutputs(admin: SupabaseClient): Promise<TypeOutput[]> {
+  const { data, error } = await admin.from('ps_type_outputs').select('*').order('sort_order');
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ ...r, default_yield_pct: num(r.default_yield_pct) }));
+}
+
+// ----------------------------------------------------------------------- yield
+//
+// Yields are mass ratios: output grams over input grams. Lines counted in
+// units cannot be weighed, so they are left out of the mass.
+
+/** Grams, or null for a quantity in units (or no quantity). */
+export function grams(q: number | null, unit: string): number | null {
+  if (q === null || unit === 'unit') return null;
+  return unit === 'kg' ? q * 1000 : q;
+}
+
+/** Planned input mass (what the plan expected to use). */
+export const plannedInputG = (t: Pick<Task, 'inputs'>) =>
+  t.inputs.reduce((s, i) => s + (grams(i.quantity, i.unit) ?? 0), 0);
+
+/** Mass really used: the actual quantity where entered, the planned one otherwise. */
+export function actualInputG(t: Pick<Task, 'inputs'>): number {
+  return t.inputs.reduce((s, i) => s + (grams(i.actual_quantity ?? i.quantity, i.unit) ?? 0), 0);
+}
+
+/** True once every input line has its used quantity and every output its result. */
+export const yieldComplete = (t: Pick<Task, 'inputs' | 'outputs'>) =>
+  t.outputs.length > 0 && t.outputs.every((o) => o.actual_quantity !== null)
+  && t.inputs.every((i) => i.actual_quantity !== null);
+
+/** Expected output in grams for one output line, from the planned inputs. */
+export function expectedOutputG(t: Pick<Task, 'inputs'>, o: TaskOutput): number | null {
+  const mass = plannedInputG(t);
+  return o.expected_yield_pct === null || mass === 0 ? null : (mass * o.expected_yield_pct) / 100;
+}
+
+/** Actual yield % of one output line, or null until both sides are known. */
+export function actualYieldPct(t: Pick<Task, 'inputs'>, o: TaskOutput): number | null {
+  const out = grams(o.actual_quantity, o.unit);
+  const mass = actualInputG(t);
+  return out === null || mass === 0 ? null : (out / mass) * 100;
+}
+
+export function fmtPct(v: number | null, locale: 'fr' | 'en'): string {
+  if (v === null) return '—';
+  const s = v.toLocaleString(locale === 'en' ? 'en-CA' : 'fr-CA', { maximumFractionDigits: 1 });
+  return locale === 'en' ? `${s}%` : `${s}\u00a0%`;
+}
+
+/** "1 234,5 g", switching to kg from 10 kg so big batches stay readable. */
+export function fmtMass(g: number | null, locale: 'fr' | 'en'): string {
+  if (g === null) return '—';
+  const l = locale === 'en' ? 'en-CA' : 'fr-CA';
+  return g >= 10000
+    ? `${(g / 1000).toLocaleString(l, { maximumFractionDigits: 2 })} kg`
+    : `${g.toLocaleString(l, { maximumFractionDigits: 1 })} g`;
 }
 
 // --------------------------------------------------------------------- loading
