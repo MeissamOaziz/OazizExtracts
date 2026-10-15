@@ -65,12 +65,12 @@ export async function linkVendors(admin: SupabaseClient, opts: { dryRun?: boolea
   const qbo = await getQbo(admin);
   if (!qbo) throw new Error('QuickBooks non connecté');
   const vendors = await qbo.query('Vendor', 'Active = true');
-  const { data: sups } = await admin.from('ap_suppliers').select('id, name, legal_name, qbo_vendor_name, qbo_vendor_id, aliases');
+  const { data: sups } = await admin.from('ap_suppliers').select('id, name, legal_name, qbo_vendor_name, qbo_vendor_id, aliases, is_active');
   const taken = new Set((sups ?? []).map((s) => s.qbo_vendor_id).filter(Boolean));
   const linked: Array<{ supplier: string; vendor: string }> = [];
   const proposals: Array<{ supplierId: string; supplier: string; vendorId: string; vendor: string; score: number }> = [];
   for (const s of sups ?? []) {
-    if (s.qbo_vendor_id) continue;
+    if (s.qbo_vendor_id || !s.is_active) continue;
     const keys = [s.qbo_vendor_name, s.name, s.legal_name, ...(s.aliases ?? [])].filter((k): k is string => !!k);
     const scored = vendors
       .filter((v) => !taken.has(v.Id))
