@@ -45,7 +45,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   // Expense: paid without a bill (DAS, taxes generated in QB, reimbursements
   // already entered as expenses) — no credit is left on the supplier and
   // nothing is sent to QuickBooks.
-  const isExpense = form.get('expense') === 'on';
+  // One choice on the form (qb_mode): push = pays invoices, create it in QB;
+  // already = pays invoices, already entered in QB; expense = no bill.
+  const mode = String(form.get('qb_mode') ?? (form.get('expense') === 'on' ? 'expense' : form.get('already_in_qbo') === 'on' ? 'already' : 'push'));
+  const isExpense = mode === 'expense';
   const notes = String(form.get('notes') ?? '');
   const { data: newId, error } = await admin.rpc('ap_record_payment_split', {
     p_supplier_id: supplierId, p_amount: amount, p_paid_on: paidOn,
@@ -61,7 +64,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`${back}?error=missing`, 303);
   }
   await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_recorded', details: { amount, paid_on: paidOn, reference: ref || null, ...(isExpense ? { expense: true } : {}) } });
-  if (newId && !isExpense && form.get('already_in_qbo') !== 'on') await autoPushPayment(admin, newId as string);
+  if (newId && mode === 'push') await autoPushPayment(admin, newId as string);
   if (newId && isExpense) await admin.from('ap_payments').update({ qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', newId as string);
   return redirect(`${back}?ok=pay`, 303);
 };
