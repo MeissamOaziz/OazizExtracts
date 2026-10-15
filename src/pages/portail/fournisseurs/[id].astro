@@ -6,6 +6,8 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frFournisseursDetail, enFournisseursDetail } from '../../../i18n/portail/fournisseurs-detail';
 import { frVendorForm, enVendorForm } from '../../../i18n/vendor-form';
+import { getQbo } from '../../../lib/qbo';
+import { similarVendors, vendorPreview, type VendorSubmission } from '../../../lib/vendor-qbo';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 const staff = await currentStaff(supabase);
@@ -38,10 +40,39 @@ type ApprovalRow = { id: string; staff_id: string; approved_at: string | null; s
 const approvals = (approvalRows ?? []) as unknown as ApprovalRow[];
 const fullyApproved = approvals.length > 0 && approvals.every((a) => !!a.approved_at);
 
+// QuickBooks card: for the accountants (Payments access) once the VQ is submitted.
+const accountant = !!Astro.locals.access?.perms?.has('payables');
+const showQb = accountant && submission.status === 'submitted';
+const approvedCount = approvals.filter((a) => !!a.approved_at).length;
+let qbConnected = false;
+let similar: Array<{ id: string; name: string; company: string | null; score: number }> = [];
+let qbLookupError: string | null = null;
+const preview = vendorPreview(submission as VendorSubmission);
+let pushedBy: string | null = null;
+if (showQb && !submission.qbo_vendor_id) {
+  try {
+    const qbo = await getQbo(admin);
+    qbConnected = !!qbo;
+    if (qbo) similar = await similarVendors(qbo, submission as VendorSubmission);
+  } catch (e) {
+    qbLookupError = String((e as Error)?.message ?? e).slice(0, 200);
+  }
+}
+if (submission.qbo_pushed_by) {
+  const { data: who } = await admin.from('staff').select('full_name').eq('id', submission.qbo_pushed_by).maybeSingle();
+  pushedBy = who?.full_name ?? null;
+}
+const qbReport = submission.qbo_push_report as null | {
+  vendor_id: string; vendor_name: string; created: boolean; supplier: string;
+  fields: Record<string, string>; errors: Record<string, string>;
+};
+const fmtAddr = (a: { Line1: string; City: string; CountrySubDivisionCode: string; PostalCode: string } | null) =>
+  a ? [a.Line1, [a.City, a.CountrySubDivisionCode, a.PostalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ') : null;
+
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
 const errCode = url.searchParams.get('error');
-const infoMessages: Record<string, string> = { approved: T('info.approved') };
+const infoMessages: Record<string, string> = { approved: T('info.approved'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked') };
 const errorMessages: Record<string, string> = {
   not_approver: T('error.not_approver'),
   unknown: T('error.unknown'),
@@ -127,7 +158,9 @@ function telHref(phone: string, ext?: string | null): string {
   </div>
 
   {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
-  {errCode && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
+  {errCode === 'qb' && <div class="flash flash-error">{T('qb.err').replace('{msg}', url.searchParams.get('msg') ?? '')}</div>}
+  {errCode === 'qb_forbidden' && <div class="flash flash-error">{T('qb.err.forbidden')}</div>}
+  {errCode && !errCode.startsWith('qb') && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
 
   {isDraft && (
     <div class="card" style="margin-bottom: 20px;">{T('notYetSubmitted')}</div>
@@ -167,6 +200,85 @@ function telHref(phone: string, ext?: string | null): string {
       </tbody>
     </table>
   </div>
+
+  {showQb && (
+    <div class="card qb-card" id="quickbooks" style="margin-bottom: 20px;">
+      <h2>{T('qb.title')}</h2>
+      {submission.qbo_vendor_id ? (
+        <>
+          <p class="qb-done">{T('qb.done').replace('{name}', submission.qbo_vendor_name ?? '').replace('{id}', submission.qbo_vendor_id)}</p>
+          {submission.qbo_pushed_at && <p class="hint">{T('qb.doneBy').replace('{date}', fmtDate(submission.qbo_pushed_at)).replace('{name}', pushedBy ?? '—')}</p>}
+          {submission.ap_supplier_id && (
+            <p style="margin-top: 8px;">{T('qb.supplier')} : <a href={`/portail/paiements/fournisseurs/${submission.ap_supplier_id}`}>{submission.qbo_vendor_name}</a>
+              {qbReport && <span class="hint"> ({T(`qb.supplier.${qbReport.supplier}` as keyof typeof frFournisseursDetail)})</span>}</p>
+          )}
+          {qbReport?.created && (
+            <>
+              <h3 class="qb-h">{T('qb.fields')}</h3>
+              <table class="data qb-table"><tbody>
+                {(['emails', 'shipping', 'business_number', 'notes'] as const).map((k) => (
+                  <tr>
+                    <th>{T(`qb.field.${k}` as keyof typeof frFournisseursDetail)}</th>
+                    <td><span class={`qb-st qb-${qbReport.fields[k]}`}>{T(`qb.state.${qbReport.fields[k] ?? 'skipped'}` as keyof typeof frFournisseursDetail)}</span>
+                      {qbReport.errors?.[k] && <div class="hint">{qbReport.errors[k]}</div>}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+              {Object.values(qbReport.fields).some((v) => v === 'refused' || v === 'dropped') && <p class="hint" style="margin-top: 8px;">{T('qb.manual')}</p>}
+            </>
+          )}
+        </>
+      ) : !qbConnected ? (
+        <p class="hint">{qbLookupError ? T('qb.err').replace('{msg}', qbLookupError) : T('qb.notConnected')}</p>
+      ) : (
+        <>
+          <p class="hint" style="margin: -4px 0 12px;">{T('qb.intro')}</p>
+          {!fullyApproved && <div class="warn-banner">{T('qb.pending').replace('{n}', String(approvedCount)).replace('{total}', String(approvals.length))}</div>}
+
+          <h3 class="qb-h">{T('qb.similar')}</h3>
+          {similar.length === 0 ? <p class="hint">{T('qb.similar.none')}</p> : (
+            <>
+              <p class="hint" style="margin-bottom: 8px;">{T('qb.similar.hint')}</p>
+              <table class="data qb-table"><tbody>
+                {similar.map((v) => (
+                  <tr>
+                    <td><strong>{v.name}</strong>{v.company && v.company !== v.name && <span class="hint"> · {v.company}</span>} <span class="hint">#{v.id}</span></td>
+                    <td style="text-align: right;">
+                      <form method="POST" action={`/api/portail/vendor-submissions/${id}/qbo`} style="margin: 0;">
+                        <input type="hidden" name="_action" value="link" />
+                        <input type="hidden" name="vendor_id" value={v.id} />
+                        <button type="submit" class="btn btn-secondary" style="font-size: .82rem; padding: 6px 14px;">{T('qb.link')}</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody></table>
+            </>
+          )}
+
+          <h3 class="qb-h">{T('qb.preview')}</h3>
+          <form method="POST" action={`/api/portail/vendor-submissions/${id}/qbo`} class="qb-create" data-confirm={T('qb.create.confirm')}>
+            <input type="hidden" name="_action" value="create" />
+            <div class="form-row">
+              <label for="qb-name">{T('qb.f.displayName')}</label>
+              <input type="text" id="qb-name" name="display_name" value={preview.displayName} maxlength="100" required />
+              <p class="hint">{T('qb.f.displayName.hint')}</p>
+            </div>
+            <table class="data qb-table"><tbody>
+              <tr><th>{T('qb.f.company')}</th><td>{preview.companyName}</td></tr>
+              <tr><th>{T('qb.f.emails')}</th><td>{preview.emails.length ? preview.emails.join(', ') : T('qb.none')}</td></tr>
+              <tr><th>{T('qb.f.phone')}</th><td>{preview.phone ?? T('qb.none')}</td></tr>
+              <tr><th>{T('qb.f.billing')}</th><td>{fmtAddr(preview.billing) ?? T('qb.none')}</td></tr>
+              <tr><th>{T('qb.f.shipping')}</th><td>{preview.shipping ? fmtAddr(preview.shipping) : T('qb.f.shipping.same')}</td></tr>
+              <tr><th>{T('qb.f.bn')}</th><td>{preview.businessNumber ?? T('qb.none')}</td></tr>
+              <tr><th>{T('qb.f.notes')}</th><td style="white-space: pre-line;">{preview.notes ?? T('qb.none')}</td></tr>
+            </tbody></table>
+            <button type="submit" class="btn btn-primary" style="margin-top: 12px;">{T('qb.create')}</button>
+          </form>
+        </>
+      )}
+    </div>
+  )}
 
   <div class="card" style="margin-bottom: 20px;">
     <h2>{T('section.contacts')}</h2>
@@ -321,6 +433,26 @@ function telHref(phone: string, ext?: string | null): string {
   </div>
   </>}
 </PortailLayout>
+
+<style>
+  .qb-h { font-size: .92rem; font-weight: 600; margin: 16px 0 8px; }
+  .qb-table th { width: 260px; }
+  .qb-table th, .qb-table td { padding: 8px 12px; }
+  .qb-done { font-weight: 600; color: var(--p-success); }
+  .qb-st { font-size: .8rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .qb-kept { background: #dcfce7; color: #166534; }
+  .qb-refused, .qb-dropped { background: #fef3c7; color: #92400e; }
+  .qb-skipped { background: #f3f4f6; color: #6b7280; }
+</style>
+
+<script>
+  document.querySelector<HTMLFormElement>('form.qb-create')?.addEventListener('submit', (e) => {
+    const f = e.currentTarget as HTMLFormElement;
+    const name = (f.querySelector('[name="display_name"]') as HTMLInputElement).value;
+    if (!confirm((f.dataset.confirm ?? '').replace('{name}', name))) { e.preventDefault(); return; }
+    (f.querySelector('button[type="submit"]') as HTMLButtonElement).disabled = true;
+  });
+</script>
 
 <style>
   tr.contact-group th {
