@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ request, cookies, url }) => {
   const qbo = await getQbo(getAdminClient());
   if (!qbo) return json({ error: 'QuickBooks non connecté' }, 409);
   // ?raw=BillPayment:123,Vendor:45 → full QB objects (read-only, for diagnosis).
-  const raw = (url.searchParams.get('raw') ?? '').split(',').map((x) => x.trim()).filter((x) => /^(BillPayment|Bill|Vendor|Purchase):\d+$/.test(x)).slice(0, 10);
+  const raw = (url.searchParams.get('raw') ?? '').split(',').map((x) => x.trim()).filter((x) => /^(BillPayment|Bill|Vendor|Purchase|Customer|Employee):\d+$/.test(x)).slice(0, 10);
   if (raw.length) {
     const objs: Record<string, unknown> = {};
     for (const r of raw) {
