@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { getQbo } from '../../../../../lib/qbo';
-import { pushVendor, type VendorSubmission } from '../../../../../lib/vendor-qbo';
+import { draftFromForm, pushVendor, type VendorSubmission } from '../../../../../lib/vendor-qbo';
 
 export const prerender = false;
 
@@ -24,16 +24,16 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect, local
   const form = await request.formData();
   const action = String(form.get('_action') ?? '');
   const vendorId = String(form.get('vendor_id') ?? '').trim();
-  const displayName = String(form.get('display_name') ?? '').trim();
   if (action === 'link' && !/^\d+$/.test(vendorId)) return back('');
-  if (action === 'create' && !displayName) return back('');
   if (action !== 'link' && action !== 'create') return back('');
+  const draft = action === 'create' ? draftFromForm(form) : null;
+  if (draft && 'error' in draft) return back(`error=qb&msg=${encodeURIComponent(draft.error)}`);
 
   try {
     const qbo = await getQbo(admin);
     if (!qbo) return back(`error=qb&msg=${encodeURIComponent('QuickBooks non connecté')}`);
     await pushVendor(admin, qbo, sub as VendorSubmission, staff.id,
-      action === 'link' ? { linkVendorId: vendorId } : { displayName });
+      action === 'link' ? { linkVendorId: vendorId } : { draft: draft! });
     return back(action === 'link' ? 'info=qb_linked' : 'info=qb_created');
   } catch (e) {
     const msg = String((e as Error)?.message ?? e).slice(0, 300);

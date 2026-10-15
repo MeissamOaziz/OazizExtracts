@@ -87,13 +87,71 @@ export function businessNumber(s: VendorSubmission): string | null {
   return (bn.match(/\d/g) ?? []).length >= 9 ? clip(bn, 30) : null;
 }
 
+const fold = (v: string | null | undefined) =>
+  (v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+
+/**
+ * Vendors often type the whole address on the street line ("100 avenue X,
+ * Saint-Georges, Qc, Canada, G5Z 0L1") and then the city, province and postal
+ * code again in their own boxes. Trailing pieces of the street line that
+ * repeat those boxes (or say "Canada") are dropped, so QuickBooks does not
+ * print the address twice. Returns the cleaned line and whether it changed.
+ */
+export function cleanStreetLine(line: string | null, city: string | null, prov: string | null, postal: string | null): { line: string; changed: boolean } {
+  const original = (line ?? '').trim();
+  if (!original) return { line: '', changed: false };
+  const repeats = new Set([fold(city), fold(prov), fold(provinceCode(prov)), fold(postal), 'canada', 'ca'].filter((x) => x.length >= 2));
+  // "Saint-Georges QC G5Z0L1" in one piece counts too.
+  const combos = [fold(`${city ?? ''}${provinceCode(prov)}${postal ?? ''}`), fold(`${city ?? ''}${prov ?? ''}${postal ?? ''}`),
+    fold(`${provinceCode(prov)}${postal ?? ''}`), fold(`${prov ?? ''}${postal ?? ''}`)].filter((x) => x.length >= 4);
+  const parts = original.split(',').map((x) => x.trim());
+  // The postal code on the street line is the tell that the whole address was
+  // typed there; without it, a street can share a city's name (boul. Saint-Laurent).
+  let sawPostal = false;
+  while (parts.length > 1) {
+    const last = fold(parts[parts.length - 1]);
+    if (!last || repeats.has(last) || combos.includes(last)) {
+      if (postal && last.includes(fold(postal))) sawPostal = true;
+      parts.pop();
+    } else break;
+  }
+  let cleaned = parts.join(', ');
+  // No commas at all: a postal code glued to the end of the street line.
+  if (postal && fold(cleaned).endsWith(fold(postal)) && fold(cleaned) !== fold(postal)) {
+    const re = new RegExp(`[\\s,]*${(postal ?? '').trim().replace(/\s+/g, '').split('').join('\\s*')}\\s*$`, 'i');
+    cleaned = cleaned.replace(re, '').trim();
+    sawPostal = true;
+  }
+  // Then trailing words that spell the city, province or country ("… Montreal QC").
+  const words = cleaned.split(/\s+/);
+  for (let changed = sawPostal; changed && words.length > 2;) {
+    changed = false;
+    for (let k = Math.min(4, words.length - 2); k >= 1; k--) {
+      const tail = fold(words.slice(-k).join(' '));
+      if (repeats.has(tail) || combos.includes(tail)) { words.splice(-k, k); changed = true; break; }
+    }
+  }
+  cleaned = words.join(' ').replace(/[\s,]+$/, '');
+  return { line: cleaned, changed: cleaned !== original };
+}
+
 function addr(line: string | null, city: string | null, prov: string | null, postal: string | null) {
   if (!line && !city && !postal) return null;
+  const street = cleanStreetLine(line, city, prov, postal);
   return {
-    Line1: clip(line, 500), City: clip(city, 255), CountrySubDivisionCode: provinceCode(prov),
+    Line1: clip(street.line, 500), City: clip(city, 255), CountrySubDivisionCode: provinceCode(prov),
     PostalCode: clip(postal, 30), Country: 'Canada',
+    // Not sent to QuickBooks: shown on the preview when the street line was corrected.
+    typed: street.changed ? clip(line, 500) : null,
   };
 }
+
+/** The address as QuickBooks takes it (without the preview-only "typed" line). */
+const qbAddr = (a: ReturnType<typeof addr>) => {
+  if (!a) return null;
+  const { typed: _typed, ...rest } = a;
+  return rest;
+};
 export const billingAddress = (s: VendorSubmission) => addr(s.address, s.city, s.province, s.postal_code);
 export const shippingAddress = (s: VendorSubmission) => (s.shipping_same_as_billing
   ? null : addr(s.shipping_address, s.shipping_city, s.shipping_province, s.shipping_postal_code));
@@ -115,6 +173,36 @@ export function vendorPreview(s: VendorSubmission, displayName?: string) {
     shipping: shippingAddress(s),
     businessNumber: businessNumber(s),
     notes: bankNotes(s),
+  };
+}
+
+export type VendorDraft = ReturnType<typeof vendorPreview>;
+
+/**
+ * The draft as edited on the VQ page (every field prefilled from the VQ,
+ * cleaned, then changeable by the accountant). Blank fields are left out.
+ */
+export function draftFromForm(form: FormData): VendorDraft | { error: string } {
+  const g = (k: string) => String(form.get(k) ?? '').trim();
+  const emails = g('emails').split(/[\s,;]+/).map((e) => e.toLowerCase()).filter(Boolean);
+  const bad = emails.find((e) => !EMAIL.test(e));
+  if (bad) return { error: `courriel invalide : ${bad}` };
+  const address = (p: string) => {
+    const line = g(`${p}_line`), city = g(`${p}_city`), prov = g(`${p}_prov`), postal = g(`${p}_postal`);
+    if (!line && !city && !postal) return null;
+    return { Line1: clip(line, 500), City: clip(city, 255), CountrySubDivisionCode: provinceCode(prov), PostalCode: clip(postal, 30), Country: 'Canada', typed: null as string | null };
+  };
+  const displayName = clip(g('display_name'), 100);
+  if (!displayName) return { error: 'nom du fournisseur manquant' };
+  return {
+    displayName,
+    companyName: clip(g('company_name') || displayName, 100),
+    emails: [...new Set(emails)],
+    phone: clip(g('phone'), 30) || null,
+    billing: address('bill'),
+    shipping: form.get('ship_same') ? null : address('ship'),
+    businessNumber: clip(g('business_number'), 30) || null,
+    notes: g('notes').replace(/\r\n/g, '\n').slice(0, 2000) || null,
   };
 }
 
@@ -148,9 +236,9 @@ async function tryUpdate(qbo: Qbo, id: string, fields: Record<string, unknown>):
  */
 export async function pushVendor(
   admin: SupabaseClient, qbo: Qbo, s: VendorSubmission, staffId: string,
-  opts: { linkVendorId?: string; displayName?: string },
+  opts: { linkVendorId?: string; draft?: VendorDraft },
 ): Promise<PushReport> {
-  const p = vendorPreview(s, opts.displayName);
+  const p = opts.draft ?? vendorPreview(s);
   const report: PushReport = { vendor_id: '', vendor_name: '', created: false, fields: {}, errors: {}, supplier: 'linked' };
 
   if (opts.linkVendorId) {
@@ -164,7 +252,7 @@ export async function pushVendor(
       PrintOnCheckName: p.companyName,
       ...(p.emails[0] ? { PrimaryEmailAddr: { Address: p.emails[0] } } : {}),
       ...(p.phone ? { PrimaryPhone: { FreeFormNumber: p.phone } } : {}),
-      ...(p.billing ? { BillAddr: p.billing } : {}),
+      ...(p.billing ? { BillAddr: qbAddr(p.billing) } : {}),
     });
     report.vendor_id = String(res.Vendor.Id); report.vendor_name = String(res.Vendor.DisplayName); report.created = true;
 
@@ -172,7 +260,7 @@ export async function pushVendor(
     const steps: Array<[FieldKey, Record<string, unknown> | null]> = [
       // QB accepts several addresses separated by commas in the email box (100 characters).
       ['emails', p.emails.length > 1 ? { PrimaryEmailAddr: { Address: joinEmails(p.emails) } } : null],
-      ['shipping', p.shipping ? { ShipAddr: p.shipping } : null],
+      ['shipping', p.shipping ? { ShipAddr: qbAddr(p.shipping) } : null],
       ['business_number', p.businessNumber ? { BusinessNumber: p.businessNumber } : null],
       ['notes', p.notes ? { Notes: p.notes } : null],
     ];
@@ -198,8 +286,8 @@ export async function pushVendor(
   const supplierFields = {
     legal_name: s.company_name,
     contact_name: s.accounting_contact_name || s.contact_person,
-    contact_email: s.accounting_contact_email || s.email,
-    remittance_email: s.accounting_contact_email || s.email,
+    contact_email: s.accounting_contact_email || s.email || p.emails[0] || null,
+    remittance_email: s.accounting_contact_email || s.email || p.emails[0] || null,
     gst_number: s.gst_hst_number, qst_number: s.qst_number,
     payment_details: p.notes,
   };
