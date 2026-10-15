@@ -139,4 +139,6 @@ const L = {
   .dup-list :global(.use-qb.chosen) { background: var(--p-accent); color: #fff; border-color: var(--p-accent); }
   .dup-using { color: #15803d; margin: 0 0 8px; }
   .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0 0 4px; }
+  /* display:inline-flex above would otherwise override the hidden attribute. */
+  .dup-panel [hidden] { display: none; }
 </style>
