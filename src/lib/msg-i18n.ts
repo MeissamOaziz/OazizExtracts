@@ -42,6 +42,8 @@ const RULES: Rule[] = [
   [/^Suppression dans QB impossible \((.*)\) — supprimez-la dans QB manuellement$/, (_, e) => `Could not delete in QB (${e}) — delete it in QB by hand`],
   [/^Montant modifié dans QB : ([\d.]+) \$ \(portail ([\d.]+) \$\)$/, (_, a, b) => `Amount changed in QB: $${a} (portal $${b})`],
   [/^Facture (.*) importée de QB \((.*)\)$/, (_, num, s) => `Bill ${num} imported from QB (${s})`],
+  [/^Facture QB (.*) liée à la facture (.*) du portail \(même montant et date\)$/, (_, q, p) => `QB bill ${q} linked to portal invoice ${p} (same amount and date)`],
+  [/^Facture QB (.*) non importée : (\d+) factures du portail de même montant \((.*)\) — liez la bonne depuis la page Écarts$/, (_, q, k, s) => `QB bill ${q} not imported: ${k} portal invoices with the same amount (${s}) — link the right one from the Differences page`],
   [/^Choisissez un compte de dépense\.$/, 'Choose an expense account.'],
 
   // Payments → bill payments

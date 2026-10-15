@@ -689,6 +689,25 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
       await admin.from('ap_invoices').update({ qbo_bill_id: b.Id, in_quickbooks: true, qbo_synced_at: new Date().toISOString() }).eq('id', same[0].id);
       continue;
     }
+    // Same supplier, same total, dates within 7 days, still unlinked: the same
+    // transaction under another number (Exka: PO1397 in the workbook, SO10002689
+    // in QB — importing it doubled the balance on 2026-10-10). Link when there is
+    // exactly one; with several, import nothing and leave it for a person.
+    const { data: twins } = await admin.from('ap_invoices').select('id, invoice_number, invoice_date')
+      .eq('supplier_id', sup.id).is('qbo_bill_id', null).is('voided_at', null).eq('kind', 'invoice')
+      .gte('amount', n(b.TotalAmt) - 0.05).lte('amount', n(b.TotalAmt) + 0.05);
+    const near = (twins ?? []).filter((t) => !t.invoice_date || !b.TxnDate
+      || Math.abs(new Date(t.invoice_date).getTime() - new Date(b.TxnDate).getTime()) <= 7 * 86400_000);
+    if (near.length === 1) {
+      await admin.from('ap_invoices').update({ qbo_bill_id: b.Id, in_quickbooks: true, qbo_synced_at: new Date().toISOString() }).eq('id', near[0].id);
+      await log(admin, { direction: 'pull', entity: 'bill', portal_id: near[0].id, qbo_id: b.Id, status: 'ok', message: `Facture QB ${b.DocNumber ?? b.Id} liée à la facture ${near[0].invoice_number ?? 'sans numéro'} du portail (même montant et date)` });
+      continue;
+    }
+    if (near.length > 1) {
+      skipped++;
+      await log(admin, { direction: 'pull', entity: 'bill', qbo_id: b.Id, status: 'warning', message: `Facture QB ${b.DocNumber ?? b.Id} non importée : ${near.length} factures du portail de même montant (${sup.name}) — liez la bonne depuis la page Écarts` });
+      continue;
+    }
     const { data: created } = await admin.from('ap_invoices').insert({
       supplier_id: sup.id, kind: 'invoice', invoice_number: b.DocNumber ?? null, invoice_date: b.TxnDate ?? null,
       due_date: b.DueDate ?? null, amount: n(b.TotalAmt), description: b.Line?.[0]?.Description ?? b.PrivateNote ?? null,
