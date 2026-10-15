@@ -56,7 +56,13 @@ export interface RunLine {
   suggested_amount: number | null; suggested_note: string | null;
   approved_amount: number | null; approver_note: string | null;
   payment_id: string | null; processed_at: string | null; remittance_sent_at: string | null;
+  /** Invoices chosen for this payment (null = oldest first). */
+  allocations: LineAllocation[] | null;
+  /** Expense reimbursement already in QB as an expense: no bill, no credit left behind. */
+  is_expense: boolean;
 }
+
+export interface LineAllocation { invoice_id: string; amount: number }
 
 export interface InvoiceBalance {
   id: string; supplier_id: string; kind: string; invoice_number: string | null; po_number: string | null;
@@ -391,4 +397,48 @@ export async function paymentWithReference(admin: SupabaseClient, ref: string) {
     .ilike('reference', r.replace(/[%_\\]/g, (c) => `\\${c}`)).is('voided_at', null).limit(1);
   const p = data?.[0];
   return p ? { id: p.id, supplierId: p.supplier_id, amount: n(p.amount), paidOn: p.paid_on, supplier: (p.ap_suppliers as unknown as { name: string } | null)?.name ?? null } : null;
+}
+
+/** Clean a client-sent allocation list: valid invoice ids, positive amounts, one entry per invoice. */
+export function parseAllocations(raw: unknown): LineAllocation[] | null {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<string>();
+  const out: LineAllocation[] = [];
+  for (const r of raw as Array<Record<string, unknown>>) {
+    const id = String(r?.invoice_id ?? '');
+    const amount = parseAmount(r?.amount);
+    if (!isUuid(id) || !amount || amount <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ invoice_id: id, amount: round2(amount) });
+  }
+  return out.length ? out : null;
+}
+
+/**
+ * Record the payment of a weekly line: the invoices chosen on the line are
+ * paid first (rest oldest first), or — for an expense reimbursement — an
+ * "already in QuickBooks" invoice of the same amount is created and paid, so
+ * no credit is left on the supplier.
+ */
+export async function recordLinePayment(admin: SupabaseClient, line: RunLine, p: {
+  amount: number; paidOn: string; reference: string; staffId: string; bulk?: boolean;
+}): Promise<{ paymentId: string | null; error: string | null }> {
+  const { data: sup } = await admin.from('ap_suppliers').select('payment_method, bank_account_id').eq('id', line.supplier_id).single();
+  const { data, error } = await admin.rpc('ap_record_payment_split', {
+    p_supplier_id: line.supplier_id, p_amount: p.amount, p_paid_on: p.paidOn,
+    p_method: sup?.payment_method ?? null, p_bank_account_id: sup?.bank_account_id ?? null,
+    p_reference: p.reference, p_notes: '', p_staff_id: p.staffId, p_run_line_id: line.id,
+    p_allocations: line.is_expense ? null : (line.allocations ?? null),
+    p_expense: !!line.is_expense, p_expense_note: line.is_expense ? (line.suggested_note ?? null) : null,
+  });
+  if (error || !data) return { paymentId: null, error: error?.message ?? 'failed' };
+  await admin.from('ap_run_lines').update({ payment_id: data, processed_at: new Date().toISOString(), processed_by: p.staffId }).eq('id', line.id);
+  await logEvent(admin, {
+    run_id: line.run_id, supplier_id: line.supplier_id, actor_staff_id: p.staffId, action: 'paid',
+    details: {
+      amount: p.amount, paid_on: p.paidOn, reference: p.reference || null, ...(p.bulk ? { bulk: true } : {}),
+      ...(line.is_expense ? { expense: true } : line.allocations?.length ? { invoices: line.allocations.length } : {}),
+    },
+  });
+  return { paymentId: data as string, error: null };
 }

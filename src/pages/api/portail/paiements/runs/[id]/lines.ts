@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { json, isUuid, parseAmount, logEvent } from '../../../../../../lib/payables';
+import { json, isUuid, parseAmount, parseAllocations, logEvent } from '../../../../../../lib/payables';
 
 export const prerender = false;
 
@@ -36,6 +36,17 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
     const v = parseAmount(body.approved_amount);
     if (v !== null && v < 0) return json({ error: 'negative' }, 400);
     patch.approved_amount = v;
+  }
+  // Invoices chosen for the payment, and the expense flag: while preparing, or
+  // after approval as long as the line isn't paid yet.
+  if ('allocations' in body || 'is_expense' in body) {
+    if (run.status !== 'draft' && run.status !== 'approved') return json({ error: 'locked' }, 409);
+    if (existing?.payment_id) return json({ error: 'already paid' }, 409);
+    if ('allocations' in body) patch.allocations = parseAllocations(body.allocations);
+    if ('is_expense' in body) {
+      patch.is_expense = body.is_expense === true;
+      if (patch.is_expense) patch.allocations = null;
+    }
   }
   if (Object.keys(patch).length === 0) return json({ error: 'nothing to save' }, 400);
 

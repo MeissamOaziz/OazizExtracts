@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { localizeMsg } from '../../../../../../lib/msg-i18n';
 import { getPortailLocale } from '../../../../../../lib/portail-i18n';
-import { bumpReference, json, isUuid, parseAmount, logEvent, paymentWithReference, todayIso, round2 } from '../../../../../../lib/payables';
+import { bumpReference, json, isUuid, parseAmount, paymentWithReference, recordLinePayment, todayIso, round2 } from '../../../../../../lib/payables';
 import { autoPushPayment } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
@@ -46,16 +46,9 @@ export const POST: APIRoute = async ({ request, cookies, params }) => {
     if (!line) { results.push({ line_id: lineId, ok: false, error: L('introuvable') }); continue; }
     if (line.payment_id) { results.push({ line_id: lineId, ok: false, error: L('déjà payé') }); continue; }
     if (!(Number(line.approved_amount) > 0)) { results.push({ line_id: lineId, ok: false, error: L('non approuvé') }); continue; }
-    const { data: sup } = await admin.from('ap_suppliers').select('payment_method, bank_account_id').eq('id', line.supplier_id).single();
     const lineRef = sequential ? bumpReference(reference, seq)! : reference;
-    const { data: paymentId, error } = await admin.rpc('ap_record_payment', {
-      p_supplier_id: line.supplier_id, p_amount: amount, p_paid_on: paidOn,
-      p_method: sup?.payment_method ?? null, p_bank_account_id: sup?.bank_account_id ?? null,
-      p_reference: lineRef, p_notes: '', p_staff_id: staff.id, p_run_line_id: line.id,
-    });
-    if (error || !paymentId) { results.push({ line_id: lineId, ok: false, error: L(error?.message ?? 'échec') }); continue; }
-    await admin.from('ap_run_lines').update({ payment_id: paymentId, processed_at: new Date().toISOString(), processed_by: staff.id }).eq('id', line.id);
-    await logEvent(admin, { run_id: runId, supplier_id: line.supplier_id, actor_staff_id: staff.id, action: 'paid', details: { amount, paid_on: paidOn, reference: lineRef || null, bulk: true } });
+    const { paymentId, error } = await recordLinePayment(admin, line, { amount, paidOn, reference: lineRef, staffId: staff.id, bulk: true });
+    if (error || !paymentId) { results.push({ line_id: lineId, ok: false, error: L(error ?? 'échec') }); continue; }
     seq++;
     created.push(paymentId as string);
     results.push({ line_id: lineId, ok: true, payment_id: paymentId as string });

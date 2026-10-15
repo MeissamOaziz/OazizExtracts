@@ -86,6 +86,7 @@ const i18n = {
   submitConfirm: fill(T('submit.confirm'), { name: approver?.name ?? '?', email: approver?.email ?? '?' }),
   manualConfirm: T('action.manualApprove.confirm'), closeConfirm: T('action.close.confirm'),
   noLines: T('submit.noLines'), payTitle: T('line.payModal.title'),
+  allocChosen: T('alloc.chosen'),
   bulkConfirm: T('bulk.confirm'), bulkNone: T('bulk.none'), bulkTotal: T('bulk.total'), bulkDone: T('bulk.done'), bulkQbPending: T('bulk.qbPending'), cashMissing: T('run.cash.missing'), cashNegative: T('run.cash.negative'), locale,
 };
 ---
@@ -232,12 +233,17 @@ const i18n = {
           const invs = openInvoices.get(s.id) ?? [];
           const paidAmt = l?.payment_id ? paidMap.get(l.payment_id) ?? null : null;
           const canPay = run.status === 'approved' && n(l?.approved_amount) > 0;
+          // Choosing invoices / expense: while preparing, or after approval until paid.
+          const canAlloc = (editableSuggest || editableApproved) && !l?.payment_id;
+          const allocBy = new Map((l?.allocations ?? []).map((a) => [a.invoice_id, n(a.amount)]));
+          const isExpense = !!l?.is_expense;
           return (
             <>
               <tr class="ap-row" data-supplier={s.id} data-name={s.name.toLowerCase()} data-owed={s.bal.owed} data-overdue={s.bal.overdue}
                   data-account={s.bank_account_id ?? defaultAccount} data-method={s.payment_method}
                   data-suggested={l?.suggested_amount ?? ''} data-approved={l?.approved_amount ?? ''} data-paid={paidAmt ?? ''}
-                  data-has-line={l && (n(l.suggested_amount) > 0 || n(l.approved_amount) > 0) ? '1' : ''} data-status={st}>
+                  data-has-line={l && (n(l.suggested_amount) > 0 || n(l.approved_amount) > 0) ? '1' : ''} data-status={st}
+                  data-expense={isExpense ? '1' : ''}>
                 <td class="sup-cell">
                   {invs.length > 0 && <button type="button" class="toggle no-print" aria-label={T('line.openInvoices')}>▸</button>}
                   <a href={`/portail/paiements/fournisseurs/${s.id}`} target="_blank" rel="noopener">{s.name}</a>
@@ -255,8 +261,11 @@ const i18n = {
                         {s.bal.overdue > 0 && <button type="button" data-quick="overdue">{T('quick.overdue')}</button>}
                         <button type="button" data-quick="all">{T('quick.all')}</button>
                       </span>
+                      <label class="exp-toggle no-print"><input type="checkbox" class="cb-expense" checked={isExpense} /> {T('expense.toggle')}</label>
+                      <div class="alloc-note small" hidden={allocBy.size === 0}>{allocBy.size > 0 ? fill(T('alloc.chosen'), { n: allocBy.size }) : ''}</div>
                     </div>
                   ) : <span>{l?.suggested_amount ? money(l.suggested_amount, locale) : '—'}</span>}
+                  {!editableSuggest && isExpense && <div><span class="chip chip-expense">{T('expense.chip')}</span></div>}
                 </td>
                 <td>
                   {editableSuggest
@@ -265,7 +274,11 @@ const i18n = {
                 </td>
                 <td class="num">
                   {editableApproved && !l?.payment_id
-                    ? <input type="text" inputmode="decimal" class="in-approved num" value={l?.approved_amount !== null && l?.approved_amount !== undefined ? l.approved_amount.toFixed(2) : ''} />
+                    ? <>
+                        <input type="text" inputmode="decimal" class="in-approved num" value={l?.approved_amount !== null && l?.approved_amount !== undefined ? l.approved_amount.toFixed(2) : ''} />
+                        <label class="exp-toggle no-print"><input type="checkbox" class="cb-expense" checked={isExpense} /> {T('expense.toggle')}</label>
+                        <div class="alloc-note small" hidden={allocBy.size === 0}>{allocBy.size > 0 ? fill(T('alloc.chosen'), { n: allocBy.size }) : ''}</div>
+                      </>
                     : <span class="approved-val">{l?.approved_amount !== null && l?.approved_amount !== undefined ? money(l.approved_amount, locale) : '—'}</span>}
                   {l?.approver_note && <div class="small muted">{l.approver_note}</div>}
                 </td>
@@ -290,15 +303,24 @@ const i18n = {
                 <tr class="detail-row" data-for={s.id} hidden>
                   <td colspan="11">
                     <table class="inner">
-                      <thead><tr><th>{T('inv.number')}</th><th>{T('inv.date')}</th><th>{T('inv.due')}</th><th class="num">{T('inv.amount')}</th><th class="num">{T('inv.open')}</th><th>{T('inv.description')}</th></tr></thead>
+                      <thead><tr>{(canAlloc || allocBy.size > 0) && <th class="center"></th>}<th>{T('inv.number')}</th><th>{T('inv.date')}</th><th>{T('inv.due')}</th><th class="num">{T('inv.amount')}</th><th class="num">{T('inv.open')}</th>{(canAlloc || allocBy.size > 0) && <th class="num">{T('alloc.pay')}</th>}<th>{T('inv.description')}</th></tr></thead>
                       <tbody>
+                        {canAlloc && <tr class="alloc-hint"><td colspan="8" class="small muted">{T('alloc.hint')}</td></tr>}
                         {invs.map((i) => (
-                          <tr>
+                          <tr class="inv-row" data-invoice={i.id} data-open={i.open_amount}>
+                            {(canAlloc || allocBy.size > 0) && (
+                              <td class="center">{i.open_amount > 0 && <input type="checkbox" class="cb-alloc" checked={allocBy.has(i.id)} disabled={!canAlloc || isExpense} />}</td>
+                            )}
                             <td>{i.invoice_number ?? T(`inv.kind.${i.kind}` as keyof typeof frPaiements)}</td>
                             <td>{i.invoice_date ?? ''}</td>
                             <td class={i.due_date && i.due_date < today ? 'overdue' : ''}>{i.due_date ?? ''}</td>
                             <td class="num">{money(i.amount, locale)}</td>
                             <td class="num">{money(i.open_amount, locale)}</td>
+                            {(canAlloc || allocBy.size > 0) && (
+                              <td class="num">{i.open_amount > 0 && (canAlloc
+                                ? <input type="text" inputmode="decimal" class="in-alloc num" value={allocBy.has(i.id) ? allocBy.get(i.id)!.toFixed(2) : ''} disabled={isExpense} />
+                                : allocBy.has(i.id) ? money(allocBy.get(i.id)!, locale) : '')}</td>
+                            )}
                             <td class="small">{i.description ?? ''}</td>
                           </tr>
                         ))}
@@ -588,9 +610,84 @@ const i18n = {
       if (Number.isNaN(v)) { input.classList.add('invalid'); return; }
       input.classList.remove('invalid');
       input.value = v === null ? '' : v.toFixed(2);
-      saveLine(input.closest('tr')!, { [field]: v });
+      const row = input.closest<HTMLTableRowElement>('tr.ap-row')!;
+      const patch: Record<string, unknown> = { [field]: v };
+      // Typed by hand (or 50 % / All): if it no longer matches the chosen
+      // invoices, go back to oldest first rather than keep a stale choice.
+      const chosen = allocOf(row);
+      if (chosen.length && Math.abs(chosen.reduce((t, a) => t + a.amount, 0) - (v ?? 0)) > 0.004) {
+        clearAlloc(row);
+        patch.allocations = null;
+      }
+      saveLine(row, patch);
     });
   }
+
+  // ---------------------------------------------------------------- invoice choice
+  const detailOf = (row: HTMLTableRowElement) => document.querySelector<HTMLTableRowElement>(`tr.detail-row[data-for="${row.dataset.supplier}"]`);
+  function allocOf(row: HTMLTableRowElement) {
+    const det = detailOf(row);
+    if (!det) return [] as Array<{ invoice_id: string; amount: number }>;
+    return [...det.querySelectorAll<HTMLTableRowElement>('tr.inv-row')].flatMap((tr) => {
+      const cb = tr.querySelector<HTMLInputElement>('.cb-alloc');
+      const v = parseAmount(tr.querySelector<HTMLInputElement>('.in-alloc')?.value ?? '');
+      return cb?.checked && v && !Number.isNaN(v) && v > 0 ? [{ invoice_id: tr.dataset.invoice!, amount: v }] : [];
+    });
+  }
+  function showAllocNote(row: HTMLTableRowElement, count: number) {
+    row.querySelectorAll<HTMLElement>('.alloc-note').forEach((el) => {
+      el.hidden = count === 0;
+      el.textContent = count ? AP.i18n.allocChosen.replace('{n}', String(count)) : '';
+    });
+  }
+  function clearAlloc(row: HTMLTableRowElement) {
+    detailOf(row)?.querySelectorAll<HTMLTableRowElement>('tr.inv-row').forEach((tr) => {
+      const cb = tr.querySelector<HTMLInputElement>('.cb-alloc'); const inp = tr.querySelector<HTMLInputElement>('.in-alloc');
+      if (cb) cb.checked = false;
+      if (inp) inp.value = '';
+    });
+    showAllocNote(row, 0);
+  }
+  function syncAlloc(row: HTMLTableRowElement) {
+    const chosen = allocOf(row);
+    showAllocNote(row, chosen.length);
+    const field = AP.status === 'draft' ? 'suggested_amount' : 'approved_amount';
+    const input = row.querySelector<HTMLInputElement>(AP.status === 'draft' ? '.in-suggested' : '.in-approved');
+    if (!chosen.length) { saveLine(row, { allocations: null }); return; }
+    const total = Math.round(chosen.reduce((t, a) => t + a.amount, 0) * 100) / 100;
+    if (input) input.value = total.toFixed(2);
+    saveLine(row, { allocations: chosen, [field]: total });
+  }
+  document.querySelectorAll<HTMLTableRowElement>('tr.detail-row').forEach((det) => {
+    const row = document.querySelector<HTMLTableRowElement>(`tr.ap-row[data-supplier="${det.dataset.for}"]`)!;
+    det.querySelectorAll<HTMLTableRowElement>('tr.inv-row').forEach((tr) => {
+      const cb = tr.querySelector<HTMLInputElement>('.cb-alloc'); const inp = tr.querySelector<HTMLInputElement>('.in-alloc');
+      if (!cb || !inp) return;
+      cb.addEventListener('change', () => {
+        // Ticking pays the whole open balance; the amount can then be lowered.
+        inp.value = cb.checked ? (inp.value || num(tr.dataset.open).toFixed(2)) : '';
+        syncAlloc(row);
+      });
+      inp.addEventListener('change', () => {
+        const v = parseAmount(inp.value);
+        if (Number.isNaN(v)) { inp.classList.add('invalid'); return; }
+        inp.classList.remove('invalid');
+        const capped = v === null ? null : Math.min(v, num(tr.dataset.open));
+        inp.value = capped && capped > 0 ? capped.toFixed(2) : '';
+        cb.checked = !!capped && capped > 0;
+        syncAlloc(row);
+      });
+    });
+  });
+
+  // Expense reimbursement (already in QB as an expense): no invoice to choose.
+  document.querySelectorAll<HTMLInputElement>('.cb-expense').forEach((cb) => cb.addEventListener('change', () => {
+    const row = cb.closest<HTMLTableRowElement>('tr.ap-row')!;
+    row.dataset.expense = cb.checked ? '1' : '';
+    if (cb.checked) clearAlloc(row);
+    detailOf(row)?.querySelectorAll<HTMLInputElement>('.cb-alloc, .in-alloc').forEach((i) => { i.disabled = cb.checked; });
+    saveLine(row, { is_expense: cb.checked });
+  }));
   document.querySelectorAll<HTMLInputElement>('.in-suggested').forEach((i) => bindAmount(i, 'suggested_amount'));
   document.querySelectorAll<HTMLInputElement>('.in-approved').forEach((i) => bindAmount(i, 'approved_amount'));
   const grow = (t: HTMLTextAreaElement) => { t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight + 2, 140)}px`; };
@@ -805,6 +902,13 @@ const i18n = {
 </script>
 
 <style>
+  .exp-toggle { display: flex; align-items: center; gap: 4px; justify-content: flex-end; font-size: .72rem; font-weight: 400; color: var(--p-muted); margin: 2px 0 0; white-space: nowrap; }
+  .exp-toggle input { width: auto; margin: 0; }
+  .alloc-note { color: var(--p-accent); text-align: right; }
+  .chip-expense { background: #eef2ff; color: #3730a3; }
+  .inner .in-alloc { width: 110px; padding: 4px 6px; font-size: .85rem; }
+  .inner .cb-alloc { width: 16px; height: 16px; }
+  .alloc-hint td { padding-top: 4px; }
   .run-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
   .run-head h1 { margin-bottom: 4px; }
   .run-head .meta { color: var(--p-muted); font-size: .85rem; margin-left: 10px; }
