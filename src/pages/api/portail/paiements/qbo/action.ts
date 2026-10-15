@@ -26,6 +26,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         return go('ok', `Synchronisé : ${s.bills} facture(s) et ${s.payments} paiement(s) envoyés, ${s.pulled.bills} facture(s) et ${s.pulled.payments} paiement(s) importés`
           + (s.billErrors + s.paymentErrors ? ` — ${s.billErrors + s.paymentErrors} à corriger (voir le journal)` : ''));
       }
+      case 'link_vendors_preview': {
+        const r = await linkVendors(admin, { dryRun: true });
+        return new Response(JSON.stringify({ proposals: r.proposals }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      case 'link_vendors_run': {
+        const r = await linkVendors(admin);
+        return new Response(JSON.stringify({ linked: r.linked, proposals: r.proposals, linkedBills: r.linkedBills }), { headers: { 'Content-Type': 'application/json' } });
+      }
       case 'link_vendors': {
         const r = await linkVendors(admin);
         return go('ok', `${r.matched} fournisseur(s) liés automatiquement, ${r.linkedBills} facture(s) ouvertes rapprochées`);

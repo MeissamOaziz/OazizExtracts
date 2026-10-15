@@ -56,26 +56,44 @@ async function ensureVendor(admin: SupabaseClient, qbo: Qbo, s: SupplierRowLite)
 }
 
 /** Auto-link portal suppliers to QB vendors by (normalized) name; returns counts and the unmatched. */
-export async function linkVendors(admin: SupabaseClient) {
+/**
+ * Link portal suppliers to their QuickBooks vendor by name. Certain matches
+ * (same name ignoring spacing/suffixes, or the same company number) are linked;
+ * probable ones (unique whole-word match) are only returned as proposals.
+ */
+export async function linkVendors(admin: SupabaseClient, opts: { dryRun?: boolean } = {}) {
   const qbo = await getQbo(admin);
   if (!qbo) throw new Error('QuickBooks non connecté');
   const vendors = await qbo.query('Vendor', 'Active = true');
-  const { data: sups } = await admin.from('ap_suppliers').select('id, name, legal_name, qbo_vendor_name, qbo_vendor_id');
+  const { data: sups } = await admin.from('ap_suppliers').select('id, name, legal_name, qbo_vendor_name, qbo_vendor_id, aliases');
   const taken = new Set((sups ?? []).map((s) => s.qbo_vendor_id).filter(Boolean));
-  let matched = 0;
+  const linked: Array<{ supplier: string; vendor: string }> = [];
+  const proposals: Array<{ supplierId: string; supplier: string; vendorId: string; vendor: string; score: number }> = [];
   for (const s of sups ?? []) {
     if (s.qbo_vendor_id) continue;
-    const keys = [s.qbo_vendor_name, s.name, s.legal_name].map(norm).filter(Boolean);
-    const v = vendors.find((x) => !taken.has(x.Id) && [x.DisplayName, x.CompanyName].map(norm).some((k) => k && keys.includes(k)));
-    if (v) {
-      await admin.from('ap_suppliers').update({ qbo_vendor_id: v.Id }).eq('id', s.id);
-      taken.add(v.Id);
-      matched++;
+    const keys = [s.qbo_vendor_name, s.name, s.legal_name, ...(s.aliases ?? [])].filter((k): k is string => !!k);
+    const scored = vendors
+      .filter((v) => !taken.has(v.Id))
+      .map((v) => ({ v, score: Math.max(0, ...keys.flatMap((k) => [v.DisplayName, v.CompanyName].filter(Boolean).map((vn: string) => nameScore(k, vn)))) }))
+      .filter((x) => x.score >= 0.85)
+      .sort((a, b) => b.score - a.score);
+    if (!scored.length) continue;
+    const top = scored[0];
+    const unique = scored.length === 1 || scored[1].score < top.score;
+    if (!unique) continue;
+    if (top.score >= 0.95 && !opts.dryRun) {
+      await admin.from('ap_suppliers').update({ qbo_vendor_id: top.v.Id, qbo_vendor_name: top.v.DisplayName }).eq('id', s.id);
+      taken.add(top.v.Id);
+      linked.push({ supplier: s.name, vendor: top.v.DisplayName });
+    } else {
+      proposals.push({ supplierId: s.id, supplier: s.name, vendorId: String(top.v.Id), vendor: top.v.DisplayName, score: top.score });
     }
   }
-  const linkedBills = await matchOpenBills(admin, qbo);
-  await log(admin, { direction: 'system', entity: 'vendor', status: 'ok', message: `${matched} fournisseur(s) liés automatiquement, ${linkedBills} facture(s) ouvertes rapprochées` });
-  return { matched, linkedBills, vendors: vendors.map((v) => ({ id: v.Id as string, name: v.DisplayName as string, balance: n(v.Balance) })) };
+  const linkedBills = opts.dryRun ? 0 : await matchOpenBills(admin, qbo);
+  if (!opts.dryRun) {
+    await log(admin, { direction: 'system', entity: 'vendor', status: 'ok', message: `${linked.length} fournisseur(s) liés automatiquement, ${linkedBills} facture(s) ouvertes rapprochées` });
+  }
+  return { matched: linked.length, linked, proposals, linkedBills, vendors: vendors.map((v) => ({ id: v.Id as string, name: v.DisplayName as string, balance: n(v.Balance) })) };
 }
 
 /** Link open portal invoices (e.g. imported from the workbook) to the matching open QB bill (same vendor + number). */

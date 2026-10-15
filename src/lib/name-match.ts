@@ -51,7 +51,11 @@ export function nameScore(a: string | null | undefined, b: string | null | undef
   let best = 0;
   for (const x of nameVariants(a)) {
     for (const y of nameVariants(b)) {
-      if (x === y || x.replace(/ /g, '') === y.replace(/ /g, '')) return 1;
+      const cx = x.replace(/ /g, ''), cy = y.replace(/ /g, '');
+      if (x === y || cx === cy) return 1;
+      // Joined words: "SelectcomTelecom" starts with "Selectcom" (only for a distinctive start, 5+ letters).
+      const [short, long] = cx.length <= cy.length ? [cx, cy] : [cy, cx];
+      if (short.length >= 5 && long.startsWith(short) && !GENERIC.has(short)) best = Math.max(best, 0.85);
       const wx = words(x), wy = words(y);
       if (!wx.size || !wy.size) continue;
       // Whole-word containment ("ccx" inside "ccx canada"; not "bis" inside "cannabis").
