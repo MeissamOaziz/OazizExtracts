@@ -38,6 +38,25 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const r = await linkVendors(admin);
         return go('ok', `${r.matched} fournisseur(s) liés automatiquement, ${r.linkedBills} facture(s) ouvertes rapprochées`);
       }
+      case 'accept_link': {
+        const sid = String(form.get('supplier_id') ?? '');
+        const vid = str('qbo_vendor_id');
+        if (!isUuid(sid) || !vid || !/^\d+$/.test(vid)) return go('error', 'Fournisseur invalide');
+        const { error } = await admin.from('ap_suppliers').update({ qbo_vendor_id: vid, qbo_vendor_name: str('qbo_vendor_name'), qbo_link_ignored: false })
+          .eq('id', sid).is('qbo_vendor_id', null);
+        if (error) return go('error', error.code === '23505' ? 'Ce fournisseur QB est déjà lié à un autre fournisseur du portail.' : error.message);
+        await logEvent(admin, { actor_staff_id: staff.id, supplier_id: sid, action: 'qbo_vendor_linked', details: { qbo_vendor_id: vid } });
+        return go('ok', 'Lien QuickBooks enregistré.');
+      }
+      case 'ignore_link':
+      case 'unignore_link': {
+        const sid = String(form.get('supplier_id') ?? '');
+        if (!isUuid(sid)) return go('error', 'Fournisseur invalide');
+        const ignored = action === 'ignore_link';
+        await admin.from('ap_suppliers').update({ qbo_link_ignored: ignored }).eq('id', sid);
+        await logEvent(admin, { actor_staff_id: staff.id, supplier_id: sid, action: ignored ? 'qbo_link_ignored' : 'qbo_link_restored' });
+        return go('ok', ignored ? 'Suggestion ignorée.' : 'Suggestion rétablie.');
+      }
       case 'save_settings': {
         const cur = await qboDefaults(admin);
         await setSetting(admin, 'qbo_defaults', {

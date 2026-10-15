@@ -14,6 +14,8 @@ const RULES: Rule[] = [
   [/^Nouvelle compagnie QuickBooks : liens de l’ancienne compagnie effacés$/, 'New QuickBooks company: links to the previous company cleared'],
   [/^Paramètres QuickBooks enregistrés\.$/, 'QuickBooks settings saved.'],
   [/^Lien QuickBooks enregistré\.$/, 'QuickBooks link saved.'],
+  [/^Suggestion ignorée\.$/, 'Suggestion ignored.'],
+  [/^Suggestion rétablie\.$/, 'Suggestion restored.'],
   [/^Ce fournisseur QB est déjà lié à un autre fournisseur du portail\.$/, 'That QB vendor is already linked to another portal supplier.'],
   [/^Synchronisé : (\d+) facture\(s\) et (\d+) paiement\(s\) envoyés, (\d+) facture\(s\) et (\d+) paiement\(s\) importés(?: — (\d+) à corriger \(voir le journal\))?$/,
     (_, a, b, c, d, e) => `Synced: ${a} bill(s) and ${b} payment(s) sent, ${c} bill(s) and ${d} payment(s) imported${e ? ` — ${e} to fix (see the log)` : ''}`],

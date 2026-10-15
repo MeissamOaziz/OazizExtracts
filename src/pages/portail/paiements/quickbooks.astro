@@ -9,7 +9,7 @@ import { localizeMsg } from '../../../lib/msg-i18n';
 import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
 import { loadAccounts, loadSuppliers, money, round2 } from '../../../lib/payables';
 import { qboConfig, connectionInfo, RECONNECT_STATUS } from '../../../lib/qbo';
-import { qboDefaults, qboLists, suggestCoding, TO_CLASSIFY, type CodingSuggestion } from '../../../lib/qbo-sync';
+import { linkVendors, qboDefaults, qboLists, suggestCoding, TO_CLASSIFY, type CodingSuggestion } from '../../../lib/qbo-sync';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -65,6 +65,14 @@ const linkedCount = rows.filter((r) => r.f?.qbo_vendor_id).length;
 const linkedIds = new Set((qboFields ?? []).map((r) => r.qbo_vendor_id).filter(Boolean));
 const orphanVendors = (lists?.vendors ?? []).filter((v) => !linkedIds.has(v.id) && Math.abs(v.balance) >= 0.01)
   .sort((x, y) => Math.abs(y.balance) - Math.abs(x.balance));
+// Probable vendor links waiting for a decision, and those set aside on purpose.
+let proposals: Awaited<ReturnType<typeof linkVendors>>['proposals'] = [];
+if (conn && lists) {
+  try { proposals = (await linkVendors(admin, { dryRun: true })).proposals; } catch { /* suggestions are optional */ }
+}
+const { data: ignoredRows } = await admin.from('ap_suppliers').select('id, name')
+  .eq('qbo_link_ignored', true).is('qbo_vendor_id', null).eq('is_active', true).order('name');
+const ignored = ignoredRows ?? [];
 const mismatches = rows.filter((r) => r.diff !== null && Math.abs(r.diff) >= 0.01).length;
 const sp = Astro.url.searchParams;
 const errKey = sp.get('error');
@@ -146,6 +154,52 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
             ))}
           </tbody>
         </table>
+      )}
+    </section>
+  )}
+
+  {conn && lists && (proposals.length > 0 || ignored.length > 0) && (
+    <section class="card tbl-card" id="suggestions">
+      <div class="tbl-head"><h2>{T('qbo.sugg')} ({proposals.length})</h2></div>
+      <p class="muted small" style="padding: 4px 20px 8px;">{T('qbo.suggHint')}</p>
+      {proposals.length === 0 ? <p class="muted" style="padding: 0 20px 12px;">{T('qbo.suggEmpty')}</p> : (
+        <table class="data">
+          <thead><tr><th>{T('col.supplier')}</th><th>{T('qbo.qbVendor')}</th><th class="num">%</th><th></th></tr></thead>
+          <tbody>
+            {proposals.map((p) => (
+              <tr>
+                <td><a href={`/portail/paiements/fournisseurs/${p.supplierId}`}>{p.supplier}</a></td>
+                <td>{p.vendor}</td>
+                <td class="num muted">{Math.round(p.score * 100)}</td>
+                <td>
+                  <form method="POST" action="/api/portail/paiements/qbo/action" class="sugg-actions">
+                    <input type="hidden" name="supplier_id" value={p.supplierId} />
+                    <input type="hidden" name="qbo_vendor_id" value={p.vendorId} />
+                    <input type="hidden" name="qbo_vendor_name" value={p.vendor} />
+                    <button class="btn btn-primary btn-sm" name="_action" value="accept_link">{T('qbo.suggLink')}</button>
+                    <button class="btn btn-secondary btn-sm" name="_action" value="ignore_link">{T('qbo.suggIgnore')}</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {ignored.length > 0 && (
+        <details class="ignored">
+          <summary>{T('qbo.suggIgnored')} ({ignored.length})</summary>
+          <ul>
+            {ignored.map((i) => (
+              <li>
+                <a href={`/portail/paiements/fournisseurs/${i.id}`}>{i.name}</a>
+                <form method="POST" action="/api/portail/paiements/qbo/action" style="display:inline;">
+                  <input type="hidden" name="supplier_id" value={i.id} />
+                  <button class="link-btn" name="_action" value="unignore_link">{T('qbo.suggRestore')}</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   )}
@@ -289,6 +343,11 @@ const opt = (list: Array<{ id: string; name: string }>, sel: string | null | und
   .queue-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .queue-form select { width: auto; max-width: 260px; padding: 6px 8px; font-size: .85rem; }
   .small { font-size: .78rem; }
+  .sugg-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .btn-sm { font-size: .78rem; padding: 4px 10px; }
+  .ignored { padding: 4px 20px 14px; font-size: .85rem; }
+  .ignored ul { list-style: none; display: grid; gap: 4px; margin-top: 8px; }
+  .ignored li { display: flex; gap: 12px; align-items: center; }
   .log .st-error strong { color: var(--p-danger); }
   .log .st-warning strong { color: var(--p-warn); }
 </style>
