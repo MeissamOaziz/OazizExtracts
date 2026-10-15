@@ -43,13 +43,27 @@ async function ensureVendor(admin: SupabaseClient, qbo: Qbo, s: SupplierRowLite)
   if (found[0]) {
     id = found[0].Id;
   } else {
-    const res = await qbo.post('/vendor', {
-      DisplayName: display,
-      ...(s.legal_name ? { CompanyName: s.legal_name.slice(0, 100) } : {}),
+    const create = (name: string) => qbo.post('/vendor', {
+      DisplayName: name,
+      CompanyName: (s.legal_name ?? s.name).slice(0, 100),
       ...(s.contact_email ? { PrimaryEmailAddr: { Address: s.contact_email } } : {}),
     });
+    let name = display;
+    let res;
+    try {
+      res = await create(name);
+    } catch (e) {
+      // QB names are unique across vendors, customers and employees: a company
+      // we also sell to (Galaxie Brands, 2026-10-13) already holds the name as a
+      // customer. Create the vendor under a distinct name instead of failing.
+      if (!/Duplicate Name/i.test(e instanceof Error ? e.message : String(e))) throw e;
+      name = `${display.slice(0, 86)} (Fournisseur)`;
+      const again = await qbo.query('Vendor', `DisplayName = ${qstr(name)}`);
+      res = again[0] ? { Vendor: again[0] } : await create(name);
+      await admin.from('ap_suppliers').update({ qbo_vendor_name: name }).eq('id', s.id);
+    }
     id = res.Vendor.Id;
-    await log(admin, { direction: 'push', entity: 'vendor', portal_id: s.id, qbo_id: id, status: 'ok', message: `Fournisseur créé dans QB : ${display}` });
+    await log(admin, { direction: 'push', entity: 'vendor', portal_id: s.id, qbo_id: id, status: 'ok', message: `Fournisseur créé dans QB : ${name}` });
   }
   await admin.from('ap_suppliers').update({ qbo_vendor_id: id }).eq('id', s.id);
   return id;
