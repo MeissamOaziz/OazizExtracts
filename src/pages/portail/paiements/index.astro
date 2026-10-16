@@ -6,7 +6,7 @@ import PaiementsNav from '../../../components/portail/PaiementsNav.astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frPaiements, enPaiements } from '../../../i18n/portail/paiements';
-import { loadSuppliers, money, upcomingFriday } from '../../../lib/payables';
+import { loadSuppliers, money, nextRunDate } from '../../../lib/payables';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -27,6 +27,7 @@ const due7 = suppliers.reduce((s, x) => s + x.bal.due_7d, 0);
 const withBal = suppliers.filter((x) => x.bal.owed > 0.004).length;
 const notQbo = suppliers.reduce((s, x) => s + x.bal.not_in_qbo, 0);
 const error = Astro.url.searchParams.get('error');
+const defaultDate = await nextRunDate(admin);
 ---
 <PortailLayout title={T('title')} staffName={staff.full_name} wide>
   <h1>{T('title')}</h1>
@@ -47,7 +48,7 @@ const error = Astro.url.searchParams.get('error');
     <form method="POST" action="/api/portail/paiements/runs">
       <div class="form-row">
         <label for="run_date">{T('start.date')}</label>
-        <input type="date" id="run_date" name="run_date" value={upcomingFriday()} required />
+        <input type="date" id="run_date" name="run_date" value={defaultDate} required />
       </div>
       <button class="btn btn-primary" type="submit">{T('start.cta')}</button>
     </form>

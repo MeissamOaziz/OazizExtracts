@@ -113,6 +113,21 @@ export function upcomingFriday(from = new Date()): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+/**
+ * Date for a new weekly run: this week's Friday, unless a run already has that
+ * date (or a later one) — then the Friday after the latest run. A week started
+ * on a Friday right after closing the previous one used to reuse its date
+ * (2026-10-09 twice).
+ */
+export async function nextRunDate(admin: SupabaseClient, from = new Date()): Promise<string> {
+  const friday = upcomingFriday(from);
+  const { data } = await admin.from('ap_runs').select('run_date').order('run_date', { ascending: false }).limit(1).maybeSingle();
+  if (!data?.run_date || data.run_date < friday) return friday;
+  const d = new Date(data.run_date + 'T12:00:00');
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function getSetting<T>(admin: SupabaseClient, key: string, fallback: T): Promise<T> {
   const { data } = await admin.from('ap_settings').select('value').eq('key', key).maybeSingle();
   return (data?.value as T) ?? fallback;
