@@ -652,6 +652,33 @@ export async function deleteQboBill(admin: SupabaseClient, invoiceId: string): P
 }
 
 /** When a portal payment is voided, delete its BillPayment in QB too. */
+/** After a payment is edited in the portal: bring its QB bill payment's date, Ref no. and bank account in line. */
+export async function updateQboPaymentDetails(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
+  const { data: p } = await admin.from('ap_payments').select('paid_on, reference, bank_account_id, qbo_billpayment_id').eq('id', paymentId).maybeSingle();
+  if (!p?.qbo_billpayment_id) return { ok: true, message: '' };
+  const qbo = await getQbo(admin);
+  if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
+  try {
+    const cur = (await qbo.get(`/billpayment/${p.qbo_billpayment_id}`))?.BillPayment;
+    if (!cur) return { ok: false, message: 'Paiement introuvable ou annulé' };
+    const { data: bank } = p.bank_account_id
+      ? await admin.from('ap_bank_accounts').select('qbo_account_id').eq('id', p.bank_account_id).maybeSingle()
+      : { data: null };
+    await qbo.post('/billpayment', {
+      Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, PayType: cur.PayType, TotalAmt: cur.TotalAmt,
+      TxnDate: p.paid_on,
+      ...(p.reference ? { DocNumber: String(p.reference).slice(0, 21) } : {}),
+      ...(cur.PayType === 'Check' ? { CheckPayment: { ...cur.CheckPayment, PrintStatus: 'NotSet', ...(bank?.qbo_account_id ? { BankAccountRef: { value: bank.qbo_account_id } } : {}) } } : {}),
+    });
+    await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'ok', message: `Paiement ${p.reference ?? ''} mis à jour dans QB` });
+    return { ok: true, message: `Paiement ${p.reference ?? ''} mis à jour dans QB` };
+  } catch (e) {
+    const message = errMsg(e);
+    await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: p.qbo_billpayment_id, status: 'error', message });
+    return { ok: false, message };
+  }
+}
+
 export async function deleteQboPayment(admin: SupabaseClient, paymentId: string) {
   const { data: p } = await admin.from('ap_payments').select('qbo_billpayment_id').eq('id', paymentId).maybeSingle();
   if (!p?.qbo_billpayment_id) return;

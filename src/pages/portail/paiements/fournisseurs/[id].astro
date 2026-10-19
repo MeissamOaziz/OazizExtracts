@@ -74,11 +74,13 @@ for (const a of allocs ?? []) {
   list.push({ id: a.invoice_id, label: `${inv.invoice_number ?? T(`inv.kind.${inv.kind}` as keyof typeof frPaiements)} (${money(n(a.amount), locale)})` });
   unlinkedByPayment.set(a.payment_id, list);
 }
+// Payments recorded "without a bill" (they own the invoice they paid).
+const expenseIds = new Set(invoices.filter((i) => i.origin_payment_id && i.kind === 'invoice').map((i) => i.origin_payment_id as string));
 const openBills = qboOn && needsBill.length > 0 ? await openBillsForSupplier(admin, id).catch(() => []) : [];
 const nextRef = await nextPaymentReference(admin);
 const here = `/portail/paiements/fournisseurs/${id}`;
 const okText: Record<string, string> = {
-  created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'),
+  created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'), payedit: T('pay.edited'),
 };
 ---
 <PortailLayout title={s.name} staffName={staff.full_name} wide>
@@ -324,6 +326,11 @@ const okText: Record<string, string> = {
                 )}
               </td>
               <td class="actions">
+                {!p.voided_at && (
+                  <button type="button" class="link-btn pay-edit" data-id={p.id} data-amount={n(p.amount).toFixed(2)} data-date={p.paid_on}
+                    data-method={p.payment_method ?? ''} data-account={p.bank_account_id ?? ''} data-ref={p.reference ?? ''} data-notes={p.notes ?? ''}
+                    data-expense={expenseIds.has(p.id) ? '1' : ''} data-historical={p.source !== 'portal' ? '1' : ''} data-qb={p.qbo_billpayment_id ? '1' : ''}>{T('pay.edit')}</button>
+                )}
                 {!p.voided_at && p.source !== 'import' && (
                   <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`} class="inline void-form" data-confirm={T('pay.void.confirm')}>
                     <input type="hidden" name="_action" value="void" /><input type="hidden" name="payment_id" value={p.id} />
@@ -337,6 +344,37 @@ const okText: Record<string, string> = {
       </tbody>
     </table>
   </div>
+
+  <dialog id="pay-edit-dialog" class="edit-dialog">
+    <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`}>
+      <input type="hidden" name="_action" value="edit" />
+      <input type="hidden" name="payment_id" />
+      <h2>{T('pay.edit.title')}</h2>
+      <div class="grid3">
+        <div class="form-row"><label>{T('pay.date')}</label><input type="date" name="paid_on" required /></div>
+        <div class="form-row"><label>{T('pay.amount')} *</label><input type="text" inputmode="decimal" name="amount" required /></div>
+        <div class="form-row"><label>{T('pay.method')}</label>
+          <select name="payment_method">{PAYMENT_METHODS.map((m) => <option value={m}>{T(`m.${m}` as keyof typeof frPaiements)}</option>)}</select>
+        </div>
+        <div class="form-row"><label>{T('pay.account')}</label>
+          <select name="bank_account_id">{accounts.map((a) => <option value={a.id}>{a.name}</option>)}</select>
+        </div>
+        <div class="form-row"><label>{T('pay.ref')}</label><input type="text" name="reference" /></div>
+        <div class="form-row"><label>{T('pay.notes')}</label><input type="text" name="notes" /></div>
+      </div>
+      <fieldset class="pay-mode edit-mode">
+        <legend>{T('pay.mode')}</legend>
+        <label class="mode-opt"><input type="radio" name="edit_mode" value="invoices" /><span><strong>{T('pay.mode.push')}</strong></span></label>
+        <label class="mode-opt"><input type="radio" name="edit_mode" value="expense" /><span><strong>{T('pay.mode.expense')}</strong></span></label>
+      </fieldset>
+      <p class="hint edit-note">{T('pay.edit.hint')}</p>
+      <p class="hint edit-qb" hidden>{T('pay.edit.qb')}</p>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" id="pay-edit-cancel">{T('qbo.cancel')}</button>
+        <button type="submit" class="btn btn-primary">{T('qbo.save')}</button>
+      </div>
+    </form>
+  </dialog>
 
   <details class="card" style="margin-top: 20px;">
     <summary>{T('det.history')}</summary>
@@ -354,6 +392,26 @@ const okText: Record<string, string> = {
     const row = r.form?.querySelector<HTMLElement>('.apply-row');
     if (row) row.hidden = r.value === 'expense' && r.checked;
   }));
+  // Edit a payment: fill the dialog from the row.
+  const ed = document.getElementById('pay-edit-dialog') as HTMLDialogElement | null;
+  document.querySelectorAll<HTMLButtonElement>('.pay-edit').forEach((b) => b.addEventListener('click', () => {
+    if (!ed) return;
+    const f = ed.querySelector('form')!;
+    const set = (name: string, v: string) => { (f.elements.namedItem(name) as HTMLInputElement).value = v; };
+    const d = b.dataset;
+    set('payment_id', d.id!); set('amount', d.amount!); set('paid_on', d.date!); set('reference', d.ref ?? ''); set('notes', d.notes ?? '');
+    if (d.method) set('payment_method', d.method);
+    if (d.account) set('bank_account_id', d.account);
+    f.querySelectorAll<HTMLInputElement>('input[name="edit_mode"]').forEach((r) => { r.checked = r.value === (d.expense ? 'expense' : 'invoices'); });
+    // Historical payments: details only — the amount and type stay as imported.
+    (f.elements.namedItem('amount') as HTMLInputElement).readOnly = !!d.historical;
+    f.querySelector<HTMLElement>('.edit-mode')!.hidden = !!d.historical;
+    f.querySelector<HTMLElement>('.edit-qb')!.hidden = !d.qb;
+    delete f.dataset.sent;
+    f.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { x.disabled = false; });
+    ed.showModal();
+  }));
+  document.getElementById('pay-edit-cancel')?.addEventListener('click', () => ed?.close());
   document.querySelectorAll<HTMLInputElement>('input.autosubmit').forEach((cb) => cb.addEventListener('change', () => cb.form!.submit()));
   document.querySelectorAll<HTMLFormElement>('form.void-form').forEach((f) => f.addEventListener('submit', (ev) => {
     if (!confirm(f.dataset.confirm!)) ev.preventDefault();
@@ -391,6 +449,9 @@ const okText: Record<string, string> = {
   .mode-opt span { display: grid; gap: 1px; }
   .mode-opt small { color: var(--p-muted); font-size: .78rem; }
   .apply-row[hidden] { display: none; }
+  .edit-dialog { border: none; border-radius: 12px; padding: 24px; width: min(760px, 94vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .edit-dialog::backdrop { background: rgba(16, 24, 40, .4); }
+  .edit-dialog .pay-mode[hidden], .edit-dialog .hint[hidden] { display: none; }
   .apply-list { display: grid; gap: 4px; max-height: 180px; overflow-y: auto; border: 1px solid var(--p-border); border-radius: 6px; padding: 8px 12px; }
   .check-inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
   .section-head { display: flex; justify-content: space-between; align-items: baseline; }

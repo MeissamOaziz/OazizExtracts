@@ -64,6 +64,8 @@ const RULES: Rule[] = [
   [/^Dépôt RBC → TD — saisi dans QB à la main, non envoyé$/, 'RBC → TD deposit — entered in QB by hand, not sent'],
   [/^Déjà dans QB comme dépense — aucun paiement créé$/, 'Already in QB as an expense — no payment created'],
   [/^Ce fournisseur existe déjà dans le portail\.$/, 'This supplier already exists in the portal.'],
+  [/^Paiement modifié dans le portail — QuickBooks : (.*)$/, (_, e) => `Payment updated in the portal — QuickBooks: ${e}`],
+  [/^Le montant d’un paiement historique ne se modifie pas — annulez-le et enregistrez-en un nouveau\.$/, 'The amount of a historical payment can’t be changed — void it and record a new one.'],
   [/^Paiement (.*) mis à jour dans QB$/, (_, r) => `Payment ${r} updated in QB`],
   [/^Paiement supprimé dans QB \(annulé au portail\)$/, 'Payment deleted in QB (voided in the portal)'],
   [/^Suppression dans QB impossible : (.*)$/, (_, e) => `Could not delete in QB: ${e}`],

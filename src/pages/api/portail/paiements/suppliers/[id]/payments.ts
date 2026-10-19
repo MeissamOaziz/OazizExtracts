@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { isUuid, logEvent, parseAmount, paymentWithReference, todayIso, PAYMENT_METHODS } from '../../../../../../lib/payables';
-import { autoPushPayment, deleteQboPayment } from '../../../../../../lib/qbo-sync';
+import { isUuid, logEvent, n, parseAmount, paymentWithReference, todayIso, PAYMENT_METHODS } from '../../../../../../lib/payables';
+import { autoPushPayment, deleteQboPayment, updateQboPaymentDetails } from '../../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -24,6 +24,68 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     await admin.from('ap_payments').update(stamp).eq('id', paymentId).eq('supplier_id', supplierId);
     await admin.from('ap_run_lines').update(stamp).eq('payment_id', paymentId);
     return redirect(back, 303);
+  }
+
+  if (action === 'edit' && isUuid(paymentId)) {
+    const { data: old } = await admin.from('ap_payments').select('*').eq('id', paymentId).eq('supplier_id', supplierId).is('voided_at', null).maybeSingle();
+    if (!old) return redirect(`${back}?error=${encodeURIComponent('Paiement introuvable ou annulé')}`, 303);
+    const amount = parseAmount(form.get('amount'));
+    if (!amount || amount <= 0) return redirect(`${back}?error=missing`, 303);
+    const paidOn = /^\d{4}-\d{2}-\d{2}$/.test(String(form.get('paid_on') ?? '')) ? String(form.get('paid_on')) : old.paid_on;
+    const methodIn = String(form.get('payment_method') ?? '');
+    const method = (PAYMENT_METHODS as readonly string[]).includes(methodIn) ? methodIn : old.payment_method;
+    const bank = isUuid(form.get('bank_account_id')) ? String(form.get('bank_account_id')) : old.bank_account_id;
+    const ref = String(form.get('reference') ?? '').trim();
+    const notes = String(form.get('notes') ?? '').trim();
+    if (ref && ref.toLowerCase() !== String(old.reference ?? '').toLowerCase()) {
+      const d = await paymentWithReference(admin, ref);
+      if (d && d.id !== paymentId) return redirect(`${back}?error=${encodeURIComponent(`Référence ${ref} déjà utilisée — ${d.supplier ?? ''}, ${d.amount.toFixed(2)} $, ${d.paidOn}`)}`, 303);
+    }
+    // "No bill" payments carry the invoice created for them (origin_payment_id).
+    const { data: own } = await admin.from('ap_invoices').select('id').eq('origin_payment_id', paymentId).eq('kind', 'invoice').is('voided_at', null).limit(1);
+    const wasExpense = !!own?.length;
+    const isExpense = form.get('edit_mode') ? form.get('edit_mode') === 'expense' : wasExpense;
+    const before = { amount: n(old.amount), paid_on: old.paid_on, payment_method: old.payment_method, bank_account_id: old.bank_account_id, reference: old.reference, notes: old.notes, expense: wasExpense };
+    const after = { amount, paid_on: paidOn, payment_method: method, bank_account_id: bank, reference: ref || null, notes: notes || null, expense: isExpense };
+
+    // Same amount and type: edit in place (and in QB when it's there).
+    if (Math.abs(amount - n(old.amount)) < 0.005 && isExpense === wasExpense) {
+      await admin.from('ap_payments').update({ paid_on: paidOn, payment_method: method, bank_account_id: bank, reference: ref || null, notes: notes || null }).eq('id', paymentId);
+      if (wasExpense && notes) await admin.from('ap_invoices').update({ description: notes, invoice_date: paidOn }).eq('id', own![0].id);
+      await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_edited', details: { payment_id: paymentId, from: before, to: after } });
+      const qb = old.qbo_billpayment_id && (paidOn !== old.paid_on || (ref || null) !== old.reference || bank !== old.bank_account_id)
+        ? await updateQboPaymentDetails(admin, paymentId) : null;
+      if (qb && !qb.ok) return redirect(`${back}?error=${encodeURIComponent(`Paiement modifié dans le portail — QuickBooks : ${qb.message}`)}`, 303);
+      return redirect(`${back}?ok=payedit`, 303);
+    }
+
+    // Amount or type changed: replace the payment (void + record again with the
+    // same reference, invoices and week line), so balances and QB stay exact.
+    if (old.source !== 'portal') return redirect(`${back}?error=${encodeURIComponent('Le montant d’un paiement historique ne se modifie pas — annulez-le et enregistrez-en un nouveau.')}`, 303);
+    const { data: oldAllocs } = await admin.from('ap_payment_allocations').select('invoice_id, amount').eq('payment_id', paymentId);
+    const paidInvoices = (oldAllocs ?? []).filter((a) => !own?.some((o) => o.id === a.invoice_id)).map((a) => ({ invoice_id: a.invoice_id, amount }));
+    const wasPushed = !!old.qbo_billpayment_id;
+    const wasAlreadyInQb = !wasPushed && !!old.qbo_synced_at && !wasExpense;
+    await deleteQboPayment(admin, paymentId);
+    const { error: voidErr } = await admin.rpc('ap_void_payment', { p_payment_id: paymentId, p_staff_id: staff.id });
+    if (voidErr) return redirect(`${back}?error=${encodeURIComponent(voidErr.message)}`, 303);
+    const { data: newId, error } = await admin.rpc('ap_record_payment_split', {
+      p_supplier_id: supplierId, p_amount: amount, p_paid_on: paidOn, p_method: method, p_bank_account_id: bank,
+      p_reference: ref, p_notes: notes, p_staff_id: staff.id, p_run_line_id: old.run_line_id ?? null,
+      p_allocations: !isExpense && paidInvoices.length ? paidInvoices : null,
+      p_expense: isExpense, p_expense_note: isExpense ? notes || null : null,
+    });
+    if (error || !newId) return redirect(`${back}?error=${encodeURIComponent(error?.message ?? 'échec')}`, 303);
+    await admin.from('ap_payments').update({
+      remittance_sent_at: old.remittance_sent_at, remittance_sent_by: old.remittance_sent_by,
+      ...(isExpense || wasAlreadyInQb ? { qbo_synced_at: new Date().toISOString(), qbo_error: null } : {}),
+    }).eq('id', newId as string);
+    if (old.run_line_id) {
+      await admin.from('ap_run_lines').update({ payment_id: newId, processed_at: new Date().toISOString(), processed_by: staff.id }).eq('id', old.run_line_id);
+    }
+    await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'payment_edited', details: { payment_id: paymentId, replaced_by: newId, from: before, to: after } });
+    if (!isExpense && !wasAlreadyInQb) await autoPushPayment(admin, newId as string);
+    return redirect(`${back}?ok=payedit`, 303);
   }
 
   if (action === 'void' && isUuid(paymentId)) {
