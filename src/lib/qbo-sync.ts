@@ -505,9 +505,12 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
     const vendorId = sup.qbo_vendor_id ?? await ensureVendor(admin, qbo, sup);
     const total = round2(lines.reduce((s, l) => s + l.amount, 0));
 
-    // 1) Already entered in QB by hand (same vendor, same amount, ±7 days)?
+    // 1) Already entered in QB by hand (same vendor, amount and bills / invoice number, ±7 days)?
     //    Link to it instead of creating a duplicate.
-    const twin = await findHandEnteredTwin(admin, qbo, vendorId, total, p.paid_on);
+    const twin = await findHandEnteredTwin(admin, qbo, vendorId, total, p.paid_on, {
+      bills: lines.map((l) => l.bill),
+      numbers: [p.reference, ...rows.map((r) => r.inv?.invoice_number)].filter((x): x is string => !!x),
+    });
     if (twin) {
       await admin.from('ap_payments').update({
         qbo_billpayment_id: twin.type === 'BillPayment' ? twin.id : null, qbo_synced_at: new Date().toISOString(), qbo_error: null,
@@ -549,16 +552,30 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
 }
 
 /** A payment entered by hand in QB for the same vendor and amount within ±7 days, not yet linked to a portal payment. */
-async function findHandEnteredTwin(admin: SupabaseClient, qbo: Qbo, vendorId: string, amount: number, paidOn: string) {
+async function findHandEnteredTwin(
+  admin: SupabaseClient, qbo: Qbo, vendorId: string, amount: number, paidOn: string,
+  match: { bills: string[]; numbers: string[] },
+) {
+  // Same vendor and amount is not enough: suppliers billed the same amount every
+  // week (Cintas, 290.68 $) made PMT-26-0992 link to the PREVIOUS week's bill
+  // payment (#15318, 2026-10-06) and no payment was created. A bill payment is
+  // the same one only if it pays these bills; an expense only if its Ref no. is
+  // one of these invoice numbers or the payment reference.
   const d = new Date(paidOn + 'T12:00:00');
   const from = new Date(d.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
   const to = new Date(d.getTime() + 7 * 86400_000).toISOString().slice(0, 10);
+  const ours = new Set(match.bills.map(String));
+  const key = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const numbers = new Set(match.numbers.map(key).filter(Boolean));
   const cands: Array<{ type: 'BillPayment' | 'Purchase'; id: string; doc: string | null; date: string }> = [];
   for (const t of await qbo.query('BillPayment', `TxnDate >= ${qstr(from)} and TxnDate <= ${qstr(to)}`)) {
-    if (t.VendorRef?.value === vendorId && Math.abs(n(t.TotalAmt) - amount) < 0.005) cands.push({ type: 'BillPayment', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
+    if (t.VendorRef?.value !== vendorId || Math.abs(n(t.TotalAmt) - amount) >= 0.005) continue;
+    const paid = (t.Line ?? []).flatMap((l: any) => (l.LinkedTxn ?? []).filter((x: any) => x.TxnType === 'Bill').map((x: any) => String(x.TxnId)));
+    if (paid.length && paid.every((b: string) => ours.has(b))) cands.push({ type: 'BillPayment', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
   }
   for (const t of await qbo.query('Purchase', `TxnDate >= ${qstr(from)} and TxnDate <= ${qstr(to)}`)) {
-    if (t.EntityRef?.value === vendorId && Math.abs(n(t.TotalAmt) - amount) < 0.005) cands.push({ type: 'Purchase', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
+    if (t.EntityRef?.value !== vendorId || Math.abs(n(t.TotalAmt) - amount) >= 0.005) continue;
+    if (numbers.has(key(t.DocNumber))) cands.push({ type: 'Purchase', id: String(t.Id), doc: t.DocNumber ?? null, date: t.TxnDate });
   }
   if (!cands.length) return null;
   const { data: linked } = await admin.from('ap_payments').select('qbo_billpayment_id').in('qbo_billpayment_id', cands.map((c) => c.id)).is('voided_at', null);
