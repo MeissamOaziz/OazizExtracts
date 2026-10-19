@@ -17,6 +17,8 @@ export const InvoiceExtraction = z.object({
   invoice_number: z.string().nullable(),
   po_number: z.string().nullable().describe('Customer PO / purchase order reference, if any'),
   invoice_date: z.string().nullable().describe('YYYY-MM-DD'),
+  invoice_date_printed: z.string().nullable().describe('The invoice date exactly as printed, character for character (e.g. "10/09/2026", "9 oct. 2026")'),
+  date_order: z.enum(['day_first', 'month_first', 'unknown']).describe('Order of numeric dates on this document, ONLY when the document itself shows it: a format label such as JJ/MM/AAAA, DD/MM/YYYY or MM/DD/YYYY, or another date on the page whose first number is above 12. Otherwise "unknown" — do not guess from the language or country.'),
   due_date: z.string().nullable().describe('YYYY-MM-DD — only if printed or computable from stated terms'),
   payment_terms: z.string().nullable().describe('e.g. "Net 30"'),
   currency: z.enum(['CAD', 'USD', 'EUR', 'OTHER']),
@@ -57,7 +59,52 @@ export async function extractInvoice(file: { data: Buffer; mediaType: string }):
   });
   if (response.stop_reason === 'refusal') throw new Error('Le document n’a pas pu être lu (refus du modèle).');
   if (!response.parsed_output) throw new Error('Lecture incomplète du document.');
-  return fixDayMonth(response.parsed_output);
+  return resolveDates(fixDayMonth(response.parsed_output));
+}
+
+export type ExtractionWithDates = InvoiceExtraction & { date_alternative?: string | null };
+
+/**
+ * A numeric date where both numbers are 12 or less ("10/09/2026") reads two
+ * ways: 10 Sept (day first) or 9 Oct (month first). Suppliers use both orders,
+ * so the model guesses wrong at times (Cintas 4285180521: 9 Oct read as
+ * 10 Sept). Use the order the document states; otherwise the reading that is
+ * not in the future and is closest to today (invoices are entered within days
+ * or weeks of their date). The other reading is returned so the form can say so.
+ */
+export function resolveDates(x: InvoiceExtraction, today = new Date()): ExtractionWithDates {
+  const m = /^\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})\s*$/.exec(x.invoice_date_printed ?? '');
+  if (!m) return { ...x, date_alternative: null };
+  const a = Number(m[1]), b = Number(m[2]);
+  const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  const iso = (mo: number, d: number) => `${year}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const valid = (mo: number, d: number) => mo >= 1 && mo <= 12 && d >= 1 && d <= 31;
+  const dayFirst = valid(b, a) ? iso(b, a) : null;
+  const monthFirst = valid(a, b) ? iso(a, b) : null;
+  let chosen: string | null;
+  if (!dayFirst || !monthFirst || dayFirst === monthFirst) chosen = dayFirst ?? monthFirst;
+  else if (x.date_order === 'day_first') chosen = dayFirst;
+  else if (x.date_order === 'month_first') chosen = monthFirst;
+  else {
+    const t = today.getTime();
+    const score = (v: string) => {
+      const diff = new Date(v + 'T12:00:00').getTime() - t;
+      // More than a week ahead is unlikely for an invoice date: rank it after any past reading.
+      return Math.abs(diff) + (diff > 7 * 86400_000 ? 1e13 : 0);
+    };
+    chosen = score(dayFirst) <= score(monthFirst) ? dayFirst : monthFirst;
+  }
+  if (!chosen) return { ...x, date_alternative: null };
+  const ambiguous = !!dayFirst && !!monthFirst && dayFirst !== monthFirst && x.date_order === 'unknown';
+  // The due date was read with the same order: keep the same gap (the terms) from the corrected date.
+  let due = x.due_date;
+  const isIso = (v: string | null) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  if (isIso(x.invoice_date) && x.invoice_date !== chosen && isIso(due)) {
+    const gap = new Date(due + 'T12:00:00').getTime() - new Date(x.invoice_date + 'T12:00:00').getTime();
+    due = gap >= 0 ? new Date(new Date(chosen + 'T12:00:00').getTime() + gap).toISOString().slice(0, 10) : null;
+  }
+  if (due && due < chosen) due = null;
+  return { ...x, invoice_date: chosen, due_date: due, date_alternative: ambiguous ? (chosen === dayFirst ? monthFirst : dayFirst) : null };
 }
 
 /**

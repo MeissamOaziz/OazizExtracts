@@ -25,7 +25,7 @@ const i18n = {
   matched: T('pdf.matched'), newSupplier: T('pdf.newSupplierOpt'), copied: T('pdf.copied'),
   qbVendor: T('pdf.qb.vendor'), qbNumber: T('inv.number'), qbDate: T('inv.date'), qbDue: T('inv.due'),
   qbSubtotal: T('pdf.subtotal'), qbGst: T('pdf.gst'), qbQst: T('pdf.qst'), qbOther: T('pdf.otherTaxes'),
-  qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), locale,
+  qbTotal: T('pdf.total'), qbTerms: T('pdf.terms'), qbDesc: T('inv.description'), dateAlt: T('pdf.dateAlt'), dateUse: T('pdf.dateUse'), locale,
   codingFrom: T('pdf.qbFromHistory'), codingNone: T('pdf.qbNoHistory'), codingNew: T('pdf.qbNewSupplier'),
   saving: T('pdf.saving'), vendorNew: T('pdf.qbVendorNew'), vendorMatched: T('pdf.qbVendorMatched'), vendorNone: T('pdf.qbVendorNone'),
 };
@@ -79,7 +79,7 @@ const i18n = {
         </div>
         <div class="form-row"><label>{T('inv.number')}</label><input type="text" name="invoice_number" id="invoice_number" /></div>
         <div class="form-row"><label>{T('inv.po')}</label><input type="text" name="po_number" id="po_number" /></div>
-        <div class="form-row"><label>{T('inv.date')}</label><input type="date" name="invoice_date" id="invoice_date" /></div>
+        <div class="form-row"><label>{T('inv.date')}</label><input type="date" name="invoice_date" id="invoice_date" /><p class="hint date-alt" id="date-alt" hidden></p></div>
         <div class="form-row"><label>{T('inv.due')}</label><input type="date" name="due_date" id="due_date" /></div>
         <div class="form-row"><label>{T('pdf.total')} *</label><input type="text" inputmode="decimal" name="amount" id="amount" required /></div>
       </div>
@@ -212,6 +212,21 @@ const i18n = {
     set('x_gst_number', x.vendor_gst_number); set('x_qst_number', x.vendor_qst_number);
     set('invoice_number', x.invoice_number); set('po_number', x.po_number);
     set('invoice_date', x.invoice_date); set('due_date', x.due_date);
+    // Ambiguous numeric date (10/09/2026): say how it was read and offer the other reading.
+    const alt = $('date-alt');
+    if (x.date_alternative) {
+      const fmtD = (v: string) => new Date(v + 'T12:00:00').toLocaleDateString(L.locale === 'en' ? 'en-CA' : 'fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+      alt.textContent = L.dateAlt.replace('{printed}', String(x.invoice_date_printed ?? '')).replace('{read}', fmtD(String(x.invoice_date)));
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'link-btn'; btn.textContent = L.dateUse.replace('{other}', fmtD(String(x.date_alternative)));
+      btn.onclick = () => {
+        $<HTMLInputElement>('invoice_date').value = String(x.date_alternative);
+        $<HTMLInputElement>('invoice_date').dispatchEvent(new Event('input', { bubbles: true }));
+        alt.hidden = true;
+      };
+      alt.append(' ', btn);
+      alt.hidden = false;
+    } else alt.hidden = true;
     set('amount', Math.abs(Number(x.total)).toFixed(2)); set('description', x.description);
     set('subtotal', x.subtotal); set('tax_gst', x.gst_hst); set('tax_qst', x.qst);
     $<HTMLSelectElement>('kind').value = x.is_credit_note ? 'credit' : 'invoice';
@@ -234,21 +249,32 @@ const i18n = {
     $('inv-form').dispatchEvent(new Event('dup:check'));
 
     const money = (v: unknown) => (v === null || v === undefined ? null : fmt.format(Number(v)));
-    const rows: Array<[string, string | null]> = [
+    const val = (id: string) => ($<HTMLInputElement>(id).value || '').trim() || null;
+    const buildRows = (): Array<[string, string | null]> => [
       [L.qbVendor, [x.vendor_name, x.vendor_legal_name].filter(Boolean).join(' / ')],
-      [L.qbNumber, x.invoice_number as string | null], [L.qbDate, x.invoice_date as string | null],
-      [L.qbDue, x.due_date as string | null], [L.qbTerms, x.payment_terms as string | null],
+      [L.qbNumber, val('invoice_number')], [L.qbDate, val('invoice_date')],
+      [L.qbDue, val('due_date')], [L.qbTerms, x.payment_terms as string | null],
       [L.qbSubtotal, money(x.subtotal)], [L.qbGst, money(x.gst_hst)], [L.qbQst, money(x.qst)],
-      [L.qbOther, money(x.other_taxes)], [L.qbTotal, `${money(x.total)}${x.currency !== 'CAD' ? ` ${x.currency}` : ''}`],
-      [L.qbDesc, x.description as string | null],
+      [L.qbOther, money(x.other_taxes)], [L.qbTotal, `${money(val('amount') ?? x.total)}${x.currency !== 'CAD' ? ` ${x.currency}` : ''}`],
+      [L.qbDesc, val('description')],
     ];
-    const dl = $('qb-list'); dl.innerHTML = '';
-    for (const [k, v] of rows) {
-      if (!v) continue;
-      const dt = document.createElement('dt'); dt.textContent = k;
-      const dd = document.createElement('dd'); dd.textContent = v;
-      dl.append(dt, dd);
-    }
+    let rows = buildRows();
+    const dl = $('qb-list');
+    const renderQb = () => {
+      rows = buildRows();
+      dl.innerHTML = '';
+      for (const [k, v] of rows) {
+        if (!v) continue;
+        const dt = document.createElement('dt'); dt.textContent = k;
+        const dd = document.createElement('dd'); dd.textContent = v;
+        dl.append(dt, dd);
+      }
+    };
+    renderQb();
+    ['invoice_number', 'invoice_date', 'due_date', 'amount', 'description'].forEach((id) => {
+      $<HTMLInputElement>(id).oninput = renderQb;
+      $<HTMLInputElement>(id).onchange = () => { renderQb(); if (id === 'invoice_date') $('date-alt').hidden = true; };
+    });
     $('qb-card').hidden = false;
     $('copy-qb').onclick = async () => {
       await navigator.clipboard.writeText(rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n'));
