@@ -3,13 +3,12 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { sendShipmentLabelReady } from '../../../lib/email';
 import type { Permission } from '../../../lib/access';
 import {
-  LABEL_READY_NOTIFY, isOcs, loadShipment, logShipment, nextCocNo, shipmentSummary, type Shipment, type ShipmentBox,
+  LABEL_READY_NOTIFY, isCocSigner, isOcs, loadShipment, logShipment, nextCocNo, shipmentSummary, type Shipment, type ShipmentBox,
 } from '../../../lib/shipments';
 import { qboShipTo } from '../../../lib/qbo-customers';
 import { loadSwo } from '../../../lib/production-swo';
 import { todayLocal } from '../../../lib/production';
 import { buildPackingList, packingListFilename } from '../../../lib/packing-list';
-import { buildCocPdf, cocDataFor, cocFilename } from '../../../lib/coc';
 
 export const prerender = false;
 
@@ -57,8 +56,22 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
   const cur = await loadShipment(admin, id);
   if (!cur) return redirect('/portail/envois', 303);
   const booker = perms.has('shipping');
-  if (action !== 'shipped' && !booker) return page('error=forbidden');
+  const signer = isCocSigner(staff.email);
+  if (action !== 'shipped' && !(action === 'coc_reopen' && signer) && !booker) return page('error=forbidden');
   const now = new Date().toISOString();
+
+  // ------------------------------------- reopen a signed Chain of Custody
+  if (action === 'coc_reopen') {
+    const reason = str(form, 'reason');
+    if (!reason) return page('error=reason', '#coc');
+    if (!cur.coc_signed_at) return page('error=state', '#coc');
+    await admin.from('sh_shipments').update({
+      coc_signed_at: null, coc_signed_by: null, coc_signer_name: null, coc_signature: null,
+      version: cur.version + 1, updated_by: staff.id, updated_at: now,
+    }).eq('id', id);
+    await logShipment(admin, id, staff.id, 'coc_reopened', reason, { signed_by: cur.coc_signer_name });
+    return page('ok=coc_reopened', '#coc');
+  }
 
   // --------------------------------------------- ship-to from QuickBooks
   if (action === 'qbo_ship_to') {
@@ -118,6 +131,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
     const cocNo = labelReady && !cur.coc_no && !isOcs(cur.customer_name) ? await nextCocNo(admin, todayLocal()) : cur.coc_no;
     const { data: upd, error } = await admin.from('sh_shipments').update({
       ...f, label_paths: labelPaths, status, coc_no: cocNo,
+      ...(cocNo && !cur.coc_no ? { coc_ship_date: todayLocal() } : {}),
       ...(changes.ship_to ? { ship_to_source: f.ship_to ? 'manual' : null } : {}),
       ...(status !== cur.status && status === 'booked' ? { booked_at: now, booked_by: staff.id } : {}),
       ...(labelReady ? { label_ready_at: now, label_ready_by: staff.id, ...(cur.booked_at ? {} : { booked_at: now, booked_by: staff.id }) } : {}),
@@ -131,8 +145,9 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
     if (added.length) await logShipment(admin, id, staff.id, 'label_added', null, { files: added.length });
     if (!labelReady) return missing ? page(`ok=saved&error=${missing}`, '#reserver') : page('ok=saved');
 
-    // Label ready: QA & Logistics get the label(s), the packing list and the
-    // Chain of Custody, with links to each in the portal.
+    // Label ready: QA & Logistics get the label(s) and the packing list, and
+    // the link to verify and sign the Chain of Custody (a draft until signed,
+    // so it is not attached here).
     const attachments: Array<{ filename: string; content: Buffer }> = [];
     for (const [i, p] of labelPaths.entries()) {
       const { data: blob } = await admin.storage.from('production').download(p);
@@ -145,10 +160,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
       attachments.push({ filename: packingListFilename(swo), content: await buildPackingList(swo, after) });
       links.push({ label: 'Liste d’emballage (Word)', url: `${siteUrl()}/api/portail/production/swo/${swo.id}/packing-list` });
     }
-    if (cocNo) {
-      const pdf = await buildCocPdf(cocDataFor(after, swo?.lines ?? [], todayLocal()));
-      attachments.push({ filename: cocFilename(cocNo, cur.customer_name), content: Buffer.from(pdf) });
-      links.push({ label: `Chain of Custody ${cocNo} (PDF)`, url: `${siteUrl()}/api/portail/envois/${id}/coc` });
+    if (cocNo && !cur.coc_signed_at) {
+      links.push({ label: `Vérifier et signer la Chain of Custody ${cocNo}`, url: `${siteUrl()}/portail/envois/${id}/coc` });
     }
     await sendShipmentLabelReady({
       toEmails: LABEL_READY_NOTIFY, shipmentNo: cur.shipment_no, customer: cur.customer_name, customerPo: cur.customer_po,

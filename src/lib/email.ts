@@ -1475,7 +1475,13 @@ export function sendShipmentToBook(n: ShipmentEmail) {
 export function sendShipmentLabelReady(n: ShipmentEmail) {
   const onto = n.summary.toLowerCase().includes('palette') ? 'la palette' : 'les boîtes';
   return sendShipmentEmail(n, `[Oaziz] Étiquette prête - ${shipmentRef(n)}`, 'Étiquette prête — QA et Logistique',
-    `Le transport est réservé. Sont joints : l'étiquette d'expédition (à imprimer et coller sur ${onto}), la liste d'emballage pré-remplie${n.cocNo ? ` et la Chain of Custody ${escapeHtml(n.cocNo)} (à imprimer, signer et envoyer au client, qui la signe à la réception et la retourne)` : ''}. Marquez l'envoi comme expédié dans le portail une fois parti.`,
+    `Le transport est réservé. Sont joints : l'étiquette d'expédition (à imprimer et coller sur ${onto}) et la liste d'emballage pré-remplie.${n.cocNo ? ` La Chain of Custody ${escapeHtml(n.cocNo)} est prête à vérifier : Stéphane (ou Jacob) inscrit l'heure de départ et la signe dans le portail, puis la version signée est envoyée par courriel pour le client.` : ''} Marquez l'envoi comme expédié dans le portail une fois parti.`,
+    'Voir l’envoi');
+}
+
+export function sendCocSigned(n: ShipmentEmail & { signerName: string }) {
+  return sendShipmentEmail(n, `[Oaziz] CoC signée ${n.cocNo ?? ''} - ${shipmentRef(n)}`, 'Chain of Custody signée',
+    `La Chain of Custody a été vérifiée et signée par <strong>${escapeHtml(n.signerName)}</strong>. La version signée est jointe : envoyez-la au client, qui signe la partie B à la réception et la retourne à stephane@oaziz.ca.`,
     'Voir l’envoi');
 }
 

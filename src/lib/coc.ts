@@ -1,10 +1,11 @@
 // Chain of Custody form (controlled document, author Stéphane Paquin) for a
-// shipment, as a PDF to print, sign and send to the customer, who signs Part B
-// and returns it. Filled with what the shipment knows; signatures, times, the
-// driver and the vehicle check stay blank for the people on site. Not used for
-// the OCS, which has its own process.
+// shipment. A draft (watermarked) until QA verifies it and signs in the portal;
+// the signed PDF is sent to the customer, who signs Part B and returns it.
+// Filled with what the shipment knows: courier and tracking #, dates, vehicle
+// check (YES unless QA says otherwise), temperature (N/A unless stated), the
+// departure time QA enters, and the QA signature. Not used for the OCS.
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { OAZIZ_LOGO_PNG_B64 } from './templates/oaziz-logo';
 
 export interface CocData {
@@ -14,8 +15,16 @@ export interface CocData {
   customer: string | null;
   shipTo: string | null;
   carrier: string | null;
+  trackingNo: string | null;
   /** One bullet per product: "Juicy J Bubble Hash — Lot 74494, 2 843 g". */
   products: string[];
+  vehicleOk: boolean;
+  vehicleNote: string | null;
+  temperature: string;
+  departureTime: string | null;
+  /** QA signature (PNG data URL) and who signed; absent on a draft. */
+  signature: string | null;
+  signerName: string | null;
 }
 
 const ddmmyyyy = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
@@ -49,6 +58,7 @@ export async function buildCocPdf(d: CocData): Promise<Uint8Array> {
   const arialB = await doc.embedFont(StandardFonts.HelveticaBold);
   const times = await doc.embedFont(StandardFonts.TimesRomanBold);
   const logo = await doc.embedPng(Buffer.from(OAZIZ_LOGO_PNG_B64, 'base64'));
+  const sig = d.signature ? await doc.embedPng(Buffer.from(d.signature.split(',')[1] ?? '', 'base64')) : null;
   const ink = rgb(0, 0, 0);
   const grey = rgb(0.75, 0.75, 0.75);
   const band = rgb(0.9, 0.9, 0.9);
@@ -117,7 +127,7 @@ export async function buildCocPdf(d: CocData): Promise<Uint8Array> {
   row('Originator', null, 'Oaziz Extracts Inc.');
   row('Date of shipment (dd-mm-yy)', null, ship);
   row('Ship to (Company name and address)', null, dest);
-  row('Courier company', null, d.carrier ?? '');
+  row('Courier company', null, [d.carrier, d.trackingNo ? `Tracking # ${d.trackingNo}` : null].filter(Boolean).join(' - '));
   row('Name of driver', null, '');
   const bullets = d.products.flatMap((p) => wrap(p, arial, 8.5, VW - 22).map((l, i) => ({ l, first: i === 0 })));
   row('Product(s) description and quantity (g)', '(Batch/Lot Name(s) and ID Number(s))', '', {
@@ -129,15 +139,27 @@ export async function buildCocPdf(d: CocData): Promise<Uint8Array> {
   });
   row('Courier vehicle in good condition?', '(Inspect the inside of the vehicle - cargo area, for cleanliness and to ensure there are no gaps in the walls/ceilings)', '', {
     draw: (x, top) => {
-      text('[   ] YES', x, top - 10.5, 8.5);
-      text('[   ] NO', x + 52, top - 10.5, 8.5);
-      text('(if no, provide details)', x + 88, top - 10.5, 6.5);
+      text(`[${d.vehicleOk ? 'X' : '   '}] YES`, x, top - 10.5, 8.5);
+      text(`[${d.vehicleOk ? '   ' : 'X'}] NO`, x + 52, top - 10.5, 8.5);
+      text(!d.vehicleOk && d.vehicleNote ? d.vehicleNote : '(if no, provide details)', x + 88, top - 10.5, !d.vehicleOk && d.vehicleNote ? 8 : 6.5);
     },
   });
-  row('Shipping Temperature Range Required', '(State temperature range required - "NA" if not required)', 'N/A');
-  sigRow('Sign/Date (Shipping Dept)', 'Signature:', ship);
+  row('Shipping Temperature Range Required', '(State temperature range required - "NA" if not required)', d.temperature || 'N/A');
+  // QA signs for the shipping department: the signature image sits on the line.
+  row('Sign/Date (Shipping Dept)', null, '', {
+    minH: d.signature ? 30 : 15,
+    draw: (x, top) => {
+      text('Signature:', x, top - 10.5, 8.5);
+      if (sig) {
+        const h = 24; const w = Math.min(110, (sig.width / sig.height) * h);
+        page.drawImage(sig, { x: x + 44, y: top - 27, width: w, height: h });
+        if (d.signerName) text(`(${d.signerName})`, x + 44 + w + 4, top - 22, 6.5);
+      }
+      text(`Date (dd-mm-yy): ${ship}`, x + 154, top - 10.5, 8.5);
+    },
+  });
   sigRow('Sign/Date (Courier)', 'Signature:', ship);
-  sigRow('Time and date of shipment departure', 'Time:', ship);
+  sigRow('Time and date of shipment departure', `Time:${d.departureTime ? ` ${d.departureTime}` : ''}`, ship);
   section('Part B: Receiving Confirmation');
   row('Destination', null, dest);
   sigRow('Time and Date of shipment arrival', 'Time:', null);
@@ -153,6 +175,12 @@ export async function buildCocPdf(d: CocData): Promise<Uint8Array> {
   text('Email: ', T, y - 22, 9);
   text('stephane@oaziz.ca', T + arial.widthOfTextAtSize('Email: ', 9), y - 22, 9, arial, blue);
   text('Attn: Stephane Paquin', T, y - 33, 9);
+  if (!d.signature) {
+    // Draft: not to be sent before QA verifies and signs it in the portal.
+    page.drawText('DRAFT - TO VERIFY AND SIGN', {
+      x: 120, y: 260, size: 34, font: arialB, color: rgb(0.85, 0.2, 0.15), opacity: 0.18, rotate: degrees(35),
+    });
+  }
   text('Version Date: 1-Nov-2022', 80, 40, 8.5);
   text('Page 1 of 1', 530 - arial.widthOfTextAtSize('Page 1 of 1', 8.5), 40, 8.5);
   return doc.save();
@@ -167,14 +195,23 @@ export function cocProductLine(p: { product: string; lot: string | null; quantit
   return [p.product, p.lot ? `Lot ${p.lot}` : null].filter(Boolean).join(' - ') + (qty ? `, ${qty}` : '');
 }
 
+export interface CocShipment {
+  coc_no: string | null; customer_name: string | null; ship_to: string | null; carrier: string | null; tracking_no: string | null;
+  coc_ship_date: string | null; coc_vehicle_ok: boolean; coc_vehicle_note: string | null; coc_temperature: string;
+  coc_departure_time: string | null; coc_signature: string | null; coc_signer_name: string | null;
+}
+
 /** The CoC of a shipment, from its work order lines (which know the SKU size). */
 export function cocDataFor(
-  s: { coc_no: string | null; customer_name: string | null; ship_to: string | null; carrier: string | null },
+  s: CocShipment,
   lines: Array<{ product_name: string; lot_no: string | null; final_quantity: number | null; po_quantity: number | null; sku_size_g: number | null }>,
-  shipDate: string,
+  fallbackDate: string,
 ): CocData {
   return {
-    cocNo: s.coc_no ?? 'COC-', shipDate, customer: s.customer_name, shipTo: s.ship_to, carrier: s.carrier,
+    cocNo: s.coc_no ?? 'COC-', shipDate: s.coc_ship_date ?? fallbackDate, customer: s.customer_name, shipTo: s.ship_to,
+    carrier: s.carrier, trackingNo: s.tracking_no,
+    vehicleOk: s.coc_vehicle_ok, vehicleNote: s.coc_vehicle_note, temperature: s.coc_temperature,
+    departureTime: s.coc_departure_time, signature: s.coc_signature, signerName: s.coc_signer_name,
     products: lines.filter((l) => l.product_name).map((l) => cocProductLine({
       product: l.product_name, lot: l.lot_no, quantity: l.final_quantity ?? l.po_quantity, sku_size_g: l.sku_size_g,
     })),

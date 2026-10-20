@@ -1,0 +1,275 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frEnvois, enEnvois } from '../../../../i18n/portail/envois';
+import { fmtDateTime, todayLocal } from '../../../../lib/production';
+import { loadSwo, staffDirectory } from '../../../../lib/production-swo';
+import { COC_SIGNERS, isCocSigner, loadShipment } from '../../../../lib/shipments';
+import { cocProductLine } from '../../../../lib/coc';
+
+// QA verifies the Chain of Custody and signs it (Stéphane by default, or
+// Jacob under his own name), as the R&D forms are verified and signed.
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frEnvois, enEnvois);
+const admin = getAdminClient();
+
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/envois');
+const s = await loadShipment(admin, id);
+if (!s) return Astro.redirect('/portail/envois');
+if (!s.coc_no) return Astro.redirect(`/portail/envois/${id}#coc`);
+if (s.coc_signed_at) return Astro.redirect(`/portail/envois/${id}#coc`);
+
+const [swo, people, mine] = await Promise.all([
+  loadSwo(admin, s.swo_id), staffDirectory(admin),
+  admin.from('staff').select('saved_signature').eq('id', staff.id).maybeSingle(),
+]);
+const savedSignature: string | null = mine.data?.saved_signature ?? null;
+const signers = COC_SIGNERS.map((e) => ({ email: e, name: people.find((p) => p.email.toLowerCase() === e)?.full_name ?? e }));
+const canSign = isCocSigner(staff.email);
+// The form opens on the person signed in when they can sign, Stéphane otherwise.
+const defaultSigner = canSign ? staff.email.toLowerCase() : COC_SIGNERS[0];
+const products = (swo?.lines ?? []).filter((l) => l.product_name).map((l) => cocProductLine({
+  product: l.product_name, lot: l.lot_no, quantity: l.final_quantity ?? l.po_quantity, sku_size_g: l.sku_size_g,
+}));
+const shipDate = s.coc_ship_date ?? todayLocal();
+const strings = {
+  sending: T('coc.sig.sending'), generic: T('coc.err.generic'), conflict: T('coc.err.conflict'),
+  already: T('coc.err.already_signed'), departure: T('coc.err.departure_time'), vehicle: T('coc.err.vehicle_note'),
+  other: T('coc.signer.other'),
+};
+---
+<PortailLayout title={`${s.coc_no} — ${T('coc.title')}`} staffName={staff.full_name}>
+  <p style="margin-bottom: 10px;"><a href={`/portail/envois/${s.id}#coc`} class="back">← {s.shipment_no}</a></p>
+  <h1>{T('coc.verifyTitle')}</h1>
+  <p class="lead">{T('coc.subtitle')}</p>
+
+  <div class="card">
+    <div class="coc-head">
+      <div>
+        <p class="no">{s.coc_no} · {s.shipment_no}</p>
+        <h2 style="margin: 2px 0 0;">{s.customer_name ?? '—'}</h2>
+      </div>
+      <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{T('coc.btn.draftPdf')}</a>
+    </div>
+
+    <dl class="facts">
+      <dt>{T('coc.f.shipTo')}</dt>
+      <dd class="pre">{s.ship_to ?? '—'} <a href={`/portail/envois/${s.id}#reserver`} class="small">{T('coc.editOnTicket')}</a></dd>
+      <dt>{T('coc.f.courier')}</dt>
+      <dd>{[s.carrier, s.tracking_no ? `Tracking # ${s.tracking_no}` : null].filter(Boolean).join(' - ') || '—'} <a href={`/portail/envois/${s.id}#reserver`} class="small">{T('coc.editOnTicket')}</a></dd>
+      <dt>{T('coc.f.products')}</dt>
+      <dd><ul class="products">{products.map((p) => <li>{p}</li>)}</ul></dd>
+    </dl>
+
+    <div class="two-col">
+      <div class="form-row">
+        <label for="c-date">{T('coc.f.shipDate')}</label>
+        <input type="date" id="c-date" value={shipDate} required />
+      </div>
+      <div class="form-row">
+        <label for="c-time">{T('coc.f.departure')} <em class="req">*</em></label>
+        <input type="time" id="c-time" value={s.coc_departure_time ?? ''} required />
+        <p class="hint">{T('coc.f.departure.hint')}</p>
+      </div>
+    </div>
+    <div class="form-row">
+      <span class="lbl">{T('coc.f.vehicle')}</span>
+      <div class="radio-group">
+        <label><input type="radio" name="vehicle" value="yes" checked={s.coc_vehicle_ok} /> {T('coc.f.yes')}</label>
+        <label><input type="radio" name="vehicle" value="no" checked={!s.coc_vehicle_ok} /> {T('coc.f.no')}</label>
+      </div>
+      <p class="hint">{T('coc.f.vehicle.hint')}</p>
+      <input type="text" id="c-vnote" placeholder={T('coc.f.vehicleNote')} value={s.coc_vehicle_note ?? ''} hidden={s.coc_vehicle_ok} style="margin-top: 8px;" />
+    </div>
+    <div class="form-row">
+      <label for="c-temp">{T('coc.f.temperature')}</label>
+      <input type="text" id="c-temp" value={s.coc_temperature || 'N/A'} />
+      <p class="hint">{T('coc.f.temperature.hint')}</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 18px;">
+    {!canSign ? <p class="warn-banner" style="margin: 0;">{T('coc.notSigner')}</p> : (
+      <>
+        <div class="form-row">
+          <label for="c-signer">{T('coc.signer')}</label>
+          <select id="c-signer">
+            {signers.map((x) => <option value={x.email} selected={x.email === defaultSigner}>{x.name}</option>)}
+          </select>
+          <p class="hint">{T('coc.signer.hint')}</p>
+          <p class="warn-banner signer-warn" hidden style="margin-top: 8px;"></p>
+        </div>
+
+        <h2>{T('coc.sig.title')}</h2>
+        <div class="sig-tabs" role="tablist">
+          <button type="button" class="sig-tab active" data-method="draw">{T('coc.sig.draw')}</button>
+          <button type="button" class="sig-tab" data-method="type">{T('coc.sig.type')}</button>
+          <button type="button" class="sig-tab" data-method="upload">{T('coc.sig.upload')}</button>
+        </div>
+        <p class="hint sig-panel" data-panel="draw">{T('coc.sig.drawHint')}</p>
+        <div class="sig-panel" data-panel="type" hidden>
+          <p class="hint">{T('coc.sig.typeHint')}</p>
+          <input type="text" id="type-input" placeholder={staff.full_name} autocomplete="name" />
+        </div>
+        <div class="sig-panel" data-panel="upload" hidden>
+          <p class="hint">{T('coc.sig.uploadHint')}</p>
+          <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" />
+        </div>
+        <div class="pad-wrap"><canvas id="sig-pad"></canvas></div>
+        {savedSignature && <p class="hint" style="margin-top: 8px;">{T('coc.sig.saved')}</p>}
+        <div class="sig-actions">
+          <button type="button" id="btn-clear" class="btn btn-secondary">{T('coc.sig.clear')}</button>
+          <button type="button" id="btn-submit" class="btn btn-primary" disabled>{T('coc.sig.submit')}</button>
+          <label class="save"><input type="checkbox" id="save-sig" checked={!savedSignature} /> {T('coc.sig.save')}</label>
+          <span id="status" class="muted small"></span>
+        </div>
+        <div id="flash" style="margin-top: 12px;"></div>
+      </>
+    )}
+  </div>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet" />
+
+  <script is:inline define:vars={{ shipmentId: s.id, version: s.version, me: staff.email.toLowerCase(), savedSig: canSign ? savedSignature : null, signers, strings }}>
+    (function () {
+      const canvas = document.getElementById('sig-pad');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const btnSubmit = document.getElementById('btn-submit');
+      const statusEl = document.getElementById('status');
+      const flashEl = document.getElementById('flash');
+      const signerSel = document.getElementById('c-signer');
+      const warn = document.querySelector('.signer-warn');
+      const typeInput = document.getElementById('type-input');
+      const uploadInput = document.getElementById('upload-input');
+      const vnote = document.getElementById('c-vnote');
+      let W = 0, H = 0, method = 'draw', has = false, drawing = false, last = null;
+
+      const flash = (msg) => { flashEl.innerHTML = '<div class="flash flash-error"></div>'; flashEl.firstChild.textContent = msg; };
+      const canSubmit = () => { btnSubmit.disabled = !has || signerSel.value !== me; };
+      function setup() {
+        const r = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
+        W = r.width; H = r.height; canvas.width = W * dpr; canvas.height = H * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+        ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+      }
+      function clear() { setup(); has = false; canSubmit(); flashEl.innerHTML = ''; }
+      function drawImage(src) {
+        const img = new Image();
+        img.onload = () => {
+          clear(); const k = Math.min(W / img.width, H / img.height) * 0.92;
+          ctx.drawImage(img, (W - img.width * k) / 2, (H - img.height * k) / 2, img.width * k, img.height * k);
+          has = true; canSubmit();
+        };
+        img.src = src;
+      }
+      setup();
+      if (savedSig) drawImage(savedSig);
+
+      const pt = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+      canvas.addEventListener('pointerdown', (e) => { if (method !== 'draw') return; e.preventDefault(); drawing = true; last = pt(e); });
+      canvas.addEventListener('pointermove', (e) => {
+        if (!drawing) return; e.preventDefault();
+        const p = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; has = true; canSubmit();
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => canvas.addEventListener(ev, () => { drawing = false; }));
+
+      typeInput.addEventListener('input', () => {
+        clear(); const t = typeInput.value.trim(); if (!t) return;
+        let size = 64; ctx.fillStyle = '#111'; ctx.textBaseline = 'middle';
+        do { ctx.font = `600 ${size}px 'Dancing Script', 'Segoe Script', cursive`; size -= 4; } while (ctx.measureText(t).width > W - 40 && size > 20);
+        ctx.fillText(t, (W - ctx.measureText(t).width) / 2, H / 2); has = true; canSubmit();
+      });
+      uploadInput.addEventListener('change', () => {
+        const f = uploadInput.files && uploadInput.files[0]; if (!f) return;
+        if (f.size > 4 * 1024 * 1024) { flash(strings.generic); return; }
+        const rd = new FileReader(); rd.onload = (ev) => drawImage(ev.target.result); rd.readAsDataURL(f);
+      });
+      document.querySelectorAll('.sig-tab').forEach((tab) => tab.addEventListener('click', () => {
+        method = tab.dataset.method;
+        document.querySelectorAll('.sig-tab').forEach((t) => t.classList.toggle('active', t === tab));
+        document.querySelectorAll('.sig-panel').forEach((p) => { p.hidden = p.dataset.panel !== method; });
+        canvas.style.cursor = method === 'draw' ? 'crosshair' : 'default';
+        clear();
+      }));
+      document.getElementById('btn-clear').addEventListener('click', () => { clear(); typeInput.value = ''; uploadInput.value = ''; });
+
+      // Each person signs under their own name only.
+      function checkSigner() {
+        const chosen = signers.find((x) => x.email === signerSel.value);
+        const other = signerSel.value !== me;
+        warn.hidden = !other;
+        if (other) warn.textContent = strings.other.replace('{name}', chosen ? chosen.name : '');
+        canSubmit();
+      }
+      signerSel.addEventListener('change', checkSigner);
+      checkSigner();
+
+      document.querySelectorAll('input[name="vehicle"]').forEach((r) => r.addEventListener('change', () => {
+        vnote.hidden = document.querySelector('input[name="vehicle"]:checked').value !== 'no';
+      }));
+
+      btnSubmit.addEventListener('click', async () => {
+        const time = document.getElementById('c-time').value;
+        const vehicleOk = document.querySelector('input[name="vehicle"]:checked').value === 'yes';
+        if (!time) { flash(strings.departure); document.getElementById('c-time').focus(); return; }
+        if (!vehicleOk && !vnote.value.trim()) { flash(strings.vehicle); vnote.focus(); return; }
+        btnSubmit.disabled = true; statusEl.textContent = strings.sending; flashEl.innerHTML = '';
+        try {
+          const res = await fetch(`/api/portail/envois/${shipmentId}/coc-sign`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              version, signature: canvas.toDataURL('image/png'), save_signature: document.getElementById('save-sig').checked,
+              ship_date: document.getElementById('c-date').value, departure_time: time, vehicle_ok: vehicleOk,
+              vehicle_note: vnote.value, temperature: document.getElementById('c-temp').value,
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || body.error) {
+            statusEl.textContent = '';
+            flash(body.error === 'conflict' ? strings.conflict : body.error === 'already_signed' ? strings.already
+              : body.error === 'departure_time' ? strings.departure : body.error === 'vehicle_note' ? strings.vehicle : strings.generic);
+            canSubmit();
+            return;
+          }
+          window.location.href = `/portail/envois/${shipmentId}?ok=coc_signed#coc`;
+        } catch (e) {
+          statusEl.textContent = ''; flash(strings.generic); canSubmit();
+        }
+      });
+    })();
+  </script>
+</PortailLayout>
+
+<style>
+  .back { color: var(--p-muted); font-size: .88rem; text-decoration: none; }
+  .lead { color: var(--p-muted); font-size: .92rem; margin: -2px 0 16px; max-width: 75ch; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .82rem; }
+  .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
+  .coc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; font-size: .92rem; margin-bottom: 18px; }
+  .facts dt { color: var(--p-muted); }
+  .pre { white-space: pre-line; }
+  .products { margin: 0; padding-left: 18px; }
+  .req { color: var(--p-danger); font-style: normal; }
+  .lbl { display: block; font-weight: 500; font-size: .88rem; margin-bottom: 6px; }
+  .sig-tabs { display: flex; gap: 4px; margin: 4px 0 10px; border-bottom: 1px solid var(--p-border); }
+  .sig-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font: inherit; font-size: .9rem; font-weight: 500; color: var(--p-muted); cursor: pointer; margin-bottom: -1px; }
+  .sig-tab.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  .sig-panel { margin-bottom: 10px; }
+  .pad-wrap { border: 2px dashed var(--p-border); border-radius: 8px; background: #fafbfc; touch-action: none; }
+  #sig-pad { display: block; width: 100%; height: 180px; cursor: crosshair; }
+  .sig-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap; }
+  .save { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--p-muted); font-weight: 400; margin: 0 0 0 6px; cursor: pointer; }
+</style>

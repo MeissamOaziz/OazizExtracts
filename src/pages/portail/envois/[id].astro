@@ -9,7 +9,7 @@ import type { Permission } from '../../../lib/access';
 import { fmtDateTime, fmtQty } from '../../../lib/production';
 import { poLabel } from '../../../lib/production-requests';
 import { loadSwo, staffDirectory } from '../../../lib/production-swo';
-import { LABEL_READY_NOTIFY, loadShipment, loadShipmentEvents, shipmentSummary } from '../../../lib/shipments';
+import { LABEL_READY_NOTIFY, isCocSigner, isOcs, loadShipment, loadShipmentEvents, shipmentSummary } from '../../../lib/shipments';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -20,6 +20,7 @@ const K = (k: string) => k as keyof EnvoisDict;
 const admin = getAdminClient();
 const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Permission>();
 const booker = perms.has('shipping');
+const cocSigner = isCocSigner(staff.email);
 
 const id = Astro.params.id ?? '';
 if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/envois');
@@ -63,7 +64,7 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
     <div class="head-actions">
       {swo && <a class="btn btn-secondary" href={`/portail/production/expeditions/${swo.id}`}>{T('link.swo').replace('{no}', swo.swo_no)}</a>}
       {swo && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('link.packingList')}</a>}
-      {s.coc_no && <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{T('link.coc')}</a>}
+      {s.coc_signed_at && <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{T('link.coc')}</a>}
       {s.tracking_url && <a class="btn btn-secondary" href={s.tracking_url} target="_blank" rel="noopener noreferrer">{T('link.track')}</a>}
     </div>
   </div>
@@ -185,6 +186,37 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
     </section>
   </div>
 
+  {!isOcs(s.customer_name) && (
+    <section class="card coc-card" id="coc" style="margin-top: 18px;">
+      <div class="coc-row">
+        <div>
+          <h2 style="margin-bottom: 4px;">{T('coc.title')}{s.coc_no && <span class="muted small"> · {s.coc_no}</span>}</h2>
+          {!s.coc_no ? <p class="small muted">{T('coc.none')}</p>
+            : s.coc_signed_at ? <p class="coc-ok">{T('coc.status.signed').replace('{name}', s.coc_signer_name ?? '—').replace('{date}', fmtDateTime(s.coc_signed_at, locale))}</p>
+            : <p class="coc-todo">{T('coc.status.draft')}</p>}
+        </div>
+        {s.coc_no && (
+          <div class="head-actions">
+            {!s.coc_signed_at && cocSigner && s.status !== 'cancelled' && <a class="btn btn-primary" href={`/portail/envois/${s.id}/coc`}>{T('coc.btn.verify')}</a>}
+            <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{s.coc_signed_at ? T('coc.btn.pdf') : T('coc.btn.draftPdf')}</a>
+          </div>
+        )}
+      </div>
+      {s.coc_signed_at && (cocSigner || booker) && (
+        <details class="stop">
+          <summary>{T('coc.btn.reopen')}</summary>
+          <form method="POST" action="/api/portail/envois" class="details-body">
+            <input type="hidden" name="_action" value="coc_reopen" />
+            <input type="hidden" name="id" value={s.id} />
+            <p class="hint" style="margin: 0 0 8px;">{T('coc.reopen.hint')}</p>
+            <div class="form-row"><input type="text" name="reason" required placeholder={T('coc.reopen.reason')} aria-label={T('coc.reopen.reason')} /></div>
+            <button type="submit" class="btn btn-secondary">{T('coc.btn.reopen')}</button>
+          </form>
+        </details>
+      )}
+    </section>
+  )}
+
   <section class="card" style="margin-top: 18px;">
     <h2>{T('history')}</h2>
     <ol class="history">
@@ -263,6 +295,9 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
   .ev-head .when { margin-left: auto; }
   .ev-note { font-size: .86rem; font-style: italic; margin: 3px 0; }
   .stop { margin-top: 14px; }
+  .coc-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .coc-ok { color: var(--p-success); font-weight: 500; font-size: .9rem; }
+  .coc-todo { color: #c2410c; font-weight: 600; font-size: .9rem; }
 </style>
 
 <script>

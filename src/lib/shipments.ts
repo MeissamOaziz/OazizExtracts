@@ -16,6 +16,10 @@ export const OPEN_SHIPMENT_STATUSES: readonly ShipmentStatus[] = ['to_book', 'bo
 
 /** QA & Logistics: who gets the label, packing list and CoC once the label is ready. */
 export const LABEL_READY_NOTIFY = ['jacobp@oaziz.ca', 'stephane@oaziz.ca', 'meissam@oaziz.ca'];
+/** Who verifies and signs the Chain of Custody: Stéphane (QA) by default, or Jacob under his own name. */
+export const COC_SIGNERS = ['stephane@oaziz.ca', 'jacobp@oaziz.ca'];
+export const isCocSigner = (email: string | null | undefined) => COC_SIGNERS.includes((email ?? '').toLowerCase());
+
 /** From this many boxes on, a shipment defaults to a pallet. */
 export const PALLET_FROM_BOXES = 10;
 
@@ -30,6 +34,9 @@ export interface Shipment {
   label_paths: string[]; notes: string | null; version: number;
   coc_no: string | null; ship_to_source: 'quickbooks' | 'po' | 'manual' | null;
   label_ready_by: string | null;
+  coc_ship_date: string | null; coc_vehicle_ok: boolean; coc_vehicle_note: string | null; coc_temperature: string;
+  coc_departure_time: string | null; coc_signed_at: string | null; coc_signed_by: string | null;
+  coc_signer_name: string | null; coc_signature: string | null;
   created_at: string; booked_at: string | null; label_ready_at: string | null; shipped_at: string | null;
   cancelled_at: string | null; cancel_reason: string | null;
 }
