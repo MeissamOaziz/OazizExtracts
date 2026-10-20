@@ -1392,3 +1392,66 @@ export function sendSwoCompletedCopy(n: SwoEmail) {
     `La commande est préparée. Le bon de travail d'expédition complété est joint (version saisie et photo de la feuille remplie à la main), pour la réservation du transport.`,
     'Voir dans le portail');
 }
+
+// ============================================================
+// Vendor file returned for changes — an approver put the VQ on hold (awaiting
+// feedback) or rejected it. The supplier gets the reason and a private link
+// that reopens their form, filled in, to correct and resubmit. Bilingual like
+// every vendor email. Never sent from a dev server.
+// ============================================================
+
+export interface VendorChangesRequestedEmail {
+  toEmails: string[];
+  companyName: string;
+  decision: 'feedback' | 'rejected';
+  reason: string;
+  editUrl: string;
+}
+
+export async function sendVendorChangesRequested(
+  n: VendorChangesRequestedEmail,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[vendor-changes-email] dev server: not sending to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_dev' };
+  }
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) return { status: 'skipped_no_key' };
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const reason = escapeHtml(n.reason).replace(/\n/g, '<br/>');
+  const box = (label: string) => `<div style="margin:12px 0 4px;padding:12px 14px;background:#fdf6f1;border-left:3px solid ${OAZIZ_ORANGE};border-radius:6px;font-size:14px;color:#1a1d24;"><div style="font-size:11px;font-weight:700;color:#8a8f9c;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">${label}</div>${reason}</div>`;
+  const rejected = n.decision === 'rejected';
+  const company = escapeHtml(n.companyName);
+
+  const html = renderVendorEmailShell({
+    preheaderFr: rejected ? `Votre dossier fournisseur ${n.companyName} n’a pas été approuvé.` : `Des informations sont requises pour compléter votre dossier fournisseur ${n.companyName}.`,
+    preheaderEn: rejected ? `Your vendor file ${n.companyName} was not approved.` : `More information is needed to complete your vendor file ${n.companyName}.`,
+    headingFr: rejected ? 'Votre dossier fournisseur n’a pas été approuvé' : 'Informations requises pour votre dossier fournisseur',
+    headingEn: rejected ? 'Your vendor file was not approved' : 'Information needed for your vendor file',
+    introFr: `${rejected
+      ? `Après révision, le dossier de qualification fournisseur de <strong>${company}</strong> n’a pas été approuvé, pour la raison suivante :`
+      : `Avant d’approuver le dossier de qualification fournisseur de <strong>${company}</strong>, notre équipe a besoin de ce qui suit :`}${box('Commentaire d’Oaziz')}Vous pouvez corriger ou compléter votre formulaire avec le lien ci-dessous — vos renseignements déjà saisis sont conservés — puis le soumettre de nouveau pour approbation.`,
+    introEn: `${rejected
+      ? `After review, the vendor qualification file for <strong>${company}</strong> was not approved, for the following reason:`
+      : `Before approving the vendor qualification file for <strong>${company}</strong>, our team needs the following:`}${box('Comment from Oaziz')}You can correct or complete your form with the link below — everything you entered is kept — then submit it again for approval.`,
+    ctaLabelFr: 'Mettre à jour mon dossier',
+    ctaLabelEn: 'Update my file',
+    ctaUrl: n.editUrl,
+    fallbackNoteFr: 'Ce lien est personnel à votre entreprise. Pour toute question, répondez simplement à ce courriel.',
+    fallbackNoteEn: 'This link is specific to your company. For any question, simply reply to this email.',
+  });
+
+  const subject = rejected
+    ? `Oaziz Extracts — Dossier fournisseur non approuvé / Vendor file not approved — ${n.companyName}`
+    : `Oaziz Extracts — Informations requises / Information needed — ${n.companyName}`;
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: n.toEmails, replyTo, subject, html });
+    if (error) { console.error('[vendor-changes-email] Resend error:', error); return { status: 'error', detail: error.message }; }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[vendor-changes-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}

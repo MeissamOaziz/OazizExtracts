@@ -20,8 +20,18 @@ const { data: submission } = await admin
   .from('vendor_submissions')
   .select('*')
   .eq('resume_token_hash', sha256Hex(token))
-  .eq('status', 'draft')
+  .in('status', ['draft', 'submitted'])
   .maybeSingle();
+
+// A submitted file opened with a token was sent back by Oaziz: show why.
+const returned = submission?.status === 'submitted';
+let comments: Array<{ decision: string; note: string }> = [];
+if (returned) {
+  const { data } = await admin.from('vendor_submission_approvals')
+    .select('decision, decision_note').eq('vendor_submission_id', submission.id)
+    .in('decision', ['feedback', 'rejected']);
+  comments = (data ?? []).filter((c) => c.decision_note).map((c) => ({ decision: c.decision, note: c.decision_note }));
+}
 
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
@@ -47,8 +57,16 @@ const errorMessages: Record<string, string> = {
     </div>
   ) : (
     <>
-      <h1>{T('resumeHeading')}</h1>
-      <p style="color: var(--p-muted); margin-bottom: 24px;">{T('resumeIntro')}</p>
+      <h1>{returned ? T('returned.heading') : T('resumeHeading')}</h1>
+      <p style="color: var(--p-muted); margin-bottom: 24px;">{returned ? T('returned.intro') : T('resumeIntro')}</p>
+      {returned && comments.length > 0 && (
+        <div class="card" style="margin-bottom: 20px; border-left: 3px solid #d05826;">
+          <strong>{T('returned.comments')}</strong>
+          <ul style="margin: 8px 0 0 18px;">
+            {comments.map((c) => <li style="white-space: pre-line; margin-bottom: 4px;">{c.note}</li>)}
+          </ul>
+        </div>
+      )}
 
       {info === 'draft_saved' && (
         <div class="flash flash-success">

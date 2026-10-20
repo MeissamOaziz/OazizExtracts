@@ -38,6 +38,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const admin = getAdminClient();
 
   // If resuming, verify the (submission_id, resume_token) pair before touching anything.
+  // A submitted file carries a token only while Oaziz has sent it back for
+  // changes (on hold or rejected): the supplier corrects it and submits again.
   let existing: Record<string, any> | null = null;
   if (existingSubmissionId && resumeToken) {
     const { data } = await admin
@@ -45,7 +47,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       .select('*')
       .eq('id', existingSubmissionId)
       .eq('resume_token_hash', sha256Hex(resumeToken))
-      .eq('status', 'draft')
+      .in('status', ['draft', 'submitted'])
       .maybeSingle();
     if (!data) return redirect('/fournisseurs?error=unknown', 303);
     existing = data;
@@ -330,6 +332,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   } catch (e) {
     console.error('[vendor-submit] file upload failed:', e);
     return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, 'unknown'), 303);
+  }
+
+  // A file sent back for changes and submitted again: every approver reviews
+  // it anew (their earlier decisions stay in the history).
+  if (existing?.status === 'submitted') {
+    await admin.from('vendor_submission_events').insert({ vendor_submission_id: submissionId, decision: 'resubmitted' });
   }
 
   const { data: approverStaff } = await admin

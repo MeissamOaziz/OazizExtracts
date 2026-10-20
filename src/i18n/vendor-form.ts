@@ -138,6 +138,9 @@ export const frVendorForm = {
   copiedLink: 'Copié ✓',
 
   'resumeHeading': 'Continuer un dossier en cours',
+  'returned.heading': 'Mettre à jour votre dossier fournisseur',
+  'returned.intro': 'Oaziz vous a renvoyé votre dossier pour qu’il soit corrigé ou complété. Vos renseignements sont pré-remplis : apportez les changements demandés, puis soumettez de nouveau.',
+  'returned.comments': 'Commentaires d’Oaziz',
   'resumeIntro': 'Vos renseignements précédemment enregistrés sont pré-remplis ci-dessous.',
   'shared.title': 'Formulaire partagé',
   'shared.with': 'Cette invitation a été envoyée à :',
@@ -286,6 +289,9 @@ export const enVendorForm: Partial<Record<keyof VendorFormDict, string>> = {
   copiedLink: 'Copied ✓',
 
   'resumeHeading': 'Resume your submission',
+  'returned.heading': 'Update your vendor file',
+  'returned.intro': 'Oaziz sent your file back to be corrected or completed. Your information is filled in below: make the requested changes, then submit again.',
+  'returned.comments': 'Comments from Oaziz',
   'resumeIntro': 'Your previously saved information is pre-filled below.',
   'shared.title': 'Shared form',
   'shared.with': 'This invitation was sent to:',

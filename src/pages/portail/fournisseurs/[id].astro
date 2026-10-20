@@ -51,11 +51,14 @@ const fileState: 'rejected' | 'feedback' | 'approved' | 'pending' =
 
 const { data: eventRows } = await admin
   .from('vendor_submission_events')
-  .select('id, at, decision, note, staff:staff_id ( full_name )')
+  .select('id, at, decision, note, supplier_notified_to, staff:staff_id ( full_name )')
   .eq('vendor_submission_id', id)
   .order('at', { ascending: false });
-const history = (eventRows ?? []) as unknown as Array<{ id: number; at: string; decision: Decision; note: string | null; staff: { full_name: string } | null }>;
-const decisionBadge: Record<string, string> = { approved: 'badge-complete', feedback: 'badge-signing', rejected: 'badge-cancelled' };
+const history = (eventRows ?? []) as unknown as Array<{
+  id: number; at: string; decision: Decision | 'resubmitted'; note: string | null;
+  supplier_notified_to: string[] | null; staff: { full_name: string } | null;
+}>;
+const decisionBadge: Record<string, string> = { approved: 'badge-complete', feedback: 'badge-signing', rejected: 'badge-cancelled', resubmitted: 'badge-sent' };
 
 // QuickBooks card: for the accountants (Payments access) once the VQ is submitted.
 const accountant = !!Astro.locals.access?.perms?.has('payables');
@@ -178,6 +181,8 @@ function telHref(phone: string, ext?: string | null): string {
   </div>
 
   {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
+  {url.searchParams.get('notified') === '1' && <div class="flash flash-success">{T('info.notified')}</div>}
+  {url.searchParams.get('notified') === '0' && <div class="flash flash-error">{T('error.notify_failed')}</div>}
   {errCode === 'qb' && <div class="flash flash-error">{T('qb.err').replace('{msg}', url.searchParams.get('msg') ?? '')}</div>}
   {errCode === 'qb_forbidden' && <div class="flash flash-error">{T('qb.err.forbidden')}</div>}
   {errCode && !errCode.startsWith('qb') && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
@@ -218,6 +223,7 @@ function telHref(phone: string, ext?: string | null): string {
                   <summary>{a.decision ? T('decide.change') : T('decide.title')}</summary>
                   <form method="POST" action={`/api/portail/vendor-submissions/${id}/approve`} class="decide-form">
                     <textarea name="note" rows="2" placeholder={T('decide.notePlaceholder')} aria-label={T('decide.note')}>{a.decision !== 'approved' ? a.decision_note ?? '' : ''}</textarea>
+                    <label class="notify"><input type="checkbox" name="notify" value="1" checked /> {T('decide.notify')}</label>
                     <div class="decide-btns">
                       <button type="submit" name="decision" value="approved" class="btn btn-primary">{T('approveBtn')}</button>
                       <button type="submit" name="decision" value="feedback" class="btn btn-secondary" data-needs-note>{T('decide.feedback')}</button>
@@ -239,8 +245,9 @@ function telHref(phone: string, ext?: string | null): string {
           {history.map((h) => (
             <li>
               <span class={`badge ${decisionBadge[h.decision]}`}>{T(`decision.${h.decision}` as keyof typeof frFournisseursDetail)}</span>
-              <strong>{h.staff?.full_name ?? '—'}</strong> <span class="hint">{fmtDate(h.at)}</span>
+              <strong>{h.staff?.full_name ?? (h.decision === 'resubmitted' ? submission.company_name : '—')}</strong> <span class="hint">{fmtDate(h.at)}</span>
               {h.note && <div class="decision-note">{h.note}</div>}
+              {h.supplier_notified_to?.length ? <div class="decision-note">{T('history.notified').replace('{list}', h.supplier_notified_to.join(', '))}</div> : null}
             </li>
           ))}
         </ol>
@@ -531,6 +538,7 @@ function telHref(phone: string, ext?: string | null): string {
   .decide summary { justify-content: flex-end; }
   .decide-form { margin-top: 8px; }
   .decide-form textarea { font-size: .86rem; }
+  .notify { display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: .82rem; margin: 6px 0 0; justify-content: flex-end; }
   .decide-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; justify-content: flex-end; }
   .decide-btns .btn { font-size: .82rem; padding: 6px 12px; }
   .vq-history { margin-top: 14px; }

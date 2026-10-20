@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
+import { sendVendorChangesRequested } from '../../../../../lib/email';
+import { mintToken } from '../../../../../lib/tokens';
+import { contactEmails, type VendorSubmission } from '../../../../../lib/vendor-qbo';
 
 export const prerender = false;
 
@@ -27,6 +30,7 @@ export const POST: APIRoute = async ({ params, cookies, request, redirect }) => 
   const raw = String(form.get('decision') ?? 'approved');
   const decision: Decision = (DECISIONS as readonly string[]).includes(raw) ? (raw as Decision) : 'approved';
   const note = String(form.get('note') ?? '').trim() || null;
+  const notify = decision !== 'approved' && form.get('notify') === '1';
   if (decision !== 'approved' && !note) return back('error=note_required');
 
   const admin = getAdminClient();
@@ -38,8 +42,8 @@ export const POST: APIRoute = async ({ params, cookies, request, redirect }) => 
     .maybeSingle();
   if (!approval) return back('error=not_approver');
 
-  // Same decision and same reason: nothing to record.
-  if (approval.decision === decision && (decision === 'approved' || approval.decision_note === note)) {
+  // Same decision and same reason (and no email asked): nothing to record.
+  if (!notify && approval.decision === decision && (decision === 'approved' || approval.decision_note === note)) {
     return back(`info=${decision}`);
   }
 
@@ -55,9 +59,32 @@ export const POST: APIRoute = async ({ params, cookies, request, redirect }) => 
     console.error('[vendor-approve] update failed:', error);
     return back('error=unknown');
   }
+  // Tell the supplier, with the reason and a private link that reopens their
+  // form (filled in) so they can correct it and submit it again.
+  let notifiedTo: string[] | null = null;
+  if (notify) {
+    const { data: sub } = await admin.from('vendor_submissions').select('*').eq('id', id).maybeSingle();
+    const to = sub ? contactEmails(sub as VendorSubmission) : [];
+    if (sub && to.length) {
+      const { raw, hash } = mintToken();
+      const { error: tokErr } = await admin.from('vendor_submissions').update({ resume_token_hash: hash }).eq('id', id);
+      if (tokErr) {
+        console.error('[vendor-approve] edit link failed:', tokErr);
+      } else {
+        const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://www.oaziz.ca').replace(/\/$/, '');
+        const res = await sendVendorChangesRequested({
+          toEmails: to, companyName: sub.company_name, decision: decision as 'feedback' | 'rejected',
+          reason: note ?? '', editUrl: `${siteUrl}/fournisseurs/brouillon/${raw}`,
+        });
+        if (res.status === 'sent' || res.status === 'skipped_dev') notifiedTo = to;
+        else console.error('[vendor-approve] supplier email not sent:', res);
+      }
+    }
+  }
+
   const { error: evErr } = await admin.from('vendor_submission_events')
-    .insert({ vendor_submission_id: id, staff_id: staff.id, decision, note });
+    .insert({ vendor_submission_id: id, staff_id: staff.id, decision, note, supplier_notified_to: notifiedTo });
   if (evErr) console.error('[vendor-approve] history insert failed:', evErr);
 
-  return back(`info=${decision}`);
+  return back(`info=${decision}${notify ? (notifiedTo ? '&notified=1' : '&notified=0') : ''}`);
 };
