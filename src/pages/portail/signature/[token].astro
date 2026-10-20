@@ -9,7 +9,13 @@ import DocConsent from '../../../components/portail/DocConsent.astro';
 import type {
   SubmissionForRender, StaffLite, DocumentEntry, RndRatings,
 } from '../../../lib/portail-types';
-import { fmtDateFr, RATING_KEYS, RATING_LABELS } from '../../../lib/portail-types';
+import { fmtDateFr, RATING_KEYS } from '../../../lib/portail-types';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frSigner, enSigner, type SignerDict } from '../../../i18n/portail/signer';
+
+// The page follows the FR/EN switch; the documents themselves stay in French.
+const T = makeT(getPortailLocale(Astro.cookies), frSigner, enSigner);
+const K = (k: string) => k as keyof SignerDict;
 
 const { token } = Astro.params;
 const raw = (token ?? '').trim();
@@ -19,9 +25,9 @@ const { data: ctx, error } = await supabase.rpc('get_signer_context', { raw_toke
 if (error) console.error('get_signer_context error:', error);
 
 const kindLabel: Record<string, string> = {
-  sample_request: "Demande d'échantillon",
-  rnd: 'Formulaire R&D (F2-PRO-013/04)',
-  consent: 'Formulaire de consentement éclairé',
+  sample_request: T('kind.sample_request'),
+  rnd: T('kind.rnd'),
+  consent: T('kind.consent'),
 };
 
 type Ctx = {
@@ -56,9 +62,15 @@ const invalid = !ctx || (ctx as any).error;
 const ctxTyped = invalid ? null : (ctx as Ctx);
 const errorCode: string | null = ctx && (ctx as any).error ? (ctx as any).error : (!ctx ? 'not_found' : null);
 const errorMessages: Record<string, string> = {
-  not_found: 'Ce lien de signature est invalide.',
-  expired: 'Ce lien de signature a expiré. Contactez Oaziz Extracts pour en obtenir un nouveau.',
-  already_signed: 'Ce lien a déjà été utilisé — merci !',
+  not_found: T('invalid.not_found'),
+  expired: T('invalid.expired'),
+  already_signed: T('invalid.already_signed'),
+};
+// Texts the page script writes on the fly.
+const msgs = {
+  view: T('viewDocument'), hide: T('hideDocument'), tooLarge: T('errorImageTooLargeMax'), unreadable: T('errorImageRead'),
+  sending: T('statusSending'), expired: T('errorExpired'), already: T('errorAlreadySigned'), generic: T('errorGeneric'),
+  network: T('errorNetwork'), thanks: T('successThanks'),
 };
 
 // Show the R&D evaluation card only when this token includes a
@@ -79,11 +91,11 @@ const qaPrefill = {
   rnd_qa_comments: ctxTyped?.submission.rnd_qa_comments ?? '',
 };
 ---
-<PortailLayout title="Signature" minimal>
+<PortailLayout title={T('tokenHeading')} minimal>
   {invalid ? (
     <div style="max-width: 520px; margin: 40px auto;">
       <div class="card">
-        <h1>Lien invalide</h1>
+        <h1>{T('invalidHeading')}</h1>
         <p style="color: var(--p-muted); margin-top: 8px;">
           {errorMessages[errorCode ?? 'not_found']}
         </p>
@@ -92,9 +104,9 @@ const qaPrefill = {
   ) : (
     <div style="max-width: 840px; margin: 0 auto;">
       <div class="card" style="margin-bottom: 16px;">
-        <h1 style="margin-bottom: 6px;">Signature requise</h1>
+        <h1 style="margin-bottom: 6px;">{T('tokenHeading')}</h1>
         <p style="color: var(--p-muted); font-size: .95rem;">
-          Bonjour <strong>{ctxTyped!.signer.name.split(' ')[0]}</strong>, merci de signer {ctxTyped!.documents.length > 1 ? 'les documents suivants' : 'le document suivant'}.
+          {T('greetingHello')} <strong>{ctxTyped!.signer.name.split(' ')[0]}</strong>, {ctxTyped!.documents.length > 1 ? T('greetingMultiple') : T('greetingSingle')}.
         </p>
         <div style="margin-top: 14px; color: var(--p-muted); font-size: .88rem;">
           <strong style="color: var(--p-text);">{ctxTyped!.submission.product_name}</strong> · {ctxTyped!.submission.product_type} · {fmtDateFr(ctxTyped!.submission.form_date)}
@@ -102,17 +114,17 @@ const qaPrefill = {
       </div>
 
       <div class="card" style="margin-bottom: 16px;">
-        <h2>Documents à signer</h2>
+        <h2>{T('documentsHeading')}</h2>
         <ul style="margin-top: 12px; padding-left: 0; list-style: none;">
           {ctxTyped!.documents.map((doc, idx) => (
             <li style="margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--p-border); border-radius: 6px;">
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                 <div>
                   <strong>{kindLabel[doc.kind] ?? doc.kind}</strong>
-                  {doc.participant && <span style="color: var(--p-muted);"> — pour {doc.participant.name}</span>}
+                  {doc.participant && <span style="color: var(--p-muted);"> — {T('signedFor')} {doc.participant.name}</span>}
                 </div>
                 <button type="button" class="btn btn-secondary doc-toggle" data-target={`doc-preview-${idx}`} style="font-size: .82rem; padding: 5px 12px;">
-                  Voir le document
+                  {T('viewDocument')}
                 </button>
               </div>
               <div id={`doc-preview-${idx}`} class="doc-preview" style="display: none; margin-top: 14px;">
@@ -136,49 +148,45 @@ const qaPrefill = {
           ))}
         </ul>
         <p class="hint" style="margin-top: 6px;">
-          En signant ci-dessous, votre signature sera apposée sur {ctxTyped!.documents.length > 1 ? 'chacun de ces documents' : 'ce document'}.
+          {ctxTyped!.documents.length > 1 ? T('signHintMultiple') : T('signHintSingle')}
         </p>
       </div>
 
       {needsQaVerification && (
         <div class="card" id="qa-verif-card" style="margin-bottom: 16px;">
-          <h2>Vérification AQ — Destruction</h2>
-          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">
-            À remplir avant de signer. Ces champs seront apposés sur tous les formulaires R&D.
-          </p>
+          <h2>{T('qaHeading')}</h2>
+          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">{T('qaHint')}</p>
           <div class="form-row">
-            <label for="qa-destruction-id">ID de destruction</label>
-            <input type="text" id="qa-destruction-id" required maxlength="200" placeholder="ex: DEST-2026-0042" value={qaPrefill.rnd_destruction_id} />
+            <label for="qa-destruction-id">{T('qaDestructionIdLabel')}</label>
+            <input type="text" id="qa-destruction-id" required maxlength="200" placeholder={T('qaDestructionIdPlaceholder')} value={qaPrefill.rnd_destruction_id} />
           </div>
           <div class="form-row">
-            <label for="qa-qty-destroyed">Quantité de cannabis détruite (en g)</label>
-            <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder="ex: 5 g" value={qaPrefill.rnd_qty_destroyed} />
+            <label for="qa-qty-destroyed">{T('qaQtyDestroyedLabel')}</label>
+            <input type="text" id="qa-qty-destroyed" required maxlength="100" placeholder={T('qaQtyDestroyedPlaceholder')} value={qaPrefill.rnd_qty_destroyed} />
           </div>
           <div class="form-row">
-            <label for="qa-date-destroyed">Date de destruction</label>
+            <label for="qa-date-destroyed">{T('qaDateDestroyedLabel')}</label>
             <input type="date" id="qa-date-destroyed" required value={qaPrefill.rnd_date_destroyed} />
           </div>
           <div class="form-row">
-            <label for="qa-comments">Commentaire de l'AQ (optionnel)</label>
-            <textarea id="qa-comments" rows="3" placeholder="Vos observations ou remarques sur ce formulaire…" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{qaPrefill.rnd_qa_comments}</textarea>
-            <div class="hint">Affiché sur le document final, juste au-dessus de votre signature.</div>
+            <label for="qa-comments">{T('qaCommentsLabel')}</label>
+            <textarea id="qa-comments" rows="3" placeholder={T('qaCommentsPlaceholder')} style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{qaPrefill.rnd_qa_comments}</textarea>
+            <div class="hint">{T('qaCommentsHint')}</div>
           </div>
           <div id="qa-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
-            Veuillez remplir les trois champs de destruction avant de signer.
+            {T('qaErrorMissing')}
           </div>
         </div>
       )}
 
       {needsRndEval && (
         <div class="card" id="rnd-eval-card" style="margin-bottom: 16px;">
-          <h2>Votre évaluation R&D</h2>
-          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">
-            Notez le produit selon vos observations (obligatoire pour signer).
-          </p>
+          <h2>{T('evalHeading')}</h2>
+          <p class="hint" style="margin-top: 4px; margin-bottom: 14px;">{T('evalHint')}</p>
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr>
-                <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">Critère</th>
+                <th style="text-align:left;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;">{T('evalCriterionHeader')}</th>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <th style="text-align:center;padding:4px 6px;font-size:.85rem;color:var(--p-muted);font-weight:600;width:56px;">{n}</th>
                 ))}
@@ -187,7 +195,7 @@ const qaPrefill = {
             <tbody>
               {RATING_KEYS.map((k) => (
                 <tr>
-                  <td style="padding:8px 6px;font-size:.92rem;">{RATING_LABELS[k]}</td>
+                  <td style="padding:8px 6px;font-size:.92rem;">{T(K(`rating.${k}`))}</td>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <td style="text-align:center;padding:8px 6px;">
                       <input
@@ -204,35 +212,35 @@ const qaPrefill = {
             </tbody>
           </table>
           <div class="form-row" style="margin-top: 16px;">
-            <label for="rnd-comments">Rétroaction / Commentaires</label>
-            <textarea id="rnd-comments" rows="4" placeholder="Vos observations sur le produit (odeur, goût, texture, effet…)" style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
+            <label for="rnd-comments">{T('commentsLabel')}</label>
+            <textarea id="rnd-comments" rows="4" placeholder={T('commentsPlaceholderLong')} style="width:100%;padding:9px 12px;border:1px solid var(--p-border);border-radius:6px;font-family:inherit;font-size:.95rem;resize:vertical;">{prefill.rnd_comments ?? ''}</textarea>
           </div>
           <div id="rnd-eval-error" style="color: var(--p-danger); font-size: .85rem; margin-top: 4px; display: none;">
-            Veuillez noter chaque critère avant de signer.
+            {T('evalErrorMissing')}
           </div>
         </div>
       )}
 
       <div class="card">
-        <h2>Votre signature</h2>
+        <h2>{T('signatureHeading')}</h2>
 
         <div class="sig-tabs" role="tablist" style="display: flex; gap: 4px; margin: 12px 0 14px; border-bottom: 1px solid var(--p-border);">
-          <button type="button" class="sig-tab active" role="tab" data-method="draw">Dessiner</button>
-          <button type="button" class="sig-tab" role="tab" data-method="type">Taper</button>
-          <button type="button" class="sig-tab" role="tab" data-method="upload">Téléverser</button>
+          <button type="button" class="sig-tab active" role="tab" data-method="draw">{T('tabDraw')}</button>
+          <button type="button" class="sig-tab" role="tab" data-method="type">{T('tabType')}</button>
+          <button type="button" class="sig-tab" role="tab" data-method="upload">{T('tabUpload')}</button>
         </div>
 
         <div class="sig-panel" data-panel="draw">
-          <p class="hint" style="margin-bottom: 10px;">Dessinez ci-dessous avec la souris ou le doigt.</p>
+          <p class="hint" style="margin-bottom: 10px;">{T('drawHint')}</p>
         </div>
 
         <div class="sig-panel" data-panel="type" style="display: none;">
-          <p class="hint" style="margin-bottom: 10px;">Tapez votre nom complet. Il sera rendu dans une police manuscrite.</p>
+          <p class="hint" style="margin-bottom: 10px;">{T('typeHintLong')}</p>
           <input type="text" id="type-input" placeholder={ctxTyped!.signer.name} style="margin-bottom: 12px;" autocomplete="name" />
         </div>
 
         <div class="sig-panel" data-panel="upload" style="display: none;">
-          <p class="hint" style="margin-bottom: 10px;">Téléversez une image de votre signature (PNG, JPG). Fond blanc idéal.</p>
+          <p class="hint" style="margin-bottom: 10px;">{T('uploadHintLong')}</p>
           <input type="file" id="upload-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: 12px;" />
         </div>
 
@@ -242,16 +250,16 @@ const qaPrefill = {
 
         {ctxTyped!.signer.saved_signature && (
           <p class="hint" style="margin-top: 10px;">
-            ✓ Votre signature enregistrée précédemment est déjà chargée. Cliquez « Effacer » pour en dessiner une nouvelle.
+            {T('savedSigLoadedLong')}
           </p>
         )}
 
         <div style="display: flex; gap: 10px; margin-top: 14px; align-items: center; flex-wrap: wrap;">
-          <button type="button" id="btn-clear" class="btn btn-secondary">Effacer</button>
-          <button type="button" id="btn-submit" class="btn btn-primary" disabled>Signer et envoyer</button>
+          <button type="button" id="btn-clear" class="btn btn-secondary">{T('btnClear')}</button>
+          <button type="button" id="btn-submit" class="btn btn-primary" disabled>{T('btnSubmit')}</button>
           <label style="display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--p-muted);margin-left:6px;cursor:pointer;">
             <input type="checkbox" id="save-sig-checkbox" checked={!ctxTyped!.signer.saved_signature} />
-            <span>Enregistrer ma signature pour la prochaine fois</span>
+            <span>{T('saveSigCheckbox')}</span>
           </label>
           <span id="pad-status" style="color: var(--p-muted); font-size: .85rem; margin-left: auto;"></span>
         </div>
@@ -276,7 +284,7 @@ const qaPrefill = {
       @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
     </style>
 
-    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval, needsQaVerification, savedSig: ctxTyped!.signer.saved_signature }}>
+    <script is:inline define:vars={{ tokenRaw: raw, needsRndEval, needsQaVerification, savedSig: ctxTyped!.signer.saved_signature, msgs }}>
       (function () {
         const canvas = document.getElementById('sig-pad');
         const ctx2d = canvas.getContext('2d');
@@ -301,6 +309,7 @@ const qaPrefill = {
         let padW = 0, padH = 0;
         let method = 'draw';
         let hasSignature = false;
+        let restoredSig = false; // set when a FR/EN switch brought a signature back
 
         function resizeCanvas() {
           const rect = canvas.getBoundingClientRect();
@@ -324,6 +333,7 @@ const qaPrefill = {
           if (!savedSig) return;
           const img = new Image();
           img.onload = function () {
+            if (restoredSig) return;
             const ratio = Math.min(padW / img.width, padH / img.height) * 0.92;
             const w = img.width * ratio;
             const h = img.height * ratio;
@@ -401,7 +411,7 @@ const qaPrefill = {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
           if (file.size > 4 * 1024 * 1024) {
-            flashEl.innerHTML = '<div class="flash flash-error">Image trop volumineuse (max 4 Mo).</div>';
+            flashEl.innerHTML = '<div class="flash flash-error">' + msgs.tooLarge + '</div>';
             return;
           }
           const reader = new FileReader();
@@ -419,7 +429,7 @@ const qaPrefill = {
               btnSubmit.disabled = false;
             };
             img.onerror = () => {
-              flashEl.innerHTML = '<div class="flash flash-error">Impossible de lire l\'image.</div>';
+              flashEl.innerHTML = '<div class="flash flash-error">' + msgs.unreadable + '</div>';
             };
             img.src = ev.target.result;
           };
@@ -447,9 +457,56 @@ const qaPrefill = {
             if (!target) return;
             const open = target.style.display !== 'none';
             target.style.display = open ? 'none' : 'block';
-            btn.textContent = open ? 'Voir le document' : 'Masquer';
+            btn.textContent = open ? msgs.view : msgs.hide;
           });
         });
+
+        // Switching FR/EN reloads the page: keep what was entered (ratings,
+        // comments, QA fields, the signature drawn or typed) across the reload.
+        const draftKey = 'sig-draft:' + tokenRaw;
+        function fieldEls() {
+          return Array.from(document.querySelectorAll('#rnd-eval-card input[type="radio"], #rnd-comments, #qa-verif-card input, #qa-verif-card textarea, #type-input, #save-sig-checkbox'));
+        }
+        document.querySelectorAll('a[data-set-locale]').forEach((link) => {
+          link.addEventListener('click', () => {
+            try {
+              const fields = {};
+              fieldEls().forEach((el) => {
+                const key = el.type === 'radio' ? el.name + '=' + el.value : el.id;
+                fields[key] = (el.type === 'radio' || el.type === 'checkbox') ? el.checked : el.value;
+              });
+              sessionStorage.setItem(draftKey, JSON.stringify({
+                fields, method, signature: hasSignature ? canvas.toDataURL('image/png') : null,
+              }));
+            } catch (e) { /* storage unavailable: nothing to keep */ }
+          });
+        });
+        (function restoreDraft() {
+          let saved = null;
+          try { saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null'); sessionStorage.removeItem(draftKey); } catch (e) {}
+          if (!saved) return;
+          fieldEls().forEach((el) => {
+            const key = el.type === 'radio' ? el.name + '=' + el.value : el.id;
+            if (!(key in saved.fields)) return;
+            if (el.type === 'radio' || el.type === 'checkbox') el.checked = !!saved.fields[key];
+            else el.value = saved.fields[key];
+          });
+          if (saved.method && saved.method !== 'draw') {
+            const tab = tabs.find((t) => t.getAttribute('data-method') === saved.method);
+            if (tab) tab.click();
+          }
+          if (saved.signature) {
+            restoredSig = true;
+            const img = new Image();
+            img.onload = function () {
+              clearCanvas();
+              ctx2d.drawImage(img, 0, 0, padW, padH);
+              hasSignature = true;
+              btnSubmit.disabled = false;
+            };
+            img.src = saved.signature;
+          }
+        })();
 
         btnClear.addEventListener('click', () => {
           clearCanvas();
@@ -498,7 +555,7 @@ const qaPrefill = {
           }
 
           btnSubmit.disabled = true;
-          statusEl.textContent = 'Envoi en cours…';
+          statusEl.textContent = msgs.sending;
           const dataUrl = canvas.toDataURL('image/png');
           const saveSig = !!(saveSigCheckbox && saveSigCheckbox.checked);
           try {
@@ -519,18 +576,18 @@ const qaPrefill = {
             const body = await res.json();
             if (!res.ok || body.error) {
               statusEl.textContent = '';
-              flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'expired' ? 'Ce lien a expiré.' : body.error === 'already_signed' ? 'Déjà signé.' : 'Erreur — réessayez.') + '</div>';
+              flashEl.innerHTML = '<div class="flash flash-error">' + (body.error === 'expired' ? msgs.expired : body.error === 'already_signed' ? msgs.already : msgs.generic) + '</div>';
               btnSubmit.disabled = false;
               return;
             }
             statusEl.textContent = '';
-            flashEl.innerHTML = '<div class="flash flash-success">Merci ! Votre signature a été enregistrée.</div>';
+            flashEl.innerHTML = '<div class="flash flash-success">' + msgs.thanks + '</div>';
             canvas.style.pointerEvents = 'none';
             document.getElementById('pad-wrap').style.opacity = '0.6';
             btnClear.disabled = true;
           } catch (e) {
             statusEl.textContent = '';
-            flashEl.innerHTML = '<div class="flash flash-error">Erreur réseau — réessayez.</div>';
+            flashEl.innerHTML = '<div class="flash flash-error">' + msgs.network + '</div>';
             btnSubmit.disabled = false;
           }
         });
