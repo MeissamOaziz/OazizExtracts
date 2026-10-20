@@ -94,7 +94,7 @@ const { count: pendingApprovalsCount } = await getAdminClient()
   .from('vendor_submission_approvals')
   .select('id', { count: 'exact', head: true })
   .eq('staff_id', staff.id)
-  .is('approved_at', null);
+  .is('decision', null);
 
 // hr_employee_packages is RLS-denied to all client roles (admin-only, same
 // pattern as the others), so this needs the admin client.

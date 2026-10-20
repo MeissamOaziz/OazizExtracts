@@ -32,13 +32,30 @@ const isDraft = submission.status !== 'submitted';
 
 const { data: approvalRows } = await admin
   .from('vendor_submission_approvals')
-  .select('id, staff_id, approved_at, staff:staff_id ( full_name, email )')
+  .select('id, staff_id, approved_at, decision, decision_note, decided_at, staff:staff_id ( full_name, email )')
   .eq('vendor_submission_id', id)
   .order('created_at');
 
-type ApprovalRow = { id: string; staff_id: string; approved_at: string | null; staff: { full_name: string; email: string } | null };
+type Decision = 'approved' | 'feedback' | 'rejected';
+type ApprovalRow = {
+  id: string; staff_id: string; approved_at: string | null; decision: Decision | null; decision_note: string | null;
+  decided_at: string | null; staff: { full_name: string; email: string } | null;
+};
 const approvals = (approvalRows ?? []) as unknown as ApprovalRow[];
 const fullyApproved = approvals.length > 0 && approvals.every((a) => !!a.approved_at);
+// The file's state: any rejection wins, then any request for feedback.
+const rejected = approvals.filter((a) => a.decision === 'rejected');
+const onHold = approvals.filter((a) => a.decision === 'feedback');
+const fileState: 'rejected' | 'feedback' | 'approved' | 'pending' =
+  rejected.length ? 'rejected' : onHold.length ? 'feedback' : fullyApproved ? 'approved' : 'pending';
+
+const { data: eventRows } = await admin
+  .from('vendor_submission_events')
+  .select('id, at, decision, note, staff:staff_id ( full_name )')
+  .eq('vendor_submission_id', id)
+  .order('at', { ascending: false });
+const history = (eventRows ?? []) as unknown as Array<{ id: number; at: string; decision: Decision; note: string | null; staff: { full_name: string } | null }>;
+const decisionBadge: Record<string, string> = { approved: 'badge-complete', feedback: 'badge-signing', rejected: 'badge-cancelled' };
 
 // QuickBooks card: for the accountants (Payments access) once the VQ is submitted.
 const accountant = !!Astro.locals.access?.perms?.has('payables');
@@ -72,9 +89,10 @@ const fmtAddr = (a: { Line1: string; City: string; CountrySubDivisionCode: strin
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
 const errCode = url.searchParams.get('error');
-const infoMessages: Record<string, string> = { approved: T('info.approved'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked'), qb_completed: T('qb.ok.completed') };
+const infoMessages: Record<string, string> = { approved: T('info.approved'), feedback: T('info.feedback'), rejected: T('info.rejected'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked'), qb_completed: T('qb.ok.completed') };
 const errorMessages: Record<string, string> = {
   not_approver: T('error.not_approver'),
+  note_required: T('error.note_required'),
   unknown: T('error.unknown'),
 };
 
@@ -154,7 +172,9 @@ function telHref(phone: string, ext?: string | null): string {
       <h1 style="margin-bottom: 4px;">{submission.company_name}</h1>
       <p style="color: var(--p-muted);">{T('submittedOn')} {fmtDate(submission.submitted_at)}</p>
     </div>
-    {fullyApproved && <span class="badge badge-complete">{T('fullyApprovedBanner')}</span>}
+    {fileState === 'approved' && <span class="badge badge-complete">{T('fullyApprovedBanner')}</span>}
+    {fileState === 'rejected' && <span class="badge badge-cancelled">{T('state.rejected')}</span>}
+    {fileState === 'feedback' && <span class="badge badge-signing">{T('state.feedback')}</span>}
   </div>
 
   {info && infoMessages[info] && <div class="flash flash-success">{infoMessages[info]}</div>}
@@ -167,38 +187,65 @@ function telHref(phone: string, ext?: string | null): string {
   )}
 
   {!isDraft && <>
-  <div class="card" style="margin-bottom: 20px;">
+  <div class="card" id="approbations" style="margin-bottom: 20px;">
     <h2>{T('section.approvals')}</h2>
     <p class="hint" style="margin: 4px 0 14px;">{T('approvals.intro')}</p>
+    {(rejected.length > 0 || onHold.length > 0) && (
+      <div class={rejected.length ? 'flash flash-error' : 'warn-banner'}>
+        {[...rejected, ...onHold].map((a) => (
+          <div><strong>{a.staff?.full_name ?? '—'}</strong> — {T(`decision.${a.decision}` as keyof typeof frFournisseursDetail)} : {a.decision_note}</div>
+        ))}
+      </div>
+    )}
     <table class="data">
       <thead>
-        <tr><th>{T('th.approver')}</th><th>{T('th.status')}</th><th>{T('th.approvedOn')}</th><th></th></tr>
+        <tr><th>{T('th.approver')}</th><th>{T('th.status')}</th><th>{T('th.decidedOn')}</th><th></th></tr>
       </thead>
       <tbody>
         {approvals.map((a) => (
           <tr>
             <td>{a.staff?.full_name ?? '—'}</td>
             <td>
-              <span class={`badge ${a.approved_at ? 'badge-complete' : 'badge-sent'}`}>
-                {a.approved_at ? T('approvedPill') : T('pendingPill')}
+              <span class={`badge ${a.decision ? decisionBadge[a.decision] : 'badge-sent'}`}>
+                {a.decision ? T(`decision.${a.decision}` as keyof typeof frFournisseursDetail) : T('pendingPill')}
               </span>
+              {a.decision_note && <div class="decision-note">{a.decision_note}</div>}
             </td>
-            <td>{a.approved_at ? fmtDate(a.approved_at) : '—'}</td>
+            <td>{a.decided_at ? fmtDate(a.decided_at) : '—'}</td>
             <td style="text-align: right;">
               {a.staff_id === staff.id && (
-                a.approved_at ? (
-                  <span style="color: var(--p-muted); font-size: .82rem;">{T('yourApprovalDone')}</span>
-                ) : (
-                  <form method="POST" action={`/api/portail/vendor-submissions/${id}/approve`} style="margin: 0;">
-                    <button type="submit" class="btn btn-primary" style="font-size: .82rem; padding: 6px 14px;">{T('approveBtn')}</button>
+                <details class="decide" open={!a.decision}>
+                  <summary>{a.decision ? T('decide.change') : T('decide.title')}</summary>
+                  <form method="POST" action={`/api/portail/vendor-submissions/${id}/approve`} class="decide-form">
+                    <textarea name="note" rows="2" placeholder={T('decide.notePlaceholder')} aria-label={T('decide.note')}>{a.decision !== 'approved' ? a.decision_note ?? '' : ''}</textarea>
+                    <div class="decide-btns">
+                      <button type="submit" name="decision" value="approved" class="btn btn-primary">{T('approveBtn')}</button>
+                      <button type="submit" name="decision" value="feedback" class="btn btn-secondary" data-needs-note>{T('decide.feedback')}</button>
+                      <button type="submit" name="decision" value="rejected" class="btn btn-danger" data-needs-note>{T('decide.reject')}</button>
+                    </div>
+                    <p class="hint">{T('decide.hint')}</p>
                   </form>
-                )
+                </details>
               )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+    {history.length > 0 && (
+      <details class="vq-history">
+        <summary>{T('history.title')} ({history.length})</summary>
+        <ol>
+          {history.map((h) => (
+            <li>
+              <span class={`badge ${decisionBadge[h.decision]}`}>{T(`decision.${h.decision}` as keyof typeof frFournisseursDetail)}</span>
+              <strong>{h.staff?.full_name ?? '—'}</strong> <span class="hint">{fmtDate(h.at)}</span>
+              {h.note && <div class="decision-note">{h.note}</div>}
+            </li>
+          ))}
+        </ol>
+      </details>
+    )}
   </div>
 
   {showQb && (
@@ -247,7 +294,8 @@ function telHref(phone: string, ext?: string | null): string {
       ) : (
         <>
           <p class="hint" style="margin: -4px 0 12px;">{T('qb.intro')}</p>
-          {!fullyApproved && <div class="warn-banner">{T('qb.pending').replace('{n}', String(approvedCount)).replace('{total}', String(approvals.length))}</div>}
+          {fileState === 'rejected' && <div class="flash flash-error">{T('qb.rejected')}</div>}
+          {fileState !== 'rejected' && !fullyApproved && <div class="warn-banner">{T('qb.pending').replace('{n}', String(approvedCount)).replace('{total}', String(approvals.length))}</div>}
 
           <h3 class="qb-h">{T('qb.similar')}</h3>
           {similar.length === 0 ? <p class="hint">{T('qb.similar.none')}</p> : (
@@ -315,7 +363,7 @@ function telHref(phone: string, ext?: string | null): string {
             <div class="form-row"><label for="qb-bank">{T('qb.f.bank')}</label>
               <input type="text" id="qb-bank" name="bank_acct" value={preview.bankAcct ?? ''} maxlength="100" />
               <p class="hint">{T('qb.f.bank.hint')}</p></div>
-            <button type="submit" class="btn btn-primary" style="margin-top: 12px;">{T('qb.create')}</button>
+            <button type="submit" class="btn btn-primary" style="margin-top: 12px;" disabled={fileState === 'rejected'}>{T('qb.create')}</button>
           </form>
         </>
       )}
@@ -478,6 +526,17 @@ function telHref(phone: string, ext?: string | null): string {
 
 <style>
   .qb-h { font-size: .92rem; font-weight: 600; margin: 16px 0 8px; }
+  .decision-note { font-size: .82rem; color: var(--p-muted); margin-top: 4px; white-space: pre-line; max-width: 46ch; }
+  .decide { text-align: left; display: inline-block; min-width: 320px; }
+  .decide summary { justify-content: flex-end; }
+  .decide-form { margin-top: 8px; }
+  .decide-form textarea { font-size: .86rem; }
+  .decide-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; justify-content: flex-end; }
+  .decide-btns .btn { font-size: .82rem; padding: 6px 12px; }
+  .vq-history { margin-top: 14px; }
+  .vq-history ol { list-style: none; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .vq-history li { font-size: .88rem; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .vq-history li .decision-note { flex-basis: 100%; }
   .qb-table th { width: 260px; }
   .qb-table th, .qb-table td { padding: 8px 12px; }
   .qb-done { font-weight: 600; color: var(--p-success); }
@@ -494,6 +553,20 @@ function telHref(phone: string, ext?: string | null): string {
 </style>
 
 <script>
+  // Awaiting feedback and reject need a reason; approving does not.
+  document.querySelectorAll<HTMLFormElement>('form.decide-form').forEach((f) => {
+    f.addEventListener('submit', (e) => {
+      const btn = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+      const note = f.querySelector<HTMLTextAreaElement>('textarea[name="note"]')!;
+      if (btn?.hasAttribute('data-needs-note') && !note.value.trim()) {
+        e.preventDefault();
+        note.focus();
+        note.setCustomValidity(note.placeholder);
+        note.reportValidity();
+        note.addEventListener('input', () => note.setCustomValidity(''), { once: true });
+      }
+    });
+  });
   // Shipping fields only when the shipping address differs from billing.
   const same = document.querySelector<HTMLInputElement>('form.qb-create [name="ship_same"]');
   same?.addEventListener('change', () => {

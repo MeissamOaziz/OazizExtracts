@@ -37,6 +37,10 @@ export const POST: APIRoute = async ({ params, request, cookies, redirect, local
   }
   // Already done (a double click, or a colleague): never make a second vendor.
   if (sub.qbo_vendor_id) return back('');
+  // A file an approver rejected is not a supplier.
+  const { count: rejectedCount } = await admin.from('vendor_submission_approvals')
+    .select('id', { count: 'exact', head: true }).eq('vendor_submission_id', id).eq('decision', 'rejected');
+  if (rejectedCount) return back(`error=qb&msg=${encodeURIComponent('dossier rejeté')}`);
   const vendorId = String(form.get('vendor_id') ?? '').trim();
   if (action === 'link' && !/^\d+$/.test(vendorId)) return back('');
   if (action !== 'link' && action !== 'create') return back('');

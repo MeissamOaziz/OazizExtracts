@@ -27,21 +27,23 @@ const { data: submissions } = await admin
   .limit(100);
 
 const submissionIds = (submissions ?? []).map((s) => s.id);
-type ApprovalRow = { vendor_submission_id: string; approved_at: string | null };
+type ApprovalRow = { vendor_submission_id: string; approved_at: string | null; decision: string | null };
 let approvalRows: ApprovalRow[] = [];
 if (submissionIds.length > 0) {
   const { data } = await admin
     .from('vendor_submission_approvals')
-    .select('vendor_submission_id, approved_at')
+    .select('vendor_submission_id, approved_at, decision')
     .in('vendor_submission_id', submissionIds);
   approvalRows = (data ?? []) as ApprovalRow[];
 }
 
-const approvalsBySubmission = new Map<string, { approved: number; total: number }>();
+const approvalsBySubmission = new Map<string, { approved: number; total: number; feedback: number; rejected: number }>();
 for (const row of approvalRows) {
-  const cur = approvalsBySubmission.get(row.vendor_submission_id) ?? { approved: 0, total: 0 };
+  const cur = approvalsBySubmission.get(row.vendor_submission_id) ?? { approved: 0, total: 0, feedback: 0, rejected: 0 };
   cur.total += 1;
   if (row.approved_at) cur.approved += 1;
+  if (row.decision === 'feedback') cur.feedback += 1;
+  if (row.decision === 'rejected') cur.rejected += 1;
   approvalsBySubmission.set(row.vendor_submission_id, cur);
 }
 
@@ -194,8 +196,11 @@ const errorMessages: Record<string, string> = {
         </thead>
         <tbody>
           {submissions.map((s) => {
-            const a = approvalsBySubmission.get(s.id) ?? { approved: 0, total: 0 };
+            const a = approvalsBySubmission.get(s.id) ?? { approved: 0, total: 0, feedback: 0, rejected: 0 };
             const fullyApproved = a.total > 0 && a.approved === a.total;
+            // Any rejection wins, then any request for feedback.
+            const state = a.rejected ? 'rejected' : a.feedback ? 'feedback' : fullyApproved ? 'approved' : 'pending';
+            const badge = { rejected: 'badge-cancelled', feedback: 'badge-signing', approved: 'badge-complete', pending: 'badge-sent' }[state];
             return (
               <tr>
                 <td>{formatDate(s.submitted_at)}</td>
@@ -203,9 +208,7 @@ const errorMessages: Record<string, string> = {
                 <td>{s.contact_person || '—'}</td>
                 <td>{a.approved} / {a.total}</td>
                 <td>
-                  <span class={`badge ${fullyApproved ? 'badge-complete' : 'badge-sent'}`}>
-                    {fullyApproved ? T('status.approved') : T('status.pending')}
-                  </span>
+                  <span class={`badge ${badge}`}>{T(`status.${state}` as keyof typeof frFournisseursIndex)}</span>
                 </td>
                 <td style="text-align: right;"><a href={`/portail/fournisseurs/${s.id}`} style="font-size: .85rem;">{T('openLink')}</a></td>
               </tr>

@@ -42,6 +42,8 @@ export const frFournisseursIndex = {
 
   'status.approved': 'Approuvé',
   'status.pending': 'En attente',
+  'status.feedback': 'En attente de feedback',
+  'status.rejected': 'Rejeté',
 
   openLink: 'Ouvrir →',
 } as const;
@@ -92,6 +94,8 @@ export const enFournisseursIndex: Partial<Record<keyof FournisseursIndexDict, st
 
   'status.approved': 'Approved',
   'status.pending': 'Pending',
+  'status.feedback': 'Awaiting feedback',
+  'status.rejected': 'Rejected',
 
   openLink: 'Open →',
 };
