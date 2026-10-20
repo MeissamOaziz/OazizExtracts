@@ -8,13 +8,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { effectivePermissions } from './access';
 import { todayLocal } from './production';
 import type { Swo } from './production-swo';
+import { qboShipTo } from './qbo-customers';
 
 export const SHIPMENT_STATUSES = ['to_book', 'booked', 'label_ready', 'shipped', 'cancelled'] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 export const OPEN_SHIPMENT_STATUSES: readonly ShipmentStatus[] = ['to_book', 'booked', 'label_ready'];
 
-/** Who hears that the label is ready (the person who ships the order). */
-export const LABEL_READY_NOTIFY = ['jacobp@oaziz.ca'];
+/** QA & Logistics: who gets the label, packing list and CoC once the label is ready. */
+export const LABEL_READY_NOTIFY = ['jacobp@oaziz.ca', 'stephane@oaziz.ca', 'meissam@oaziz.ca'];
 /** From this many boxes on, a shipment defaults to a pallet. */
 export const PALLET_FROM_BOXES = 10;
 
@@ -27,6 +28,8 @@ export interface Shipment {
   boxes: ShipmentBox[]; items: ShipmentItem[];
   carrier: string | null; tracking_no: string | null; tracking_url: string | null;
   label_paths: string[]; notes: string | null; version: number;
+  coc_no: string | null; ship_to_source: 'quickbooks' | 'po' | 'manual' | null;
+  label_ready_by: string | null;
   created_at: string; booked_at: string | null; label_ready_at: string | null; shipped_at: string | null;
   cancelled_at: string | null; cancel_reason: string | null;
 }
@@ -132,6 +135,41 @@ async function nextSeq(admin: SupabaseClient, year: number): Promise<number> {
 }
 
 /**
+ * Where to ship: the customer's address in QuickBooks when the customer is
+ * found there, otherwise what was read on the PO. A QuickBooks error never
+ * blocks the shipment — the PO address (or nothing) is used instead.
+ */
+export async function findShipTo(admin: SupabaseClient, swo: Pick<Swo, 'customer_name' | 'po_extraction'>):
+  Promise<{ ship_to: string | null; ship_to_source: 'quickbooks' | 'po' | null }> {
+  try {
+    const q = await qboShipTo(admin, swo.customer_name);
+    if (q) return { ship_to: q.address, ship_to_source: 'quickbooks' };
+  } catch (e) {
+    console.error('[shipments] QuickBooks ship-to lookup failed:', e);
+  }
+  const po = swo.po_extraction?.ship_to?.trim();
+  return po ? { ship_to: po, ship_to_source: 'po' } : { ship_to: null, ship_to_source: null };
+}
+
+/** Chain of Custody number, COC-YYYYMMDD-NNN, counted per day (compare-and-set). */
+export async function nextCocNo(admin: SupabaseClient, day: string): Promise<string> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data: ctr } = await admin.from('sh_coc_counters').select('last').eq('day', day).maybeSingle();
+    let n: number | null = null;
+    if (!ctr) {
+      const { error } = await admin.from('sh_coc_counters').insert({ day, last: 1 });
+      if (!error) n = 1;
+    } else {
+      const { data: upd } = await admin.from('sh_coc_counters')
+        .update({ last: ctr.last + 1 }).eq('day', day).eq('last', ctr.last).select('last');
+      if (upd && upd.length) n = ctr.last + 1;
+    }
+    if (n !== null) return `COC-${day.replace(/-/g, '')}-${String(n).padStart(3, '0')}`;
+  }
+  throw new Error('coc counter busy');
+}
+
+/**
  * Opens the shipment of a completed work order, or refreshes it from the work
  * order while it is still waiting to be booked (a work order can be corrected
  * and completed again). Returns the shipment and whether it is new.
@@ -153,9 +191,10 @@ export async function openShipmentForSwo(admin: SupabaseClient, staffId: string,
   const year = Number(todayLocal().slice(0, 4));
   const seq = await nextSeq(admin, year);
   const shipment_no = `EXP-${String(year % 100).padStart(2, '0')}-${String(seq).padStart(4, '0')}`;
+  const { ship_to, ship_to_source } = await findShipTo(admin, swo);
   const { data, error } = await admin.from('sh_shipments').insert({
     shipment_no, swo_id: swo.id, customer_name: swo.customer_name, customer_po: swo.customer_po,
-    ship_to: swo.po_extraction?.ship_to ?? null,
+    ship_to, ship_to_source,
     mode: defaultMode(swo.customer_name, boxes.length),
     boxes, items, created_by: staffId, updated_by: staffId,
   }).select('id').single();

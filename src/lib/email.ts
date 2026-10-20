@@ -1410,6 +1410,9 @@ export interface ShipmentEmail {
   carrier?: string | null;
   trackingNo?: string | null;
   trackingUrl?: string | null;
+  cocNo?: string | null;
+  /** Portal links listed under the intro (packing list, CoC…). */
+  links?: Array<{ label: string; url: string }>;
   attachments: Array<{ filename: string; content: Buffer }>;
 }
 
@@ -1430,7 +1433,9 @@ async function sendShipmentEmail(
     brandLine: 'Envois',
     badge,
     greeting: 'Bonjour,',
-    intro,
+    intro: intro + (n.links?.length
+      ? `<br/><br/>${n.links.map((l) => `&rarr; <a href="${escapeHtml(l.url)}" style="color:${OAZIZ_ORANGE_DEEP};">${escapeHtml(l.label)}</a>`).join('<br/>')}`
+      : ''),
     rows: [
       { label: 'Envoi', value: n.shipmentNo },
       ...(n.customer ? [{ label: 'Client', value: n.customer }] : []),
@@ -1440,6 +1445,7 @@ async function sendShipmentEmail(
       ...(n.carrier ? [{ label: 'Transporteur', value: n.carrier }] : []),
       ...(n.trackingNo ? [{ label: 'Suivi / BOL', value: n.trackingNo }] : []),
       ...(n.trackingUrl ? [{ label: 'Lien de suivi', value: n.trackingUrl }] : []),
+      ...(n.cocNo ? [{ label: 'Chain of Custody', value: n.cocNo }] : []),
       { label: 'Par', value: n.by },
     ],
     ctaLabel,
@@ -1467,8 +1473,9 @@ export function sendShipmentToBook(n: ShipmentEmail) {
 }
 
 export function sendShipmentLabelReady(n: ShipmentEmail) {
-  return sendShipmentEmail(n, `[Oaziz] Étiquette prête - ${shipmentRef(n)}`, 'Étiquette prête',
-    `Le transport est réservé : l'étiquette d'expédition est jointe. Imprimez-la et collez-la sur ${n.summary.toLowerCase().includes('palette') ? 'la palette' : 'les boîtes'}, puis marquez l'envoi comme expédié dans le portail une fois parti.`,
+  const onto = n.summary.toLowerCase().includes('palette') ? 'la palette' : 'les boîtes';
+  return sendShipmentEmail(n, `[Oaziz] Étiquette prête - ${shipmentRef(n)}`, 'Étiquette prête — QA et Logistique',
+    `Le transport est réservé. Sont joints : l'étiquette d'expédition (à imprimer et coller sur ${onto}), la liste d'emballage pré-remplie${n.cocNo ? ` et la Chain of Custody ${escapeHtml(n.cocNo)} (à imprimer, signer et envoyer au client, qui la signe à la réception et la retourne)` : ''}. Marquez l'envoi comme expédié dans le portail une fois parti.`,
     'Voir l’envoi');
 }
 

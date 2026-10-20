@@ -63,6 +63,7 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
     <div class="head-actions">
       {swo && <a class="btn btn-secondary" href={`/portail/production/expeditions/${swo.id}`}>{T('link.swo').replace('{no}', swo.swo_no)}</a>}
       {swo && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('link.packingList')}</a>}
+      {s.coc_no && <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{T('link.coc')}</a>}
       {s.tracking_url && <a class="btn btn-secondary" href={s.tracking_url} target="_blank" rel="noopener noreferrer">{T('link.track')}</a>}
     </div>
   </div>
@@ -105,9 +106,12 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
         <input type="hidden" name="version" value={String(s.version)} />
         <fieldset disabled={!editable}>
           <div class="form-row">
-            <label for="b-shipto">{T('f.shipTo')}</label>
-            <textarea id="b-shipto" name="ship_to" rows="2">{s.ship_to ?? ''}</textarea>
-            <p class="hint">{T('f.shipTo.hint')}</p>
+            <div class="label-row">
+              <label for="b-shipto">{T('f.shipTo')}</label>
+              {editable && <button type="submit" name="_action" value="qbo_ship_to" formnovalidate class="link-btn">{T('btn.qbo')}</button>}
+            </div>
+            <textarea id="b-shipto" name="ship_to" rows="3">{s.ship_to ?? ''}</textarea>
+            <p class="hint">{s.ship_to && s.ship_to_source ? T(K(`shipTo.src.${s.ship_to_source}`)) : T('f.shipTo.hint')}</p>
           </div>
           <div class="two-col">
             <div class="form-row">
@@ -233,6 +237,8 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
   .shipped { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--p-border); }
   fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   fieldset:disabled input, fieldset:disabled textarea { background: var(--p-bg); }
+  .label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .link-btn { background: none; border: 0; padding: 0; color: var(--p-accent); font: inherit; font-size: .84rem; cursor: pointer; text-decoration: underline; }
   .lbl { display: block; font-weight: 500; font-size: .88rem; margin-bottom: 6px; }
   .pallets { display: inline-flex; align-items: center; gap: 6px; }
   .pallets input { width: 70px; padding: 4px 8px; }

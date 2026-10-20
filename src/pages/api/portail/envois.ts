@@ -3,8 +3,13 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { sendShipmentLabelReady } from '../../../lib/email';
 import type { Permission } from '../../../lib/access';
 import {
-  LABEL_READY_NOTIFY, loadShipment, logShipment, shipmentSummary, type Shipment, type ShipmentBox,
+  LABEL_READY_NOTIFY, isOcs, loadShipment, logShipment, nextCocNo, shipmentSummary, type Shipment, type ShipmentBox,
 } from '../../../lib/shipments';
+import { qboShipTo } from '../../../lib/qbo-customers';
+import { loadSwo } from '../../../lib/production-swo';
+import { todayLocal } from '../../../lib/production';
+import { buildPackingList, packingListFilename } from '../../../lib/packing-list';
+import { buildCocPdf, cocDataFor, cocFilename } from '../../../lib/coc';
 
 export const prerender = false;
 
@@ -55,6 +60,25 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
   if (action !== 'shipped' && !booker) return page('error=forbidden');
   const now = new Date().toISOString();
 
+  // --------------------------------------------- ship-to from QuickBooks
+  if (action === 'qbo_ship_to') {
+    if (cur.status === 'cancelled' || cur.status === 'shipped') return page('error=state');
+    let found;
+    try {
+      found = await qboShipTo(admin, cur.customer_name);
+    } catch (e) {
+      console.error('[shipments] QuickBooks ship-to lookup failed:', e);
+      return page('error=qbo', '#reserver');
+    }
+    if (!found) return page('error=qbo_none', '#reserver');
+    const { error } = await admin.from('sh_shipments').update({
+      ship_to: found.address, ship_to_source: 'quickbooks', version: cur.version + 1, updated_by: staff.id, updated_at: now,
+    }).eq('id', id);
+    if (error) { console.error('[shipments] ship-to save failed:', error); return page('error=unknown', '#reserver'); }
+    await logShipment(admin, id, staff.id, 'ship_to_qbo', found.customer, { ship_to: { from: cur.ship_to, to: found.address } });
+    return page('ok=ship_to', '#reserver');
+  }
+
   // ------------------------------------------------- save / label ready
   if (action === 'save' || action === 'label_ready') {
     if (Number(str(form, 'version')) !== cur.version) return page('error=conflict');
@@ -90,8 +114,11 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
       return missing ? page(`error=${missing}`, '#reserver') : page('ok=nochange');
     }
 
+    // The Chain of Custody gets its number with the label (not for the OCS).
+    const cocNo = labelReady && !cur.coc_no && !isOcs(cur.customer_name) ? await nextCocNo(admin, todayLocal()) : cur.coc_no;
     const { data: upd, error } = await admin.from('sh_shipments').update({
-      ...f, label_paths: labelPaths, status,
+      ...f, label_paths: labelPaths, status, coc_no: cocNo,
+      ...(changes.ship_to ? { ship_to_source: f.ship_to ? 'manual' : null } : {}),
       ...(status !== cur.status && status === 'booked' ? { booked_at: now, booked_by: staff.id } : {}),
       ...(labelReady ? { label_ready_at: now, label_ready_by: staff.id, ...(cur.booked_at ? {} : { booked_at: now, booked_by: staff.id }) } : {}),
       version: cur.version + 1, updated_by: staff.id, updated_at: now,
@@ -104,17 +131,29 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
     if (added.length) await logShipment(admin, id, staff.id, 'label_added', null, { files: added.length });
     if (!labelReady) return missing ? page(`ok=saved&error=${missing}`, '#reserver') : page('ok=saved');
 
-    // Label ready: the person who ships gets the label(s) and the tracking link.
+    // Label ready: QA & Logistics get the label(s), the packing list and the
+    // Chain of Custody, with links to each in the portal.
     const attachments: Array<{ filename: string; content: Buffer }> = [];
     for (const [i, p] of labelPaths.entries()) {
       const { data: blob } = await admin.storage.from('production').download(p);
       if (blob) attachments.push({ filename: `${cur.shipment_no}_etiquette_${i + 1}.${p.split('.').pop()}`, content: Buffer.from(await blob.arrayBuffer()) });
     }
-    const after = { ...cur, ...f };
+    const after: Shipment = { ...cur, ...f, coc_no: cocNo, label_paths: labelPaths };
+    const swo = await loadSwo(admin, cur.swo_id);
+    const links: Array<{ label: string; url: string }> = [];
+    if (swo) {
+      attachments.push({ filename: packingListFilename(swo), content: await buildPackingList(swo, after) });
+      links.push({ label: 'Liste d’emballage (Word)', url: `${siteUrl()}/api/portail/production/swo/${swo.id}/packing-list` });
+    }
+    if (cocNo) {
+      const pdf = await buildCocPdf(cocDataFor(after, swo?.lines ?? [], todayLocal()));
+      attachments.push({ filename: cocFilename(cocNo, cur.customer_name), content: Buffer.from(pdf) });
+      links.push({ label: `Chain of Custody ${cocNo} (PDF)`, url: `${siteUrl()}/api/portail/envois/${id}/coc` });
+    }
     await sendShipmentLabelReady({
       toEmails: LABEL_READY_NOTIFY, shipmentNo: cur.shipment_no, customer: cur.customer_name, customerPo: cur.customer_po,
       shipTo: f.ship_to, summary: shipmentSummary(after), by: staff.full_name, shipmentUrl: `${siteUrl()}/portail/envois/${id}`,
-      carrier: f.carrier, trackingNo: f.tracking_no, trackingUrl: f.tracking_url, attachments,
+      carrier: f.carrier, trackingNo: f.tracking_no, trackingUrl: f.tracking_url, attachments, links, cocNo,
     });
     await logShipment(admin, id, staff.id, 'label_ready', null, { to: LABEL_READY_NOTIFY });
     return page('ok=label_ready');
