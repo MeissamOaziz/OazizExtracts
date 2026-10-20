@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'atelier',         // Atelier (production / orders)
   'prod_schedule',   // Production scheduling: tasks by room, calendar/Gantt, plan-change reports (Simon)
   'prod_request',    // Production requests only: ask for work (PO, restock, packaging) and follow it
+  'shipping',        // Shipments: book the transport of completed work orders (Meissam); others with production access can follow
   'payables',        // Supplier payments: invoices, weekly payment run, approvals
   'payables_approve', // Approve weekly supplier payments + see past approvals (Jorge)
   'admin',           // Admin panel: users and access
@@ -133,6 +134,10 @@ export const ROUTE_RULES: RouteRule[] = [
   { test: under('/portail/production'), any: ['prod_schedule'] },
   { test: under('/api/portail/production'), any: ['prod_schedule'] },
 
+  // Shipments: booking needs `shipping` (checked in the handler); production can follow and fetch labels.
+  { test: under('/portail/envois'), any: ['shipping', 'prod_schedule', 'prod_request'] },
+  { test: under('/api/portail/envois'), any: ['shipping', 'prod_schedule', 'prod_request'] },
+
   { test: under('/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
   { test: under('/api/portail/paiements/approbations'), any: ['payables', 'payables_approve'] },
   { test: under('/portail/paiements'), any: ['payables'] },
@@ -176,6 +181,7 @@ export const MODULES: ModuleLink[] = [
   { key: 'rnd', href: '/portail/formulaires', perms: ['rnd'] },
   { key: 'atelier', href: '/portail/atelier', perms: ['atelier'] },
   { key: 'prod_schedule', href: '/portail/production', perms: ['prod_schedule', 'prod_request'] },
+  { key: 'shipping', href: '/portail/envois', perms: ['shipping', 'prod_schedule', 'prod_request'] },
   { key: 'payables', href: '/portail/paiements', perms: ['payables', 'payables_approve'] },
   { key: 'calculators', href: '/portail/calculatrices', perms: ['calculators'] },
   { key: 'vq', href: '/portail/fournisseurs', perms: ['vq', 'licenses'] },

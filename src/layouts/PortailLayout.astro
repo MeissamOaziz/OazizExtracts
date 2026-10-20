@@ -224,6 +224,7 @@ const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Per
                   )}
                   {perms.has('atelier') && <a href="/portail/atelier" class={Astro.url.pathname.startsWith('/portail/atelier') ? 'active' : ''}>{Tc('nav.atelier')}</a>}
                   {can(perms, 'prod_schedule', 'prod_request') && <a href={productionHref(perms)} class={Astro.url.pathname.startsWith('/portail/production') ? 'active' : ''}>{Tc('nav.production')}</a>}
+                  {can(perms, 'shipping', 'prod_schedule', 'prod_request') && <a href="/portail/envois" class={Astro.url.pathname.startsWith('/portail/envois') ? 'active' : ''}>{Tc('nav.shipments')}</a>}
                   {can(perms, 'payables', 'payables_approve') && <a href={payablesHref(perms)} class={Astro.url.pathname.startsWith('/portail/paiements') ? 'active' : ''}>{Tc('nav.payables')}</a>}
                   {perms.has('calculators') && <a href="/portail/calculatrices" class={Astro.url.pathname.startsWith('/portail/calculatrices') ? 'active' : ''}>{Tc('nav.calculators')}</a>}
                   {can(perms, 'vq', 'licenses') && <a href={vqHref(perms)} class={Astro.url.pathname.startsWith('/portail/fournisseurs') ? 'active' : ''}>{Tc('navShort.vendors')}</a>}

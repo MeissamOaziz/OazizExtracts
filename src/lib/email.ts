@@ -1394,6 +1394,85 @@ export function sendSwoCompletedCopy(n: SwoEmail) {
 }
 
 // ============================================================
+// Shipments — a new one to book (to the bookers), and "label ready" (to the
+// person who ships). Never sent from a dev server.
+// ============================================================
+
+export interface ShipmentEmail {
+  toEmails: string[];
+  shipmentNo: string;
+  customer: string | null;
+  customerPo: string | null;
+  shipTo: string | null;
+  summary: string;
+  by: string;
+  shipmentUrl: string;
+  carrier?: string | null;
+  trackingNo?: string | null;
+  trackingUrl?: string | null;
+  attachments: Array<{ filename: string; content: Buffer }>;
+}
+
+async function sendShipmentEmail(
+  n: ShipmentEmail, subject: string, badge: string, intro: string, ctaLabel: string,
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[shipment-email] dev server: not sending "${subject}" to ${n.toEmails.join(', ')}`);
+    return { status: 'skipped_dev' };
+  }
+  const apiKey = import.meta.env.RESEND_API_KEY;
+  if (!apiKey) return { status: 'skipped_no_key' };
+  if (!n.toEmails.length) return { status: 'error', detail: 'no recipients' };
+  const from = import.meta.env.SIGNER_FROM_EMAIL ?? 'Portail Oaziz <onboarding@resend.dev>';
+  const replyTo = import.meta.env.SIGNER_REPLY_TO ?? 'info@oaziz.ca';
+  const html = renderEmailShell({
+    preheader: `${n.shipmentNo} — ${n.customer ?? ''} ${n.customerPo ?? ''}`.trim(),
+    brandLine: 'Envois',
+    badge,
+    greeting: 'Bonjour,',
+    intro,
+    rows: [
+      { label: 'Envoi', value: n.shipmentNo },
+      ...(n.customer ? [{ label: 'Client', value: n.customer }] : []),
+      ...(n.customerPo ? [{ label: 'PO client', value: n.customerPo }] : []),
+      ...(n.shipTo ? [{ label: 'Livrer à', value: n.shipTo }] : []),
+      { label: 'Colis', value: n.summary },
+      ...(n.carrier ? [{ label: 'Transporteur', value: n.carrier }] : []),
+      ...(n.trackingNo ? [{ label: 'Suivi / BOL', value: n.trackingNo }] : []),
+      ...(n.trackingUrl ? [{ label: 'Lien de suivi', value: n.trackingUrl }] : []),
+      { label: 'Par', value: n.by },
+    ],
+    ctaLabel,
+    ctaUrl: n.shipmentUrl,
+    footerNote: 'Envoi automatique — Envois, réservation du transport.',
+  });
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({ from, to: n.toEmails, replyTo, subject, html, attachments: n.attachments });
+    if (error) { console.error('[shipment-email] Resend error:', error); return { status: 'error', detail: error.message }; }
+    return { status: 'sent', detail: data?.id };
+  } catch (e) {
+    console.error('[shipment-email] unexpected error:', e);
+    return { status: 'error', detail: String(e) };
+  }
+}
+
+const shipmentRef = (n: ShipmentEmail) =>
+  `${n.shipmentNo}${n.customer ? ` - ${n.customer}` : ''}${n.customerPo ? ` (${n.customerPo})` : ''}`;
+
+export function sendShipmentToBook(n: ShipmentEmail) {
+  return sendShipmentEmail(n, `[Oaziz] Envoi à réserver - ${shipmentRef(n)}`, 'Transport à réserver',
+    `La commande est préparée et prête à partir. Réservez le transport, puis inscrivez le transporteur, le numéro de suivi ou de BOL et l'étiquette dans le portail. La liste d'emballage pré-remplie est jointe.`,
+    'Réserver l’envoi');
+}
+
+export function sendShipmentLabelReady(n: ShipmentEmail) {
+  return sendShipmentEmail(n, `[Oaziz] Étiquette prête - ${shipmentRef(n)}`, 'Étiquette prête',
+    `Le transport est réservé : l'étiquette d'expédition est jointe. Imprimez-la et collez-la sur ${n.summary.toLowerCase().includes('palette') ? 'la palette' : 'les boîtes'}, puis marquez l'envoi comme expédié dans le portail une fois parti.`,
+    'Voir l’envoi');
+}
+
+// ============================================================
 // Vendor file returned for changes — an approver put the VQ on hold (awaiting
 // feedback) or rejected it. The supplier gets the reason and a private link
 // that reopens their form, filled in, to correct and resubmit. Bilingual like

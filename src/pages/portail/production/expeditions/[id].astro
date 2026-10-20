@@ -12,6 +12,7 @@ import {
   DEFAULT_COPY_TO, PRODUCTION_TEAM, SWO_HEADER_FIELDS, SWO_LINE_FIELDS, emptyLine, loadSwo, loadSwoEvents,
   staffDirectory, type SwoLine,
 } from '../../../../lib/production-swo';
+import { loadShipmentForSwo } from '../../../../lib/shipments';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -25,7 +26,9 @@ const id = Astro.params.id ?? '';
 if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/production/expeditions');
 const swo = await loadSwo(admin, id);
 if (!swo) return Astro.redirect('/portail/production/expeditions');
-const [request, events, people] = await Promise.all([loadRequest(admin, swo.request_id), loadSwoEvents(admin, id), staffDirectory(admin)]);
+const [request, events, people, shipment] = await Promise.all([
+  loadRequest(admin, swo.request_id), loadSwoEvents(admin, id), staffDirectory(admin), loadShipmentForSwo(admin, id),
+]);
 
 const live = swo.status !== 'cancelled';
 const sentEv = events.find((e) => e.kind === 'sent');
@@ -69,7 +72,11 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
       <span class={`sw-badge sw-${swo.status}`}>{T(K(`sw.status.${swo.status}`))}</span>
       {swo.cancelled_at && <p class="cancelled">{swo.cancel_reason}</p>}
     </div>
-    <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pdf`} target="_blank" rel="noopener">{T('sw.pdf')}</a>
+    <div class="head-actions">
+      {shipment && <a class="btn btn-secondary" href={`/portail/envois/${shipment.id}`}>{T('sw.shipment').replace('{no}', shipment.shipment_no)}</a>}
+      {swo.status === 'completed' && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('sw.packingList')}</a>}
+      <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pdf`} target="_blank" rel="noopener">{T('sw.pdf')}</a>
+    </div>
   </div>
 
   {live && (
@@ -240,6 +247,7 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
   .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
   .ttl { font-size: 1.35rem; margin: 2px 0 6px; }
   .sw-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .cancelled { color: var(--p-danger); font-size: .9rem; margin-top: 6px; }
   .done-note { color: var(--p-success); font-weight: 500; }
   .sw-badge { display: inline-block; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }

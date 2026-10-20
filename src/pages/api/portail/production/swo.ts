@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
-import { sendSwoCompletedCopy, sendSwoToProduction } from '../../../../lib/email';
+import { sendShipmentToBook, sendSwoCompletedCopy, sendSwoToProduction } from '../../../../lib/email';
+import { bookers, loadShipment, openShipmentForSwo, shipmentSummary } from '../../../../lib/shipments';
+import { buildPackingList, packingListFilename } from '../../../../lib/packing-list';
 import { isIsoDate, parseQty } from '../../../../lib/production';
 import { loadRequest } from '../../../../lib/production-requests';
 import {
@@ -195,6 +197,18 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       const { data: blob } = await admin.storage.from('production').download(p);
       if (blob) attachments.push({ filename: `${cur.swo_no}_feuille_${i + 1}.${p.split('.').pop()}`, content: Buffer.from(await blob.arrayBuffer()) });
     }
+    // The order is ready to leave: open its shipment ticket for booking.
+    let shipment = null;
+    let shipmentIsNew = false;
+    try {
+      const opened = await openShipmentForSwo(admin, staff.id, cur);
+      shipment = await loadShipment(admin, opened.id);
+      shipmentIsNew = opened.created;
+    } catch (e) {
+      console.error('[production] shipment open failed:', e);
+    }
+    const packingList = { filename: packingListFilename(cur), content: await buildPackingList(cur, shipment) };
+    attachments.push(packingList);
     await sendSwoCompletedCopy({
       toEmails: to, swoNo: cur.swo_no, customer: cur.customer_name, customerPo: cur.customer_po,
       sentBy: staff.full_name, swoUrl: `${siteUrl()}/portail/production/expeditions/${id}`, attachments,
@@ -207,6 +221,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     if (error) { console.error('[production] work order complete failed:', error); return page(id, 'error=unknown'); }
     await logSwo(admin, id, staff.id, 'completed', null, {});
     await logSwo(admin, id, staff.id, 'copy_sent', null, { to });
+    if (shipment && shipmentIsNew) {
+      const who = await bookers(admin);
+      await sendShipmentToBook({
+        toEmails: who.map((b) => b.email), shipmentNo: shipment.shipment_no, customer: shipment.customer_name,
+        customerPo: shipment.customer_po, shipTo: shipment.ship_to, summary: shipmentSummary(shipment), by: staff.full_name,
+        shipmentUrl: `${siteUrl()}/portail/envois/${shipment.id}`, attachments: [packingList],
+      });
+    }
     return page(id, 'ok=completed');
   }
 

@@ -1,0 +1,284 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frEnvois, enEnvois, type EnvoisDict } from '../../../i18n/portail/envois';
+import type { Permission } from '../../../lib/access';
+import { fmtDateTime, fmtQty } from '../../../lib/production';
+import { poLabel } from '../../../lib/production-requests';
+import { loadSwo, staffDirectory } from '../../../lib/production-swo';
+import { LABEL_READY_NOTIFY, loadShipment, loadShipmentEvents, shipmentSummary } from '../../../lib/shipments';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frEnvois, enEnvois);
+const K = (k: string) => k as keyof EnvoisDict;
+const admin = getAdminClient();
+const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Permission>();
+const booker = perms.has('shipping');
+
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/portail/envois');
+const s = await loadShipment(admin, id);
+if (!s) return Astro.redirect('/portail/envois');
+const [swo, events, people] = await Promise.all([loadSwo(admin, s.swo_id), loadShipmentEvents(admin, id), staffDirectory(admin)]);
+
+const notifyNames = LABEL_READY_NOTIFY
+  .map((e) => people.find((p) => p.email.toLowerCase() === e)?.full_name.split(' ')[0] ?? e).join(', ');
+const editable = booker && s.status !== 'shipped' && s.status !== 'cancelled';
+const boxes = s.boxes.length ? s.boxes : [{ no: null, size: null, weight: null }];
+
+const q = Astro.url.searchParams;
+const ok = q.get('ok');
+const okMsg = ok ? (T(K(`msg.${ok}`)) ?? null)?.replace('{names}', notifyNames) : null;
+const err = q.get('error');
+const errMsg = err ? (T(K(`err.${err}`)) ?? T('err.unknown')) : null;
+const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
+---
+<PortailLayout title={`${s.shipment_no} — ${T('title')}`} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <p style="margin: -2px 0 14px;"><a href="/portail/envois" class="back">← {T('title')}</a></p>
+
+  {okMsg && <div class="flash flash-success">{okMsg}</div>}
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <div class="head">
+    <div>
+      <p class="no">{s.shipment_no}</p>
+      <h2 class="ttl">{s.customer_name ?? '—'}{s.customer_po && <span class="muted"> · {poLabel(s.customer_po)}</span>}</h2>
+      <span class={`badge-st st-${s.status}`}>{T(K(`status.${s.status}`))}</span>
+      <span class="small muted"> {shipmentSummary(s)}</span>
+      {s.cancelled_at && <p class="cancelled">{s.cancel_reason}</p>}
+      <p class="small muted dates">
+        {T('on.opened').replace('{date}', fmtDateTime(s.created_at, locale))}
+        {s.booked_at && <> · {T('on.booked').replace('{date}', fmtDateTime(s.booked_at, locale))}</>}
+        {s.label_ready_at && <> · {T('on.labelReady').replace('{date}', fmtDateTime(s.label_ready_at, locale))}</>}
+        {s.shipped_at && <> · {T('on.shipped').replace('{date}', fmtDateTime(s.shipped_at, locale))}</>}
+      </p>
+    </div>
+    <div class="head-actions">
+      {swo && <a class="btn btn-secondary" href={`/portail/production/expeditions/${swo.id}`}>{T('link.swo').replace('{no}', swo.swo_no)}</a>}
+      {swo && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('link.packingList')}</a>}
+      {s.tracking_url && <a class="btn btn-secondary" href={s.tracking_url} target="_blank" rel="noopener noreferrer">{T('link.track')}</a>}
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h3>{T('items.title')}</h3>
+      <table class="data mini">
+        <thead><tr><th>{T('items.product')}</th><th>{T('items.lot')}</th><th class="num">{T('items.qty')}</th></tr></thead>
+        <tbody>
+          {s.items.map((i) => (
+            <tr><td>{i.product}</td><td class="mono">{i.lot ?? '—'}</td><td class="num">{i.quantity === null ? '—' : fmtQty(i.quantity, 'unit', locale, qtyUnit)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h3>{T('labels.title')}</h3>
+      {s.label_paths.length === 0 ? <p class="small muted">{T('labels.none')}</p> : (
+        <ul class="labels">
+          {s.label_paths.map((_, i) => <li><a href={`/api/portail/envois/${s.id}/label/${i}`} target="_blank" rel="noopener">{`${s.shipment_no} — ${i + 1}`}</a></li>)}
+        </ul>
+      )}
+
+      {(s.status === 'booked' || s.status === 'label_ready') && (
+        <form method="POST" action="/api/portail/envois" class="shipped">
+          <input type="hidden" name="_action" value="shipped" />
+          <input type="hidden" name="id" value={s.id} />
+          <p class="hint" style="margin: 0 0 8px;">{T('shipped.hint')}</p>
+          <button type="submit" class="btn btn-primary">{T('btn.shipped')}</button>
+        </form>
+      )}
+    </section>
+
+    <section class="card" id="reserver">
+      <h2>{T('book.title')}</h2>
+      {!booker && <p class="hint">{T('book.readOnly')}</p>}
+      {editable && <p class="hint" style="margin: -6px 0 14px;">{T('book.hint')}</p>}
+      <form method="POST" action="/api/portail/envois" enctype="multipart/form-data" class="book">
+        <input type="hidden" name="id" value={s.id} />
+        <input type="hidden" name="version" value={String(s.version)} />
+        <fieldset disabled={!editable}>
+          <div class="form-row">
+            <label for="b-shipto">{T('f.shipTo')}</label>
+            <textarea id="b-shipto" name="ship_to" rows="2">{s.ship_to ?? ''}</textarea>
+            <p class="hint">{T('f.shipTo.hint')}</p>
+          </div>
+          <div class="two-col">
+            <div class="form-row">
+              <label for="b-carrier">{T('f.carrier')}</label>
+              <input id="b-carrier" type="text" name="carrier" value={s.carrier ?? ''} autocomplete="off" />
+            </div>
+            <div class="form-row">
+              <label for="b-tracking">{T('f.tracking')}</label>
+              <input id="b-tracking" type="text" name="tracking_no" value={s.tracking_no ?? ''} autocomplete="off" />
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="b-url">{T('f.trackingUrl')}</label>
+            <input id="b-url" type="url" name="tracking_url" value={s.tracking_url ?? ''} placeholder="https://" />
+          </div>
+          <div class="form-row">
+            <span class="lbl">{T('f.mode')}</span>
+            <div class="radio-group">
+              <label><input type="radio" name="mode" value="boxes" checked={s.mode === 'boxes'} /> {T('mode.boxes')}</label>
+              <label><input type="radio" name="mode" value="pallet" checked={s.mode === 'pallet'} /> {T('mode.pallet')}</label>
+              <label class="pallets" hidden={s.mode !== 'pallet'}>
+                {T('f.pallets')} <input type="number" name="pallets" min="1" max="99" value={String(s.pallets ?? 1)} />
+              </label>
+            </div>
+            <p class="hint">{T('f.mode.hint')}</p>
+          </div>
+
+          <h3>{T('boxes.title')}</h3>
+          <p class="hint" style="margin: -4px 0 8px;">{T('boxes.hint')}</p>
+          <div class="box-head" aria-hidden="true"><span>{T('boxes.no')}</span><span>{T('boxes.size')}</span><span>{T('boxes.weight')}</span><span></span></div>
+          <div class="box-rows">
+            {boxes.map((b) => (
+              <div class="box-row">
+                <input type="text" name="b_no" value={b.no ?? ''} aria-label={T('boxes.no')} />
+                <input type="text" name="b_size" value={b.size ?? ''} placeholder="12x12x12" aria-label={T('boxes.size')} />
+                <input type="text" name="b_weight" value={b.weight ?? ''} placeholder="15 lbs" aria-label={T('boxes.weight')} />
+                <button type="button" class="box-remove" title={T('boxes.remove')} aria-label={T('boxes.remove')}>&times;</button>
+              </div>
+            ))}
+          </div>
+          <template class="box-template">
+            <div class="box-row">
+              <input type="text" name="b_no" aria-label={T('boxes.no')} />
+              <input type="text" name="b_size" placeholder="12x12x12" aria-label={T('boxes.size')} />
+              <input type="text" name="b_weight" placeholder="15 lbs" aria-label={T('boxes.weight')} />
+              <button type="button" class="box-remove" title={T('boxes.remove')} aria-label={T('boxes.remove')}>&times;</button>
+            </div>
+          </template>
+          {editable && <button type="button" class="btn btn-secondary btn-sm box-add">{T('boxes.add')}</button>}
+
+          <div class="form-row" style="margin-top: 14px;">
+            <label for="b-labels">{T('f.label')}</label>
+            <input id="b-labels" type="file" name="labels" multiple accept="application/pdf,image/jpeg,image/png,image/webp" />
+            <p class="hint">{T('f.label.hint')}</p>
+          </div>
+          <div class="form-row">
+            <label for="b-notes">{T('f.notes')}</label>
+            <textarea id="b-notes" name="notes" rows="2">{s.notes ?? ''}</textarea>
+          </div>
+        </fieldset>
+        {editable && (
+          <div class="actions">
+            <button type="submit" name="_action" value="save" class="btn btn-secondary">{T('btn.save')}</button>
+            <button type="submit" name="_action" value="label_ready" class="btn btn-primary">
+              {(s.status === 'label_ready' ? T('btn.labelAgain') : T('btn.labelReady')).replace('{names}', notifyNames)}
+            </button>
+          </div>
+        )}
+        {editable && <p class="hint" style="margin-top: 8px;">{T('labelReady.hint').replace('{names}', notifyNames)}</p>}
+      </form>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top: 18px;">
+    <h2>{T('history')}</h2>
+    <ol class="history">
+      {events.map((e) => (
+        <li>
+          <div class="ev-head"><strong>{T(K(`ev.${e.kind}`)) ?? e.kind}</strong><span class="muted small when">{fmtDateTime(e.at, locale)} · {e.staff_name ?? '—'}</span></div>
+          {e.note && <p class="ev-note">« {e.note} »</p>}
+        </li>
+      ))}
+    </ol>
+    {booker && (s.status === 'cancelled' || s.status === 'shipped') && (
+      <form method="POST" action="/api/portail/envois" style="margin-top: 14px;">
+        <input type="hidden" name="_action" value="reopen" />
+        <input type="hidden" name="id" value={s.id} />
+        <button type="submit" class="btn btn-secondary">{T('btn.reopen')}</button>
+      </form>
+    )}
+    {booker && s.status !== 'cancelled' && s.status !== 'shipped' && (
+      <details class="stop">
+        <summary>{T('btn.cancel')}</summary>
+        <form method="POST" action="/api/portail/envois" class="details-body">
+          <input type="hidden" name="_action" value="cancel" />
+          <input type="hidden" name="id" value={s.id} />
+          <div class="form-row"><input type="text" name="reason" required placeholder={T('cancel.reason')} aria-label={T('cancel.reason')} /></div>
+          <button type="submit" class="btn btn-danger">{T('btn.cancel')}</button>
+        </form>
+      </details>
+    )}
+  </section>
+</PortailLayout>
+
+<style>
+  .back { color: var(--p-muted); font-size: .88rem; text-decoration: none; }
+  .muted { color: var(--p-muted); }
+  .small { font-size: .84rem; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .no { font-size: .82rem; font-weight: 700; color: var(--p-muted); letter-spacing: .4px; }
+  .ttl { font-size: 1.35rem; margin: 2px 0 6px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dates { margin-top: 6px; }
+  .cancelled { color: var(--p-danger); font-size: .9rem; margin-top: 6px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  h3 { font-size: .95rem; font-weight: 600; margin: 14px 0 8px; }
+  section > h3:first-child { margin-top: 0; }
+  table.mini th, table.mini td { padding: 7px 8px; font-size: .86rem; }
+  .num { text-align: right; white-space: nowrap; }
+  .labels { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .shipped { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--p-border); }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  fieldset:disabled input, fieldset:disabled textarea { background: var(--p-bg); }
+  .lbl { display: block; font-weight: 500; font-size: .88rem; margin-bottom: 6px; }
+  .pallets { display: inline-flex; align-items: center; gap: 6px; }
+  .pallets input { width: 70px; padding: 4px 8px; }
+  .box-head, .box-row { display: grid; grid-template-columns: 80px 1.3fr 1fr 34px; gap: 8px; align-items: center; }
+  .box-head { font-size: .76rem; color: var(--p-muted); font-weight: 600; margin-bottom: 4px; }
+  .box-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .box-row input { padding: 7px 9px; font-size: .9rem; }
+  .box-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 34px; cursor: pointer; color: var(--p-muted); }
+  .box-remove:hover { color: var(--p-danger); border-color: #fecaca; }
+  .btn-sm { padding: 6px 12px; font-size: .85rem; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  input[type="file"] { display: block; font-size: .9rem; }
+  .badge-st { display: inline-block; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .st-to_book { background: #fff7ed; color: #c2410c; }
+  .st-booked { background: #eff6ff; color: #1e40af; }
+  .st-label_ready { background: #ede9fe; color: #5b21b6; }
+  .st-shipped { background: #dcfce7; color: #166534; }
+  .st-cancelled { background: #f3f4f6; color: #6b7280; }
+  .history { list-style: none; }
+  .history > li { border-left: 2px solid var(--p-border); padding: 0 0 12px 14px; }
+  .ev-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .9rem; }
+  .ev-head .when { margin-left: auto; }
+  .ev-note { font-size: .86rem; font-style: italic; margin: 3px 0; }
+  .stop { margin-top: 14px; }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('form.book');
+  if (form) {
+    const rows = form.querySelector<HTMLElement>('.box-rows')!;
+    const tpl = form.querySelector<HTMLTemplateElement>('.box-template')!;
+    form.querySelector('.box-add')?.addEventListener('click', () => {
+      rows.appendChild(tpl.content.cloneNode(true));
+      rows.lastElementChild?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    rows.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.box-remove');
+      if (!btn || form.querySelector('fieldset')!.disabled) return;
+      const row = btn.closest('.box-row')!;
+      if (rows.children.length > 1) row.remove();
+      else row.querySelectorAll<HTMLInputElement>('input').forEach((i) => { i.value = ''; });
+    });
+    // The pallet count only matters on a pallet.
+    const pallets = form.querySelector<HTMLElement>('.pallets')!;
+    form.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((r) => r.addEventListener('change', () => {
+      pallets.hidden = form.querySelector<HTMLInputElement>('input[name="mode"]:checked')?.value !== 'pallet';
+    }));
+  }
+</script>

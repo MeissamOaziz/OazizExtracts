@@ -1,0 +1,85 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../layouts/PortailLayout.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
+import { frEnvois, enEnvois, type EnvoisDict } from '../../../i18n/portail/envois';
+import { fmtDateTime } from '../../../lib/production';
+import { poLabel } from '../../../lib/production-requests';
+import { OPEN_SHIPMENT_STATUSES, loadShipments, shipmentSummary } from '../../../lib/shipments';
+
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frEnvois, enEnvois);
+const K = (k: string) => k as keyof EnvoisDict;
+
+const all = await loadShipments(getAdminClient());
+const showAll = Astro.url.searchParams.get('vue') === 'tous';
+const rows = showAll ? all : all.filter((s) => OPEN_SHIPMENT_STATUSES.includes(s.status));
+// Waiting to be booked first, then oldest first within a status.
+const order = ['to_book', 'booked', 'label_ready', 'shipped', 'cancelled'];
+if (!showAll) rows.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || a.created_at.localeCompare(b.created_at));
+---
+<PortailLayout title={T('title')} staffName={staff.full_name} wide>
+  <h1>{T('title')}</h1>
+  <p class="lead">{T('subtitle')}</p>
+
+  <nav class="filters">
+    <a href="/portail/envois" class={showAll ? '' : 'active'}>{T('filter.open')} <span class="count">{all.filter((s) => OPEN_SHIPMENT_STATUSES.includes(s.status)).length}</span></a>
+    <a href="/portail/envois?vue=tous" class={showAll ? 'active' : ''}>{T('filter.all')} <span class="count">{all.length}</span></a>
+  </nav>
+
+  {rows.length === 0 ? (
+    <div class="card empty-state">{all.length === 0 ? T('empty') : T('emptyOpen')}</div>
+  ) : (
+    <div class="card list">
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>{T('col.no')}</th><th>{T('col.customer')}</th><th>{T('col.po')}</th><th>{T('col.packages')}</th>
+              <th>{T('col.carrier')}</th><th>{T('col.status')}</th><th>{T('col.opened')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr>
+                <td class="nowrap"><a href={`/portail/envois/${s.id}`}><strong>{s.shipment_no}</strong></a></td>
+                <td><a href={`/portail/envois/${s.id}`}>{s.customer_name ?? '—'}</a></td>
+                <td class="small">{s.customer_po ? poLabel(s.customer_po) : '—'}</td>
+                <td class="small">{shipmentSummary(s)}</td>
+                <td class="small">{s.carrier ?? '—'}{s.tracking_no && <div class="muted mono">{s.tracking_no}</div>}</td>
+                <td><span class={`badge-st st-${s.status}`}>{T(K(`status.${s.status}`))}</span></td>
+                <td class="small nowrap muted">{fmtDateTime(s.created_at, locale)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</PortailLayout>
+
+<style>
+  .lead { color: var(--p-muted); font-size: .92rem; margin: -2px 0 16px; }
+  .filters { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--p-border); }
+  .filters a { padding: 8px 14px; color: var(--p-muted); text-decoration: none; font-weight: 500; font-size: .92rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .filters a.active { color: var(--p-accent); border-bottom-color: var(--p-accent); }
+  .count { font-size: .74rem; color: var(--p-muted); background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 10px; padding: 0 7px; margin-left: 4px; }
+  .list { padding: 8px 12px; }
+  .table-wrap { overflow-x: auto; }
+  table.data th, table.data td { padding: 10px; vertical-align: top; }
+  .small { font-size: .84rem; }
+  .muted { color: var(--p-muted); }
+  .mono { font-variant-numeric: tabular-nums; }
+  .nowrap { white-space: nowrap; }
+  .badge-st { display: inline-block; font-size: .74rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+  .st-to_book { background: #fff7ed; color: #c2410c; }
+  .st-booked { background: #eff6ff; color: #1e40af; }
+  .st-label_ready { background: #ede9fe; color: #5b21b6; }
+  .st-shipped { background: #dcfce7; color: #166534; }
+  .st-cancelled { background: #f3f4f6; color: #6b7280; }
+</style>

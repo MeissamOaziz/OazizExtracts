@@ -8,6 +8,7 @@ import { frHub, enHub } from '../../i18n/portail/hub';
 import { frCommon, enCommon } from '../../i18n/portail/common';
 import { effectivePermissions, can, vqHref, payablesHref, productionHref } from '../../lib/access';
 import { countToPlan } from '../../lib/production-requests';
+import { countToBook } from '../../lib/shipments';
 
 const supabase = createServerClient(Astro.request, Astro.cookies);
 
@@ -106,6 +107,7 @@ const { count: pendingWitnessCount } = await getAdminClient()
 
 const perms = effectivePermissions(staff);
 const requestsToPlan = perms.has('prod_schedule') ? await countToPlan(getAdminClient()) : 0;
+const shipmentsToBook = perms.has('shipping') ? await countToBook(getAdminClient()) : 0;
 const allSections = [
   {
     show: perms.has('rnd'),
@@ -127,6 +129,13 @@ const allSections = [
     title: T('section.production.title'),
     desc: T('section.production.desc'),
     tag: requestsToPlan ? T('section.production.tag').replace('{count}', String(requestsToPlan)) : null,
+  },
+  {
+    show: can(perms, 'shipping', 'prod_schedule', 'prod_request'),
+    href: '/portail/envois',
+    title: Tc('nav.shipments'),
+    desc: T('section.shipments.desc'),
+    tag: shipmentsToBook ? T('section.shipments.tag').replace('{count}', String(shipmentsToBook)) : null,
   },
   {
     show: can(perms, 'payables', 'payables_approve'),

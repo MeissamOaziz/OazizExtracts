@@ -16,6 +16,9 @@ export const frHub = {
     'Ce qui roule dans chaque salle : calendrier, Gantt, vue par salle et rapports sur les changements au plan.',
   'section.production.tag': '{count} demande(s) à planifier',
 
+  'section.shipments.desc': 'Commandes préparées à expédier : réservation du transport, étiquettes et suivi.',
+  'section.shipments.tag': '{count} à réserver',
+
   'section.payables.desc': 'Factures fournisseurs, paiements de la semaine, approbation de Jorge et flux de trésorerie.',
 
   'section.vendors.desc': "Qualification des fournisseurs, approbations individuelles et licences d'Oaziz.",
@@ -48,6 +51,9 @@ export const enHub: Partial<Record<keyof HubDict, string>> = {
   'section.production.desc':
     'What is running in each room: calendar, Gantt, room view and reports on plan changes.',
   'section.production.tag': '{count} request(s) to plan',
+
+  'section.shipments.desc': 'Prepared orders to ship: transport booking, labels and tracking.',
+  'section.shipments.tag': '{count} to book',
 
   'section.payables.desc': "Supplier invoices, this week's payments, Jorge's approval and cash flow.",
 
