@@ -192,7 +192,7 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
           <input type="hidden" name="_action" value="sheet" />
           <input type="hidden" name="id" value={swo.id} />
           <label for="sheet-photos" class="small">{T('sw.sheet.files')}</label>
-          <input type="file" id="sheet-photos" name="photos" multiple required accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" />
+          <input type="file" id="sheet-photos" name="photos" multiple required accept="image/jpeg,image/png,image/webp,application/pdf" />
           <button type="submit" class="btn btn-primary" style="margin-top: 10px;">{T('sw.sheet.btn')}</button>
           <p class="hint reading" hidden>…</p>
         </form>
