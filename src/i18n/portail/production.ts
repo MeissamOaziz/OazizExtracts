@@ -260,7 +260,8 @@ export const frProduction = {
   'rep.truncated': 'Seuls les {n} changements les plus récents sont affichés ; l’export CSV les contient tous.',
 
   'set.title': 'Paramètres',
-  'set.subtitle': 'Les salles et les types de production proposés dans les tâches.',
+  'set.subtitle': 'Les salles et les types de production proposés dans les tâches, et les articles des clients.',
+  'set.err.sku': 'Choisissez le client, inscrivez le n° d’article et le produit ; les unités par caisse sont un nombre entier.',
   'set.rooms': 'Salles',
   'set.rooms.hint':
     'Dans une salle « une tâche à la fois », deux tâches qui se chevauchent sont signalées comme conflit.',
@@ -444,6 +445,14 @@ export const frProduction = {
   'set.yields.type': 'Type de production',
   'set.yields.remove': 'Retirer',
   'set.yields.add': 'Ajouter',
+
+  'set.skus': 'Articles des clients',
+  'set.skus.hint': 'Le n° d’article du client et le nombre d’unités par caisse. Ils remplissent le n° d’article et la colonne « Caisses » des bons de préparation, de la liste d’emballage et de la fiche de palette OCS. Sans nombre par caisse, les articles OCS comptent 6 unités par caisse.',
+  'set.skus.customer': 'Client',
+  'set.skus.item': 'N° d’article',
+  'set.skus.product': 'Produit',
+  'set.skus.perCase': 'Unités par caisse',
+  'set.skus.new': 'Nouvel article',
 
   'rep.yield': 'Rendements',
   'rep.yield.hint': 'Tâches terminées pendant la période dont le rendement a été saisi : rendement réel par rapport à l’attendu.',
@@ -836,7 +845,8 @@ export const enProduction: Partial<Record<keyof ProductionDict, string>> = {
   'rep.truncated': 'Only the {n} most recent changes are shown; the CSV export has them all.',
 
   'set.title': 'Settings',
-  'set.subtitle': 'The rooms and production types offered on tasks.',
+  'set.subtitle': 'The rooms and production types offered on tasks, and the customers’ items.',
+  'set.err.sku': 'Pick the customer and fill in the item # and the product; units per case is a whole number.',
   'set.rooms': 'Rooms',
   'set.rooms.hint': 'In a “one task at a time” room, two overlapping tasks are flagged as a conflict.',
   'set.types': 'Production types',
@@ -1019,6 +1029,14 @@ export const enProduction: Partial<Record<keyof ProductionDict, string>> = {
   'set.yields.type': 'Production type',
   'set.yields.remove': 'Remove',
   'set.yields.add': 'Add',
+
+  'set.skus': 'Customer items',
+  'set.skus.hint': 'The customer’s item number and how many units ship per case. They fill the item # and the “Cases” column of the work orders, the packing list and the OCS pallet placard. Without a per-case count, OCS items count 6 units per case.',
+  'set.skus.customer': 'Customer',
+  'set.skus.item': 'Item #',
+  'set.skus.product': 'Product',
+  'set.skus.perCase': 'Units per case',
+  'set.skus.new': 'New item',
 
   'rep.yield': 'Yields',
   'rep.yield.hint': 'Tasks finished during the period with their yield entered: actual yield against expected.',

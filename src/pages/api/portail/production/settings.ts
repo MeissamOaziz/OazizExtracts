@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
 import { parseQty } from '../../../../lib/production';
+import { SKU_CUSTOMERS, normItemNo, type SkuCustomer } from '../../../../lib/customer-skus';
 
 export const prerender = false;
 
@@ -15,6 +16,31 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const form = await request.formData();
   const action = String(form.get('_action') ?? '');
   const s = (k: string) => String(form.get(k) ?? '').trim();
+
+  // Customer items: item # and units per case.
+  if (action === 'add_sku' || action === 'save_sku') {
+    const backS = (q: string) => redirect(`/portail/production/parametres?${q}#articles`, 303);
+    const perCase = s('units_per_case') ? Number(s('units_per_case')) : null;
+    const row = {
+      customer: s('customer') as SkuCustomer, item_no: normItemNo(s('item_no')), product_name: s('product_name'),
+      units_per_case: perCase, is_active: action === 'add_sku' || form.get('is_active') === '1',
+    };
+    if (!SKU_CUSTOMERS.includes(row.customer) || !row.item_no || !row.product_name
+      || (perCase !== null && (!Number.isInteger(perCase) || perCase < 1))) return backS('error=sku');
+    const admin = getAdminClient();
+    let error;
+    if (action === 'add_sku') ({ error } = await admin.from('ps_customer_skus').insert(row));
+    else {
+      if (!UUID.test(s('id'))) return backS('error=sku');
+      ({ error } = await admin.from('ps_customer_skus').update(row).eq('id', s('id')));
+    }
+    if (error) {
+      if (error.code === '23505') return backS('error=duplicate');
+      console.error('[production] customer item save failed:', error);
+      return backS('error=unknown');
+    }
+    return backS('ok=1');
+  }
 
   // Default products and yields per production type.
   if (action === 'add_yield' || action === 'save_yield') {

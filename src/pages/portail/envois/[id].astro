@@ -9,7 +9,8 @@ import type { Permission } from '../../../lib/access';
 import { fmtDateTime, fmtQty } from '../../../lib/production';
 import { poLabel } from '../../../lib/production-requests';
 import { loadSwo, staffDirectory } from '../../../lib/production-swo';
-import { LABEL_READY_NOTIFY, isCocSigner, isOcs, loadShipment, loadShipmentEvents, shipmentSummary } from '../../../lib/shipments';
+import { OCS_CARRIER } from '../../../lib/customer-skus';
+import { LABEL_READY_NOTIFY, isCocSigner, isOcs, itemsFromSwo, loadShipment, loadShipmentEvents, shipmentSummary } from '../../../lib/shipments';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -32,6 +33,8 @@ const notifyNames = LABEL_READY_NOTIFY
   .map((e) => people.find((p) => p.email.toLowerCase() === e)?.full_name.split(' ')[0] ?? e).join(', ');
 const editable = booker && s.status !== 'shipped' && s.status !== 'cancelled';
 const boxes = s.boxes.length ? s.boxes : [{ no: null, size: null, weight: null }];
+// The work order is the source of truth: quantities corrected after the ticket opened show here too.
+const items = swo ? itemsFromSwo(swo).filter((i) => i.product) : s.items;
 
 const q = Astro.url.searchParams;
 const ok = q.get('ok');
@@ -76,7 +79,7 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
       <table class="data mini">
         <thead><tr><th>{T('items.product')}</th><th>{T('items.lot')}</th><th class="num">{T('items.qty')}</th></tr></thead>
         <tbody>
-          {s.items.map((i) => (
+          {items.map((i) => (
             <tr><td>{i.product}</td><td class="mono">{i.lot ?? '—'}</td><td class="num">{i.quantity === null ? '—' : fmtQty(i.quantity, 'unit', locale, qtyUnit)}</td></tr>
           ))}
         </tbody>
@@ -118,7 +121,7 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
           <div class="two-col">
             <div class="form-row">
               <label for="b-carrier">{T('f.carrier')}</label>
-              <input id="b-carrier" type="text" name="carrier" value={s.carrier ?? ''} autocomplete="off" />
+              <input id="b-carrier" type="text" name="carrier" value={s.carrier ?? (isOcs(s.customer_name) ? OCS_CARRIER : '')} autocomplete="off" />
             </div>
             <div class="form-row">
               <label for="b-tracking">{T('f.tracking')}</label>

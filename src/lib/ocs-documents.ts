@@ -8,15 +8,16 @@ import JSZip from 'jszip';
 import { PALLET_PLACARD_TEMPLATE_B64 } from './templates/pallet-placard-template';
 import type { Swo } from './production-swo';
 import type { Shipment } from './shipments';
+import { casesFor, matchSku, normItemNo, ocsPoNumber, type CustomerSku } from './customer-skus';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const wtext = (v: string | number | null | undefined) => esc(v === null || v === undefined ? '' : String(v));
 
 export function palletPlacardFilename(swo: Swo): string {
-  return `Pallet Placard Flow Through (Colored) - ${(swo.customer_po ?? swo.swo_no).replace(/[^\w.-]+/g, '_')}.docx`;
+  return `Pallet Placard Flow Through (Colored) - ${(ocsPoNumber(swo.customer_po) ?? swo.swo_no).replace(/[^\w.-]+/g, '_')}.docx`;
 }
 
-export async function buildPalletPlacard(swo: Swo, shipment: Shipment | null): Promise<Buffer<ArrayBuffer>> {
+export async function buildPalletPlacard(swo: Swo, shipment: Shipment | null, skus: CustomerSku[] = []): Promise<Buffer<ArrayBuffer>> {
   const zip = await JSZip.loadAsync(Buffer.from(PALLET_PLACARD_TEMPLATE_B64, 'base64'));
   let x = await zip.file('word/document.xml')!.async('string');
 
@@ -24,16 +25,16 @@ export async function buildPalletPlacard(swo: Swo, shipment: Shipment | null): P
   const a = x.indexOf('<!--ROW-->'); const b = x.indexOf('<!--/ROW-->');
   const rowTpl = x.slice(a + '<!--ROW-->'.length, b);
   const rows = lines.map((l) => rowTpl
-    .replace('{{ITEM}}', () => wtext(l.item_no))
+    .replace('{{ITEM}}', () => wtext(normItemNo(l.item_no) ?? matchSku(skus, l)?.item_no))
     .replace('{{DESC}}', () => wtext(l.product_name))
     .replace('{{UNITS}}', () => wtext(l.final_quantity ?? l.po_quantity))
-    .replace('{{CASES}}', () => wtext(l.cases))
+    .replace('{{CASES}}', () => wtext(casesFor(l, skus, 'OCS')))
     .replace('{{LOT}}', () => wtext(l.lot_no))).join('');
   x = x.slice(0, a) + rows + x.slice(b + '<!--/ROW-->'.length);
 
   const units = lines.reduce((s, l) => s + (l.final_quantity ?? l.po_quantity ?? 0), 0);
-  const cases = lines.reduce((s, l) => s + (l.cases ?? 0), 0);
-  x = x.replace('{{PO}}', () => wtext(swo.customer_po))
+  const cases = lines.reduce((s, l) => s + (casesFor(l, skus, 'OCS') ?? 0), 0);
+  x = x.replace('{{PO}}', () => wtext(ocsPoNumber(swo.customer_po)))
     .replace('{{TOTAL_UNITS}}', () => (units ? String(units) : ''))
     .replace('{{TOTAL_CASES}}', () => (cases ? String(cases) : ''));
 

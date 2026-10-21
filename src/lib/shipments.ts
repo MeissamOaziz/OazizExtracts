@@ -160,18 +160,23 @@ export async function findShipTo(admin: SupabaseClient, swo: Pick<Swo, 'customer
 
 /** Chain of Custody number, COC-YYYYMMDD-NNN, counted per day (compare-and-set). */
 export async function nextCocNo(admin: SupabaseClient, day: string): Promise<string> {
+  const prefix = `COC-${day.replace(/-/g, '')}-`;
   for (let attempt = 0; attempt < 8; attempt++) {
     const { data: ctr } = await admin.from('sh_coc_counters').select('last').eq('day', day).maybeSingle();
     let n: number | null = null;
     if (!ctr) {
-      const { error } = await admin.from('sh_coc_counters').insert({ day, last: 1 });
-      if (!error) n = 1;
+      // The day's first CoC continues after any number already given that day
+      // (coc_no is also unique in the table, so two can never share a name).
+      const { data: taken } = await admin.from('sh_shipments').select('coc_no').like('coc_no', `${prefix}%`);
+      const last = Math.max(0, ...(taken ?? []).map((r) => Number(String(r.coc_no).slice(prefix.length)) || 0));
+      const { error } = await admin.from('sh_coc_counters').insert({ day, last: last + 1 });
+      if (!error) n = last + 1;
     } else {
       const { data: upd } = await admin.from('sh_coc_counters')
         .update({ last: ctr.last + 1 }).eq('day', day).eq('last', ctr.last).select('last');
       if (upd && upd.length) n = ctr.last + 1;
     }
-    if (n !== null) return `COC-${day.replace(/-/g, '')}-${String(n).padStart(3, '0')}`;
+    if (n !== null) return `${prefix}${String(n).padStart(3, '0')}`;
   }
   throw new Error('coc counter busy');
 }

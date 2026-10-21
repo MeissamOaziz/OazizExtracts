@@ -5,6 +5,7 @@ import { bookers, loadShipment, openShipmentForSwo, shipmentSummary } from '../.
 import { buildPackingList, packingListFilename } from '../../../../lib/packing-list';
 import { buildPalletPlacard, palletPlacardFilename } from '../../../../lib/ocs-documents';
 import { isOcs } from '../../../../lib/shipments';
+import { learnSkus, loadSkus, skuCustomer, withItemNumbers } from '../../../../lib/customer-skus';
 import { isIsoDate, parseQty } from '../../../../lib/production';
 import { loadRequest } from '../../../../lib/production-requests';
 import {
@@ -54,6 +55,12 @@ function readForm(form: FormData): { header: SwoHeader; lines: SwoLine[] } | 'BA
 
 // Shipping work orders: create, save, send to production, read the completed
 // sheet, confirm and send the copy, cancel, reopen.
+/** The customer's SKUs, to fill item #s left blank. */
+async function skusFor(customer: string | null) {
+  const key = skuCustomer(customer);
+  return key ? loadSkus(getAdminClient(), key) : [];
+}
+
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const staff = await currentStaff(createServerClient(request, cookies));
   if (!staff) return redirect('/portail/connexion', 303);
@@ -86,7 +93,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       }
     }
     try {
-      const id = await createSwo(admin, staff.id, r, po);
+      // Item #s from the customer's SKUs when the PO did not print them; new SKUs are remembered.
+      const custKey = skuCustomer(po?.customer_name ?? r.customer_name);
+      const skus = custKey ? await loadSkus(admin, custKey) : [];
+      let created: SwoLine[] = [];
+      const id = await createSwo(admin, staff.id, r, po, (lines) => (created = withItemNumbers(lines, skus)));
+      await learnSkus(admin, custKey, created);
       return page(id, readFailed ? 'ok=created&error=read' : 'ok=created');
     } catch (e) {
       console.error('[production] work order create failed:', e);
@@ -105,6 +117,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   if (action === 'save') {
     const v = readForm(form);
     if (v === 'BAD_QTY') return page(id, 'error=qty', '#bon');
+    v.lines = withItemNumbers(v.lines, await skusFor(v.header.customer_name));
     try {
       const changed = await saveSwo(admin, staff.id, swo, v.header, v.lines);
       return page(id, `ok=${changed ? 'saved' : 'nochange'}`, '#bon');
@@ -164,6 +177,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const s = await readCompletedSheet(docs, swo);
         reading = s;
         ({ header, lines } = mergeSheet(swo, s));
+        lines = withItemNumbers(lines, await skusFor(header.customer_name));
       } catch (e) {
         console.error('[production] sheet read failed:', e);
         note = 'failed';
@@ -190,6 +204,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     // Save what is on screen first, so the copy is exactly what was checked.
     const v = readForm(form);
     if (v === 'BAD_QTY') return page(id, 'error=qty', '#bon');
+    const skus = await skusFor(v.header.customer_name);
+    v.lines = withItemNumbers(v.lines, skus);
     let cur = swo;
     try {
       if (await saveSwo(admin, staff.id, swo, v.header, v.lines)) cur = (await loadSwo(admin, id))!;
@@ -213,12 +229,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     } catch (e) {
       console.error('[production] shipment open failed:', e);
     }
-    const packingList = { filename: packingListFilename(cur), content: await buildPackingList(cur, shipment) };
+    const packingList = { filename: packingListFilename(cur), content: await buildPackingList(cur, shipment, skus) };
     attachments.push(packingList);
     // The OCS also needs its pallet placard before the order ships.
     const shipDocs = [packingList];
     if (isOcs(cur.customer_name)) {
-      const placard = { filename: palletPlacardFilename(cur), content: await buildPalletPlacard(cur, shipment) };
+      const placard = { filename: palletPlacardFilename(cur), content: await buildPalletPlacard(cur, shipment, skus) };
       attachments.push(placard); shipDocs.push(placard);
     }
     await sendSwoCompletedCopy({

@@ -133,17 +133,20 @@ export const emptyLine = (product_name = ''): SwoLine => ({
  * Creates the work order of a request: from what Claude read on the PO when
  * there is a reading, otherwise from the request's own lines.
  */
-export async function createSwo(admin: SupabaseClient, staffId: string, r: ProdRequest, po: PoExtraction | null): Promise<string> {
+export async function createSwo(
+  admin: SupabaseClient, staffId: string, r: ProdRequest, po: PoExtraction | null,
+  prepare: (lines: SwoLine[]) => SwoLine[] = (l) => l,
+): Promise<string> {
   const year = Number(todayLocal().slice(0, 4));
   const seq = await nextSwoSeq(admin, year);
   const swo_no = `BTE-${String(year % 100).padStart(2, '0')}-${String(seq).padStart(4, '0')}`;
   const customer = po?.customer_name ?? r.customer_name;
-  const lines: SwoLine[] = withDefaultExcise(po && po.lines.length
+  const lines: SwoLine[] = prepare(withDefaultExcise(po && po.lines.length
     ? po.lines.map((l) => ({
       ...emptyLine(l.product_name), item_no: l.item_no ?? null, cultivar: l.cultivar, product_type: l.product_type,
       sku_size_g: l.sku_size_g, po_quantity: l.quantity,
     }))
-    : r.lines.map((l) => ({ ...emptyLine(l.description), po_quantity: l.quantity })), customer);
+    : r.lines.map((l) => ({ ...emptyLine(l.description), po_quantity: l.quantity })), customer));
   const { data, error } = await admin.from('ps_swos').insert({
     swo_no, request_id: r.id,
     order_date: po?.order_date ?? localDay(r.created_at),

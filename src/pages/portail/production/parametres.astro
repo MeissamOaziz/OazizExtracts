@@ -7,6 +7,7 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../lib/s
 import { getPortailLocale, makeT } from '../../../lib/portail-i18n';
 import { frProduction, enProduction } from '../../../i18n/portail/production';
 import { loadCatalog, loadTypeOutputs, typeName } from '../../../lib/production';
+import { SKU_CUSTOMERS, loadSkus } from '../../../lib/customer-skus';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -14,12 +15,12 @@ if (!staff) return Astro.redirect('/portail/connexion');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frProduction, enProduction);
 const admin = getAdminClient();
-const [{ rooms, types }, typeOutputs] = await Promise.all([loadCatalog(admin), loadTypeOutputs(admin)]);
+const [{ rooms, types }, typeOutputs, skus] = await Promise.all([loadCatalog(admin), loadTypeOutputs(admin), loadSkus(admin)]);
 const pctText = (p: number | null) => (p === null ? '' : locale === 'fr' ? String(p).replace('.', ',') : String(p));
 
 const ok = Astro.url.searchParams.get('ok');
 const err = Astro.url.searchParams.get('error');
-const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' ? T('set.err.invalid') : err ? T('set.err.unknown') : null;
+const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' ? T('set.err.invalid') : err === 'sku' ? T('set.err.sku') : err ? T('set.err.unknown') : null;
 ---
 <PortailLayout title={`${T('set.title')} — ${T('title')}`} staffName={staff.full_name} wide>
   <h1>{T('title')}</h1>
@@ -131,6 +132,41 @@ const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' 
       <span></span>
     </form>
   </section>
+
+  <section class="card block" id="articles">
+    <h2>{T('set.skus')}</h2>
+    <p class="hint" style="margin: -6px 0 14px;">{T('set.skus.hint')}</p>
+    <div class="grid-head skus" aria-hidden="true">
+      <span>{T('set.skus.customer')}</span><span>{T('set.skus.item')}</span><span>{T('set.skus.product')}</span>
+      <span>{T('set.skus.perCase')}</span><span>{T('set.active')}</span><span></span>
+    </div>
+    {skus.map((k) => (
+      <form method="POST" action="/api/portail/production/settings" class={`grid-row skus${k.is_active ? '' : ' off'}`}>
+        <input type="hidden" name="_action" value="save_sku" />
+        <input type="hidden" name="id" value={k.id} />
+        <select name="customer" aria-label={T('set.skus.customer')}>
+          {SKU_CUSTOMERS.map((c) => <option value={c} selected={c === k.customer}>{c}</option>)}
+        </select>
+        <input type="text" name="item_no" value={k.item_no} required class="mono" aria-label={T('set.skus.item')} />
+        <input type="text" name="product_name" value={k.product_name} required aria-label={T('set.skus.product')} />
+        <input type="number" name="units_per_case" value={k.units_per_case ?? ''} min="1" step="1" aria-label={T('set.skus.perCase')} />
+        <label class="cb"><input type="checkbox" name="is_active" value="1" checked={k.is_active} /><span class="sr">{T('set.active')}</span></label>
+        <button type="submit" class="btn btn-secondary btn-sm">{T('set.save')}</button>
+      </form>
+    ))}
+    <h3>{T('set.skus.new')}</h3>
+    <form method="POST" action="/api/portail/production/settings" class="grid-row skus new">
+      <input type="hidden" name="_action" value="add_sku" />
+      <select name="customer" aria-label={T('set.skus.customer')}>
+        {SKU_CUSTOMERS.map((c) => <option value={c}>{c}</option>)}
+      </select>
+      <input type="text" name="item_no" required class="mono" placeholder={T('set.skus.item')} aria-label={T('set.skus.item')} />
+      <input type="text" name="product_name" required placeholder={T('set.skus.product')} aria-label={T('set.skus.product')} />
+      <input type="number" name="units_per_case" min="1" step="1" placeholder="6" aria-label={T('set.skus.perCase')} />
+      <span></span>
+      <button type="submit" class="btn btn-primary btn-sm">{T('set.add')}</button>
+    </form>
+  </section>
 </PortailLayout>
 
 <style>
@@ -141,6 +177,8 @@ const errMsg = err === 'duplicate' ? T('set.err.duplicate') : err === 'invalid' 
   .rooms { grid-template-columns: 80px 1.4fr 1.4fr 56px 90px 70px 70px 110px; }
   .types { grid-template-columns: 170px 1.6fr 1.6fr 70px 70px 110px; }
   .yields { grid-template-columns: 1.6fr 1.4fr 130px 110px 110px 90px; }
+  .skus { grid-template-columns: 100px 150px 2.4fr 110px 70px 110px; }
+  .grid-row .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .type-name { font-size: .88rem; }
   .grid-row select { padding: 6px 8px; font-size: .88rem; }
   .grid-head { font-size: .74rem; font-weight: 600; color: var(--p-muted); margin-bottom: 6px; }

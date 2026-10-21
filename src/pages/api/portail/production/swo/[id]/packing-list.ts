@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
 import { loadSwo } from '../../../../../../lib/production-swo';
 import { loadShipmentForSwo } from '../../../../../../lib/shipments';
+import { loadSkus, skuCustomer } from '../../../../../../lib/customer-skus';
 import { buildPackingList, packingListFilename } from '../../../../../../lib/packing-list';
 
 export const prerender = false;
@@ -15,7 +16,8 @@ export const GET: APIRoute = async ({ request, cookies, params, redirect }) => {
   const admin = getAdminClient();
   const swo = await loadSwo(admin, id);
   if (!swo) return new Response('Not found', { status: 404 });
-  const docx = await buildPackingList(swo, await loadShipmentForSwo(admin, id));
+  const custKey = skuCustomer(swo.customer_name);
+  const docx = await buildPackingList(swo, await loadShipmentForSwo(admin, id), custKey ? await loadSkus(admin, custKey) : []);
   return new Response(docx, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
