@@ -911,18 +911,28 @@ export async function qboLists(admin: SupabaseClient, opts: { fresh?: boolean } 
 async function loadLists(admin: SupabaseClient) {
   const qbo = await getQbo(admin);
   if (!qbo) return null;
-  const [accounts, taxCodes, vendors] = await Promise.all([
+  const [accounts, taxCodes, vendors, taxRates] = await Promise.all([
     qbo.query('Account', 'Active = true'),
     qbo.query('TaxCode', 'Active = true'),
     qbo.query('Vendor', 'Active = true'),
+    qbo.query('TaxRate', 'Active = true').catch(() => [] as any[]),
   ]);
+  // Purchase rate of each tax code (sum of its rates, e.g. GST 5 + QST 9.975 =
+  // 14.975), so the form can pick the code by the rate printed on the bill
+  // rather than by name (the first "HST…" code alphabetically is HST NL, 15 %).
+  const rateById = new Map(taxRates.map((r) => [String(r.Id), n(r.RateValue)]));
+  const codeRate = (t: any): number | null => {
+    const list = t.PurchaseTaxRateList?.TaxRateDetail ?? [];
+    if (!list.length) return null;
+    return Math.round(list.reduce((s: number, d: any) => s + (rateById.get(String(d.TaxRateRef?.value)) ?? 0), 0) * 1000) / 1000;
+  };
   const pick = (types: string[]) => accounts.filter((a) => types.includes(a.AccountType))
     .map((a) => ({ id: a.Id as string, name: (a.FullyQualifiedName ?? a.Name) as string }))
     .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   return {
     expenseAccounts: pick(['Expense', 'Cost of Goods Sold', 'Other Expense', 'Other Current Asset', 'Fixed Asset']),
     bankAccounts: pick(['Bank', 'Credit Card']),
-    taxCodes: taxCodes.map((t) => ({ id: t.Id as string, name: t.Name as string })).sort((a, b) => a.name.localeCompare(b.name, 'fr')),
+    taxCodes: taxCodes.map((t) => ({ id: t.Id as string, name: t.Name as string, rate: codeRate(t) })).sort((a, b) => a.name.localeCompare(b.name, 'fr')),
     vendors: vendors.map((v) => ({ id: v.Id as string, name: v.DisplayName as string, balance: n(v.Balance) })).sort((a, b) => a.name.localeCompare(b.name, 'fr')),
   };
 }
