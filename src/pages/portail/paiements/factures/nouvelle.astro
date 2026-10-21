@@ -148,15 +148,22 @@ const i18n = {
     // 14.975 % → GST/QST QC, 5 % → GST). The supplier's usual code wins a tie.
     if (sub > 0 && codes.some((c) => typeof c.rate === 'number')) {
       const eff = ((g + q) / sub) * 100;
-      const near = codes.filter((c) => typeof c.rate === 'number' && Math.abs((c.rate as number) - eff) <= 0.3 && !/adjust/i.test(c.name))
-        .sort((a, b) => Math.abs((a.rate as number) - eff) - Math.abs((b.rate as number) - eff));
+      // A code replaced by a dated one ("HST NL" → "HST NL 2016") is an old rate
+      // QB can no longer compute — never pick it. Ties go to Ontario (HST ON 13 %).
+      const outdated = (c: { name: string }) => codes.some((o) => {
+        const base = c.name.trim().toLowerCase() + ' ';
+        return o.name.toLowerCase().startsWith(base) && /^(19|20)\d{2}$/.test(o.name.slice(base.length).trim());
+      });
+      const isOn = (c: { name: string }) => Number(/\bON\b/.test(c.name));
+      const near = codes.filter((c) => typeof c.rate === 'number' && Math.abs((c.rate as number) - eff) <= 0.3 && !/adjust/i.test(c.name) && !outdated(c))
+        .sort((a, b) => Math.abs((a.rate as number) - eff) - Math.abs((b.rate as number) - eff) || isOn(b) - isOn(a));
       if (near.length) {
         if (historyId && near.some((c) => c.id === historyId)) return historyId;
         if (eff < 0.01) return near.find((c) => /exempt/i.test(c.name))?.id ?? near[0].id;
         return near[0].id;
       }
     }
-    if (g > 0 && sub > 0 && g / sub > 0.07 && g / sub < 0.135) return find(/HST\s*ON/i) ?? find(/^HST/i);
+    if (g > 0 && sub > 0 && g / sub > 0.07 && g / sub < 0.135) return find(/HST\s*ON/i);
     if (g > 0 && q > 0) return find(/GST\s*\/\s*QST/i) ?? find(/QST/i);
     if (g > 0 && sub > 0 && g / sub > 0.07) return find(/^HST/i);
     if (g > 0) return find(/^GST$/i) ?? find(/^GST/i, /QST|HST|Adjust/i);
