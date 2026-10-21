@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { getAdminClient } from '../../../lib/supabase';
-import { validateUploadedFile, uploadVendorFile } from '../../../lib/vendor-storage';
-import { REQUIRED_APPROVER_EMAILS } from '../../../lib/vendor-approvals';
-import { sendVendorSubmissionNotice, sendVendorDraftLink } from '../../../lib/email';
+import { validateUploadedFile } from '../../../lib/vendor-storage';
+import { sendVendorDraftLink } from '../../../lib/email';
+import { readVendorFields, reminderResets, sendForApproval, uploadAnyProvidedFiles } from '../../../lib/vendor-form-parse';
 import { mintToken, sha256Hex } from '../../../lib/tokens';
 import { findInviteByToken, inviteRecipients } from '../../../lib/vendor-invites';
 
@@ -81,85 +81,18 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const stale = !!existing && viaInvite && loadedVersion !== null
     && loadedVersion !== String(existing.updated_at ?? '');
 
-  const vendor_type = getOrNull('vendor_type');
-  const isCannabisGrower = vendor_type === 'cannabis_grower';
-
-  const company_name = get('company_name');
-  const address = get('address');
-  const city = get('city');
-  const province = get('province');
-  const postal_code = get('postal_code');
-  const contact_person = get('contact_person');
-  const phone = get('phone');
-  const phone_ext = getOrNull('phone_ext');
-  const email = get('email');
-
-  const shipping_same_as_billing = form.get('shipping_same_as_billing') === '1';
-  const shipping_address = shipping_same_as_billing ? null : getOrNull('shipping_address');
-  const shipping_city = shipping_same_as_billing ? null : getOrNull('shipping_city');
-  const shipping_province = shipping_same_as_billing ? null : getOrNull('shipping_province');
-  const shipping_postal_code = shipping_same_as_billing ? null : getOrNull('shipping_postal_code');
-
-  const sales_contact_name = get('sales_contact_name');
-  const sales_contact_email = get('sales_contact_email');
-  const sales_contact_phone = getOrNull('sales_contact_phone');
-  const sales_contact_phone_ext = getOrNull('sales_contact_phone_ext');
-  const qa_contact_name = get('qa_contact_name');
-  const qa_contact_email = get('qa_contact_email');
-  const qa_contact_phone = getOrNull('qa_contact_phone');
-  const qa_contact_phone_ext = getOrNull('qa_contact_phone_ext');
-  const accounting_contact_name = getOrNull('accounting_contact_name');
-  const accounting_contact_email = getOrNull('accounting_contact_email');
-  const accounting_contact_phone = getOrNull('accounting_contact_phone');
-  const accounting_contact_phone_ext = getOrNull('accounting_contact_phone_ext');
-
-  const business_number = getOrNull('business_number');
-  const gst_hst_number = getOrNull('gst_hst_number');
-  const qst_number = getOrNull('qst_number');
-
-  const bank_institution_number = getOrNull('bank_institution_number');
-  const bank_transit_number = getOrNull('bank_transit_number');
-  const bank_account_number = getOrNull('bank_account_number');
-  const bank_address = getOrNull('bank_address');
-
-  // Culture-information fields only apply to cannabis growers — force them to
-  // null for any other vendor type regardless of what was posted, since the
-  // section is hidden (and thus untouched) in the UI for everyone else.
-  const production_type = isCannabisGrower ? getOrNull('production_type') : null;
-  const cultivation_methods = isCannabisGrower ? form.getAll('cultivation_methods').map(String).filter(Boolean) : [];
-  const lighting_type = isCannabisGrower ? getOrNull('lighting_type') : null;
-  const medium_type = isCannabisGrower ? getOrNull('medium_type') : null;
-  const nutrient_type = isCannabisGrower ? getOrNull('nutrient_type') : null;
-  const cultivar_name = isCannabisGrower ? getOrNull('cultivar_name') : null;
-  const starting_material = isCannabisGrower ? form.getAll('starting_material').map(String).filter(Boolean) : [];
-  const pesticides_used = isCannabisGrower ? getOrNull('pesticides_used') : null;
-
-  // Universal — applies to every vendor type.
-  const products_sold = getOrNull('products_sold');
-
-  const certified = form.get('certified') === '1';
-  const certified_by_name = get('certified_by_name');
-  const certified_by_title = get('certified_by_title');
-
-  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-  const file_cra_license_expiry = DATE_RE.test(get('file_cra_license_expiry')) ? get('file_cra_license_expiry') : null;
-  const file_health_canada_license_expiry = DATE_RE.test(get('file_health_canada_license_expiry')) ? get('file_health_canada_license_expiry') : null;
-
-  const fields = {
-    vendor_type,
-    company_name, address, city, province, postal_code, contact_person, phone, phone_ext, email,
+  const fields = readVendorFields(form);
+  const {
+    vendor_type, company_name, address, city, province, postal_code, contact_person, phone, email,
     shipping_same_as_billing, shipping_address, shipping_city, shipping_province, shipping_postal_code,
-    sales_contact_name, sales_contact_email, sales_contact_phone, sales_contact_phone_ext,
-    qa_contact_name, qa_contact_email, qa_contact_phone, qa_contact_phone_ext,
-    accounting_contact_name, accounting_contact_email, accounting_contact_phone, accounting_contact_phone_ext,
-    business_number, gst_hst_number, qst_number,
+    sales_contact_name, sales_contact_email, sales_contact_phone,
+    qa_contact_name, qa_contact_email, qa_contact_phone,
+    accounting_contact_email, accounting_contact_phone,
+    business_number, gst_hst_number,
     bank_institution_number, bank_transit_number, bank_account_number, bank_address,
-    products_sold,
-    production_type, cultivation_methods, lighting_type, medium_type, nutrient_type,
-    cultivar_name, starting_material, pesticides_used,
     certified, certified_by_name, certified_by_title,
     file_cra_license_expiry, file_health_canada_license_expiry,
-  };
+  } = fields;
 
   // Out of date: a colleague saved after this page was opened. Their answers are
   // not on this page, so an empty field here means "I did not fill this in",
@@ -175,14 +108,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   // If a license's expiry date actually changed (vendor renewed and told us
   // the new date), reset that license's reminder flag so a new cycle can
   // fire for it. New rows start with the flag unset (column default null).
-  if (existing) {
-    if (file_cra_license_expiry && file_cra_license_expiry !== existing.file_cra_license_expiry) {
-      (fields as Record<string, unknown>).file_cra_license_reminder_sent_at = null;
-    }
-    if (file_health_canada_license_expiry && file_health_canada_license_expiry !== existing.file_health_canada_license_expiry) {
-      (fields as Record<string, unknown>).file_health_canada_license_reminder_sent_at = null;
-    }
-  }
+  if (existing) Object.assign(fields, reminderResets(fields, existing));
 
   // ---------------- DRAFT SAVE ----------------
   // Minimal validation: just enough to identify who to send the resume link to.
@@ -293,6 +219,9 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       console.error('[vendor-submit] finalize update failed:', updErr);
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, 'unknown'), 303);
     }
+    // A draft saved before the email was typed (Aspire Infusions, 2026-10-15)
+    // was never matched to its invitation: match it now that it is complete.
+    await linkInviteIfAny(admin, inviteToken, submissionId, fields);
   } else {
     // A second click on Submit while the first request is still uploading files
     // arrives as a brand-new submission, which is how PBG BioPharma ended up with
@@ -340,32 +269,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     await admin.from('vendor_submission_events').insert({ vendor_submission_id: submissionId, decision: 'resubmitted' });
   }
 
-  const { data: approverStaff } = await admin
-    .from('staff')
-    .select('id, full_name, email')
-    .in('email', [...REQUIRED_APPROVER_EMAILS]);
-
-  if (approverStaff && approverStaff.length > 0) {
-    // Idempotent-ish: a draft resumed twice could already have approval rows
-    // from an earlier partial run — clear any stale rows first.
-    await admin.from('vendor_submission_approvals').delete().eq('vendor_submission_id', submissionId);
-    await admin.from('vendor_submission_approvals').insert(
-      approverStaff.map((s) => ({ vendor_submission_id: submissionId, staff_id: s.id })),
-    );
-
-    const siteUrl = (import.meta.env.PORTAL_SITE_URL ?? 'https://oaziz.ca').replace(/\/$/, '');
-    const submissionUrl = `${siteUrl}/portail/fournisseurs/${submissionId}`;
-    for (const approver of approverStaff) {
-      await sendVendorSubmissionNotice({
-        toEmail: approver.email,
-        toName: approver.full_name,
-        companyName: company_name,
-        submissionUrl,
-      });
-    }
-  } else {
-    console.error('[vendor-submit] no approver staff rows found for', REQUIRED_APPROVER_EMAILS);
-  }
+  await sendForApproval(admin, submissionId, company_name);
 
   return redirect('/fournisseurs/merci', 303);
 };
@@ -409,6 +313,11 @@ async function linkInviteIfAny(
     return;
   }
 
+  // Already tied to an invitation: never claim a second one.
+  const { count: linked } = await admin
+    .from('vendor_invites').select('id', { count: 'exact', head: true }).eq('vendor_submission_id', submissionId);
+  if (linked) return;
+
   const addresses = ['email', 'sales_contact_email', 'qa_contact_email', 'accounting_contact_email']
     .map((k) => String(fields[k] ?? '').trim().toLowerCase())
     .filter((e) => e.includes('@'));
@@ -436,27 +345,4 @@ async function linkInviteIfAny(
     .update({ vendor_submission_id: submissionId })
     .eq('id', match.id)
     .is('vendor_submission_id', null);
-}
-
-async function uploadAnyProvidedFiles(
-  admin: ReturnType<typeof getAdminClient>,
-  submissionId: string,
-  form: FormData,
-): Promise<void> {
-  const jobs: Array<{ field: string; kind: 'cra-license' | 'health-canada-license' | 'bank-proof'; column: string }> = [
-    { field: 'file_cra_license', kind: 'cra-license', column: 'file_cra_license_path' },
-    { field: 'file_health_canada_license', kind: 'health-canada-license', column: 'file_health_canada_license_path' },
-    { field: 'file_bank_proof', kind: 'bank-proof', column: 'file_bank_void_cheque_path' },
-  ];
-  const updates: Record<string, string> = {};
-  for (const job of jobs) {
-    const file = form.get(job.field) as File | null;
-    if (!file || file.size === 0) continue;
-    if (validateUploadedFile(file)) continue; // invalid files are rejected earlier for the required-file cases; silently skip here for optional re-uploads on draft saves
-    const path = await uploadVendorFile(submissionId, job.kind, file);
-    updates[job.column] = path;
-  }
-  if (Object.keys(updates).length > 0) {
-    await admin.from('vendor_submissions').update(updates).eq('id', submissionId);
-  }
 }

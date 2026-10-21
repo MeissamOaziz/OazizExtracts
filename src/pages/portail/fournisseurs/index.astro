@@ -12,6 +12,7 @@ const staff = await currentStaff(supabase);
 if (!staff) return Astro.redirect('/portail/connexion');
 
 const canLicenses = effectivePermissions(staff).has('licenses');
+const canEditVq = effectivePermissions(staff).has('vq');
 const locale = getPortailLocale(Astro.cookies);
 const T = makeT(locale, frFournisseursIndex, enFournisseursIndex);
 
@@ -74,6 +75,10 @@ function inviteStatus(vendorSubmissionId: string | null): InviteStatus {
   const a = approvalsBySubmission.get(vendorSubmissionId) ?? { approved: 0, total: 0 };
   return a.total > 0 && a.approved === a.total ? 'completed' : 'submitted';
 }
+// Only invitations still waiting on the vendor are listed here: once a file is
+// submitted it is followed in the received list below.
+const openInvites = (invites ?? []).filter((i) =>
+  !i.vendor_submission_id || linkedStatusById.get(i.vendor_submission_id) === 'draft');
 const inviteStatusBadge: Record<InviteStatus, string> = {
   not_started: 'badge-draft', in_progress: 'badge-signing', submitted: 'badge-sent', completed: 'badge-complete',
 };
@@ -135,7 +140,7 @@ const errorMessages: Record<string, string> = {
       <h2>{T('invites.heading')}</h2>
       <p class="hint" style="margin: 4px 0 0;">{T('invites.hint')}</p>
     </div>
-    {(!invites || invites.length === 0) ? (
+    {openInvites.length === 0 ? (
       <div class="empty-state">
         <p>{T('invites.empty')}</p>
       </div>
@@ -151,7 +156,7 @@ const errorMessages: Record<string, string> = {
           </tr>
         </thead>
         <tbody>
-          {invites.map((inv) => {
+          {openInvites.map((inv) => {
             const status = inviteStatus(inv.vendor_submission_id);
             return (
               <tr>
@@ -162,12 +167,27 @@ const errorMessages: Record<string, string> = {
                 <td><span class={`badge ${inviteStatusBadge[status]}`}>{T(`invites.status.${status}` as keyof typeof frFournisseursIndex)}</span></td>
                 <td>{formatDateTime(inv.last_reminder_sent_at)}</td>
                 <td style="text-align: right;">
-                  {(status === 'not_started' || status === 'in_progress') && (
-                    <form method="POST" action="/api/portail/vendor-submissions/remind" style="display:inline;">
-                      <input type="hidden" name="invite_id" value={inv.id} />
-                      <button type="submit" class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('invites.remindBtn')}</button>
-                    </form>
-                  )}
+                  <div class="inv-actions">
+                    {(status === 'not_started' || status === 'in_progress') && (
+                      <form method="POST" action="/api/portail/vendor-submissions/remind" style="display:inline;">
+                        <input type="hidden" name="invite_id" value={inv.id} />
+                        <button type="submit" class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('invites.remindBtn')}</button>
+                      </form>
+                    )}
+                    {canEditVq && inv.vendor_submission_id && (
+                      <a href={`/portail/fournisseurs/${inv.vendor_submission_id}/modifier`} class="btn btn-secondary" style="font-size:.78rem;padding:4px 10px;">{T('invites.complete')}</a>
+                    )}
+                    {canEditVq && !inv.vendor_submission_id && (
+                      <details class="staff-fill">
+                        <summary>{T('invites.staffFill')}</summary>
+                        <form method="POST" action="/api/portail/vendor-submissions/from-invite">
+                          <input type="hidden" name="invite_id" value={inv.id} />
+                          <input type="text" name="company_name" required placeholder={T('invites.staffFill.company')} aria-label={T('invites.staffFill.company')} />
+                          <button type="submit" class="btn btn-primary" style="font-size:.8rem;padding:5px 12px;">{T('invites.staffFill.create')}</button>
+                        </form>
+                      </details>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -219,3 +239,10 @@ const errorMessages: Record<string, string> = {
     )}
   </div>
 </PortailLayout>
+
+<style>
+  .inv-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: flex-start; flex-wrap: wrap; }
+  .staff-fill summary { font-size: .78rem; font-weight: 500; color: var(--p-accent); margin: 4px 0 0; }
+  .staff-fill form { display: flex; gap: 6px; margin-top: 6px; }
+  .staff-fill input { width: 190px; padding: 5px 8px; font-size: .84rem; }
+</style>

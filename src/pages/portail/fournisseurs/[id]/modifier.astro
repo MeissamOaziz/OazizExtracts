@@ -1,0 +1,49 @@
+---
+export const prerender = false;
+
+import PortailLayout from '../../../../layouts/PortailLayout.astro';
+import VendorFormFields from '../../../../components/VendorFormFields.astro';
+import { createServerClient, currentStaff, getAdminClient } from '../../../../lib/supabase';
+import { getPortailLocale, makeT } from '../../../../lib/portail-i18n';
+import { frFournisseursDetail, enFournisseursDetail, type FournisseursDetailDict } from '../../../../i18n/portail/fournisseurs-detail';
+import { frVendorForm, enVendorForm } from '../../../../i18n/vendor-form';
+import { vendorFormHasFiles, vendorFormValuesFrom } from '../../../../lib/vendor-form-values';
+import type { Permission } from '../../../../lib/access';
+
+// Oaziz staff fill in or correct a vendor's file for them, with the same form
+// the vendor uses (nothing required but the company name, no attestation).
+const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
+if (!staff) return Astro.redirect('/portail/connexion');
+const perms: ReadonlySet<Permission> = Astro.locals.access?.perms ?? new Set<Permission>();
+const id = Astro.params.id ?? '';
+if (!perms.has('vq') || !/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect(`/portail/fournisseurs/${id}`);
+
+const locale = getPortailLocale(Astro.cookies);
+const T = makeT(locale, frFournisseursDetail, enFournisseursDetail);
+const Tv = makeT(locale, frVendorForm, enVendorForm);
+
+const { data: submission } = await getAdminClient().from('vendor_submissions').select('*').eq('id', id).maybeSingle();
+if (!submission) return Astro.redirect('/portail/fournisseurs');
+const isDraft = submission.status === 'draft';
+
+const err = Astro.url.searchParams.get('error');
+const errMsg = err ? (T(`error.${err}` as keyof FournisseursDetailDict) ?? T('error.unknown')) : null;
+---
+<PortailLayout title={`${T('staff.title')} — ${submission.company_name}`} staffName={staff.full_name}>
+  <div style="margin-bottom: 16px;">
+    <a href={`/portail/fournisseurs/${id}`} style="font-size: .9rem; color: var(--p-muted); text-decoration: none;">← {submission.company_name}</a>
+  </div>
+  <h1>{T('staff.title')}</h1>
+  <p class="hint" style="margin: 4px 0 8px; max-width: 80ch;">{T('staff.intro')}</p>
+  {isDraft && <p class="hint" style="margin: 0 0 8px; max-width: 80ch;">{T('staff.introDraft')}</p>}
+  <p class="hint" style="margin: 0 0 18px; max-width: 80ch;">{T('staff.attestation')}</p>
+  {errMsg && <div class="flash flash-error">{errMsg}</div>}
+
+  <VendorFormFields
+    T={Tv}
+    action={`/api/portail/vendor-submissions/${id}/staff-edit`}
+    values={vendorFormValuesFrom(submission)}
+    hasFiles={vendorFormHasFiles(submission)}
+    staff={{ saveLabel: T('staff.save'), submitLabel: isDraft ? T('staff.submit') : null }}
+  />
+</PortailLayout>

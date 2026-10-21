@@ -2,6 +2,9 @@
 // Shared form body for the public vendor qualification form — used both by
 // the blank /fournisseurs page and the /fournisseurs/brouillon/[token]
 // resume page, so the (long) field markup isn't duplicated between the two.
+// With `staff`, Oaziz staff fill it in for a vendor from the portal: nothing is
+// required but the company name, the vendor's own attestation is left out (it
+// stays the vendor's), and the buttons are "save" and "submit for approval".
 import type { VendorFormDict } from '../i18n/vendor-form';
 import type { VendorFormValues } from '../lib/vendor-form-values';
 
@@ -12,9 +15,10 @@ interface Props {
   values: VendorFormValues;
   hasFiles: { cra: boolean; hc: boolean; bank: boolean };
   hiddenFields?: Record<string, string>;
+  staff?: { saveLabel: string; submitLabel: string | null };
 }
 
-const { T, action, values: v, hasFiles, hiddenFields = {} } = Astro.props;
+const { T, action, values: v, hasFiles, hiddenFields = {}, staff } = Astro.props;
 
 const hasMethod = (code: string) => v.cultivation_methods.includes(code);
 
@@ -47,7 +51,7 @@ const contactValues: Record<ContactRole, Record<ContactField, string>> = {
 const cv = (role: ContactRole, field: ContactField): string => contactValues[role][field] ?? '';
 const hasMaterial = (code: string) => v.starting_material.includes(code);
 ---
-<form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form">
+<form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form" novalidate={!!staff} data-staff={staff ? '1' : undefined}>
   {Object.entries(hiddenFields).map(([k, val]) => <input type="hidden" name={k} value={val} />)}
 
   <div class="section-hdr"><h2>{T('section.vendorType.title')}</h2></div>
@@ -292,6 +296,7 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
   </div>
   </div>
 
+  {!staff && <>
   <div class="section-hdr"><h2>{T('section.certify.title')}</h2></div>
   <div class="two-col">
     <div class="form-row">
@@ -307,15 +312,23 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     <input type="checkbox" id="certified" name="certified" value="1" required />
     <label for="certified">{T('certifyLabel')}</label>
   </div>
+  </>}
 
-  <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
-    <button type="submit" name="action" value="draft" formnovalidate class="btn btn-secondary" id="btn-save-draft" style="flex: 1;" data-busy={T('btn.busy')}>
-      {T('saveDraftBtn')}
-    </button>
-    <button type="submit" name="action" value="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;" data-busy={T('btn.busy')}>
-      {T('submitBtn')}
-    </button>
-  </div>
+  {staff ? (
+    <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
+      <button type="submit" name="action" value="save" class="btn btn-secondary" style="flex: 1;" data-busy={T('btn.busy')}>{staff.saveLabel}</button>
+      {staff.submitLabel && <button type="submit" name="action" value="submit" class="btn btn-primary" style="flex: 2;" data-busy={T('btn.busy')}>{staff.submitLabel}</button>}
+    </div>
+  ) : (
+    <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
+      <button type="submit" name="action" value="draft" formnovalidate class="btn btn-secondary" id="btn-save-draft" style="flex: 1;" data-busy={T('btn.busy')}>
+        {T('saveDraftBtn')}
+      </button>
+      <button type="submit" name="action" value="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;" data-busy={T('btn.busy')}>
+        {T('submitBtn')}
+      </button>
+    </div>
+  )}
 </form>
 
 <script>
@@ -342,6 +355,7 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
     form.addEventListener('submit', (e: SubmitEvent) => {
       const submitter = e.submitter as HTMLButtonElement | null;
       if (!submitter || submitter.value !== 'submit') return; // draft save skips these extra checks
+      if (form.dataset.staff) return; // Oaziz staff may submit an incomplete file for a vendor
 
       let ok = true;
 

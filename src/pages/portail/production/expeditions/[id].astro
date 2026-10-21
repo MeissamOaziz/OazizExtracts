@@ -36,7 +36,7 @@ const doneEv = events.find((e) => e.kind === 'completed');
 const step = swo.status === 'draft' ? 1 : swo.status === 'sent' ? (swo.sheet_paths.length ? 4 : 3) : swo.status === 'completed' ? 5 : 0;
 
 // Columns production writes by hand: shown greyed so the split is obvious.
-const HAND: readonly string[] = ['lot_no', 'packaging_run_id', 'packaging_date', 'excise_province', 'packaging_lot_no', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight'];
+const HAND: readonly string[] = ['lot_no', 'packaging_run_id', 'packaging_date', 'excise_province', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight'];
 const NUM: readonly string[] = ['sku_size_g', 'po_quantity', 'final_quantity', 'cases'];
 const inputType = (f: string) => (f === 'packaging_date' ? 'date' : 'text');
 const cell = (l: SwoLine, f: string) => {

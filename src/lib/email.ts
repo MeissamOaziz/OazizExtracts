@@ -535,7 +535,11 @@ export interface VendorSubmissionEmail {
 
 export async function sendVendorSubmissionNotice(
   n: VendorSubmissionEmail,
-): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[vendor-email] dev server: not notifying ${n.toEmail} about ${n.companyName}`);
+    return { status: 'skipped_dev' };
+  }
   const apiKey = import.meta.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn(`[vendor-email] RESEND_API_KEY not set; would-have-notified ${n.toEmail} about ${n.companyName}`);

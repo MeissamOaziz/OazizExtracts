@@ -22,7 +22,7 @@ export const DEFAULT_COPY_TO = ['stephane@oaziz.ca', 'jacobp@oaziz.ca', 'meissam
 export const SWO_HEADER_FIELDS = ['order_date', 'packaging_date', 'customer_name', 'customer_po', 'prepared_by', 'preparation_date', 'notes'] as const;
 export const SWO_LINE_FIELDS = [
   'product_name', 'item_no', 'cultivar', 'product_type', 'lot_no', 'sku_size_g', 'packaging_run_id', 'packaging_date',
-  'excise_province', 'packaging_lot_no', 'po_quantity', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight',
+  'excise_province', 'po_quantity', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight',
 ] as const;
 export type SwoLineField = (typeof SWO_LINE_FIELDS)[number];
 const NUMERIC_LINE_FIELDS: readonly SwoLineField[] = ['sku_size_g', 'po_quantity', 'final_quantity', 'cases'];
@@ -32,7 +32,7 @@ export const isDateLineField = (f: string) => f === 'packaging_date';
 export interface SwoLine {
   product_name: string; item_no: string | null; cultivar: string | null; product_type: string | null; lot_no: string | null;
   sku_size_g: number | null; packaging_run_id: string | null; packaging_date: string | null; excise_province: string | null;
-  packaging_lot_no: string | null; po_quantity: number | null; final_quantity: number | null; cases: number | null;
+  po_quantity: number | null; final_quantity: number | null; cases: number | null;
   box_no: string | null; box_size: string | null; box_weight: string | null;
 }
 export interface Swo {
@@ -125,7 +125,7 @@ export function withDefaultExcise(lines: SwoLine[], customer: string | null | un
 /** A blank line. */
 export const emptyLine = (product_name = ''): SwoLine => ({
   product_name, item_no: null, cultivar: null, product_type: null, lot_no: null, sku_size_g: null, packaging_run_id: null,
-  packaging_date: null, excise_province: null, packaging_lot_no: null, po_quantity: null, final_quantity: null, cases: null,
+  packaging_date: null, excise_province: null, po_quantity: null, final_quantity: null, cases: null,
   box_no: null, box_size: null, box_weight: null,
 });
 
@@ -232,7 +232,6 @@ export const SheetExtraction = z.object({
     packaging_run_id: z.string().nullable(),
     packaging_date: z.string().nullable().describe('Packaging date written for this item, YYYY-MM-DD'),
     excise_province: z.string().nullable(),
-    packaging_lot_no: z.string().nullable(),
     final_quantity: z.number().nullable(),
     cases: z.number().nullable().describe('Number of cases written for this row'),
     box_no: z.string().nullable(),
@@ -282,7 +281,7 @@ export function readCompletedSheet(files: Doc[], swo: Swo): Promise<SheetExtract
 The printed rows of the table are, in order:
 ${rows}
 Rows below these may have been added by hand: number them after the printed ones.
-Read the HANDWRITTEN values: Packaging Date, Prepared By, Order Preparation Date, and for each row the LOT #, PACKAGING RUN ID, PACKAGING DATE (of that item), EXCISE STAMP PROVINCE, Packaging LOT #, FINAL Quantity Prepared, CASES, BOX # (a single number or a range like 4-7), BOX SIZE (L x W x H) and BOX WEIGHT.
+Read the HANDWRITTEN values: Packaging Date, Prepared By, Order Preparation Date, and for each row the LOT #, PACKAGING RUN ID, PACKAGING DATE (of that item), EXCISE STAMP PROVINCE, FINAL Quantity Prepared, CASES, BOX # (a single number or a range like 4-7), BOX SIZE (L x W x H) and BOX WEIGHT.
 Ignore what was already printed unless it was crossed out and corrected by hand (then return the correction). Dates as YYYY-MM-DD (the team writes DD/MM/YYYY or YYYY-MM-DD). Leave a cell null when it is empty. List in "unreadable" any filled cell you cannot read with confidence instead of guessing.`;
   return read(files, prompt, SheetExtraction);
 }
@@ -304,7 +303,7 @@ export function mergeSheet(swo: Swo, s: SheetExtraction): { header: SwoHeader; l
       lines.push(emptyLine(r.product_name));
     }
     const l = lines[idx];
-    for (const f of ['lot_no', 'packaging_run_id', 'excise_province', 'packaging_lot_no', 'box_no', 'box_size', 'box_weight'] as const) {
+    for (const f of ['lot_no', 'packaging_run_id', 'excise_province', 'box_no', 'box_size', 'box_weight'] as const) {
       if (r[f]) (l as any)[f] = r[f];
     }
     if (r.packaging_date && /^\d{4}-\d{2}-\d{2}$/.test(r.packaging_date)) l.packaging_date = r.packaging_date;
@@ -377,15 +376,14 @@ export async function buildSwoPdf(swo: Swo, opts: { requestNo?: string } = {}): 
   // The item # (customer SKU code) prints under the product name, to keep room
   // for the columns production writes in by hand.
   const cols: Array<{ h: string; w: number; v: (l: SwoLine) => string; sub?: (l: SwoLine) => string }> = [
-    { h: 'PRODUCT NAME', w: 100, v: (l) => l.product_name, sub: (l) => (l.item_no ? `Item # ${l.item_no}` : '') },
+    { h: 'PRODUCT NAME', w: 130, v: (l) => l.product_name, sub: (l) => (l.item_no ? `Item # ${l.item_no}` : '') },
     { h: 'Cultivar if Rotational (to add on label)', w: 58, v: (l) => l.cultivar ?? '' },
     { h: 'PRODUCT TYPE', w: 44, v: (l) => l.product_type ?? '' },
     { h: 'LOT #', w: 48, v: (l) => l.lot_no ?? '' },
     { h: 'SKU SIZE (g)', w: 30, v: (l) => fmtNum(l.sku_size_g) },
-    { h: 'PACKAGING RUN ID', w: 46, v: (l) => l.packaging_run_id ?? '' },
+    { h: 'PACKAGING RUN ID', w: 62, v: (l) => l.packaging_run_id ?? '' },
     { h: 'PACKAGING DATE', w: 50, v: (l) => l.packaging_date ?? '' },
     { h: 'EXCISE STAMP PROVINCE', w: 40, v: (l) => l.excise_province ?? '' },
-    { h: 'Packaging LOT #', w: 46, v: (l) => l.packaging_lot_no ?? '' },
     { h: 'PO Quantity', w: 34, v: (l) => fmtNum(l.po_quantity) },
     { h: 'FINAL Quantity Prepared', w: 42, v: (l) => fmtNum(l.final_quantity) },
     { h: 'CASES', w: 30, v: (l) => fmtNum(l.cases) },

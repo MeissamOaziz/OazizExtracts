@@ -55,10 +55,10 @@ const { data: eventRows } = await admin
   .eq('vendor_submission_id', id)
   .order('at', { ascending: false });
 const history = (eventRows ?? []) as unknown as Array<{
-  id: number; at: string; decision: Decision | 'resubmitted'; note: string | null;
+  id: number; at: string; decision: Decision | 'resubmitted' | 'staff_edited' | 'staff_submitted'; note: string | null;
   supplier_notified_to: string[] | null; staff: { full_name: string } | null;
 }>;
-const decisionBadge: Record<string, string> = { approved: 'badge-complete', feedback: 'badge-signing', rejected: 'badge-cancelled', resubmitted: 'badge-sent' };
+const decisionBadge: Record<string, string> = { approved: 'badge-complete', feedback: 'badge-signing', rejected: 'badge-cancelled', resubmitted: 'badge-sent', staff_edited: 'badge-draft', staff_submitted: 'badge-sent' };
 
 // QuickBooks card: for the accountants (Payments access) once the VQ is submitted.
 const accountant = !!Astro.locals.access?.perms?.has('payables');
@@ -92,7 +92,8 @@ const fmtAddr = (a: { Line1: string; City: string; CountrySubDivisionCode: strin
 const url = new URL(Astro.request.url);
 const info = url.searchParams.get('info');
 const errCode = url.searchParams.get('error');
-const infoMessages: Record<string, string> = { approved: T('info.approved'), feedback: T('info.feedback'), rejected: T('info.rejected'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked'), qb_completed: T('qb.ok.completed') };
+const canEdit = !!Astro.locals.access?.perms?.has('vq');
+const infoMessages: Record<string, string> = { staff_saved: T('info.staff_saved'), staff_submitted: T('info.staff_submitted'), approved: T('info.approved'), feedback: T('info.feedback'), rejected: T('info.rejected'), qb_created: T('qb.ok.created'), qb_linked: T('qb.ok.linked'), qb_completed: T('qb.ok.completed') };
 const errorMessages: Record<string, string> = {
   not_approver: T('error.not_approver'),
   note_required: T('error.note_required'),
@@ -175,6 +176,7 @@ function telHref(phone: string, ext?: string | null): string {
       <h1 style="margin-bottom: 4px;">{submission.company_name}</h1>
       <p style="color: var(--p-muted);">{T('submittedOn')} {fmtDate(submission.submitted_at)}</p>
     </div>
+    {canEdit && <a href={`/portail/fournisseurs/${id}/modifier`} class="btn btn-secondary" style="margin-left:auto;">{T('staff.editBtn')}</a>}
     {fileState === 'approved' && <span class="badge badge-complete">{T('fullyApprovedBanner')}</span>}
     {fileState === 'rejected' && <span class="badge badge-cancelled">{T('state.rejected')}</span>}
     {fileState === 'feedback' && <span class="badge badge-signing">{T('state.feedback')}</span>}
@@ -188,7 +190,10 @@ function telHref(phone: string, ext?: string | null): string {
   {errCode && !errCode.startsWith('qb') && <div class="flash flash-error">{errorMessages[errCode] ?? errorMessages.unknown}</div>}
 
   {isDraft && (
-    <div class="card" style="margin-bottom: 20px;">{T('notYetSubmitted')}</div>
+    <div class="card" style="margin-bottom: 20px;">
+      {T('notYetSubmitted')}
+      {canEdit && <div style="margin-top: 12px;"><a href={`/portail/fournisseurs/${id}/modifier`} class="btn btn-primary">{T('staff.editBtn')}</a></div>}
+    </div>
   )}
 
   {!isDraft && <>
