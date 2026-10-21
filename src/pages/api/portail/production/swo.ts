@@ -3,10 +3,12 @@ import { createServerClient, currentStaff, getAdminClient } from '../../../../li
 import { sendShipmentToBook, sendSwoCompletedCopy, sendSwoToProduction } from '../../../../lib/email';
 import { bookers, loadShipment, openShipmentForSwo, shipmentSummary } from '../../../../lib/shipments';
 import { buildPackingList, packingListFilename } from '../../../../lib/packing-list';
+import { buildPalletPlacard, palletPlacardFilename } from '../../../../lib/ocs-documents';
+import { isOcs } from '../../../../lib/shipments';
 import { isIsoDate, parseQty } from '../../../../lib/production';
 import { loadRequest } from '../../../../lib/production-requests';
 import {
-  READABLE_TYPES, SWO_LINE_FIELDS, buildSwoPdf, createSwo, isNumericLineField, loadSwo, loadSwoForRequest, logSwo,
+  READABLE_TYPES, SWO_LINE_FIELDS, buildSwoPdf, withDefaultExcise, createSwo, isDateLineField, isNumericLineField, loadSwo, loadSwoForRequest, logSwo,
   mergeSheet, readCompletedSheet, readPurchaseOrder, readingAvailable, saveSwo,
   type PoExtraction, type SwoHeader, type SwoLine,
 } from '../../../../lib/production-swo';
@@ -37,13 +39,17 @@ function readForm(form: FormData): { header: SwoHeader; lines: SwoLine[] } | 'BA
       const raw = cols[f][i] ?? '';
       if (isNumericLineField(f)) {
         const q = parseQty(raw);
-        if (Number.isNaN(q)) return 'BAD_QTY';
+        if (Number.isNaN(q) || (f === 'cases' && q !== null && !Number.isInteger(q))) return 'BAD_QTY';
         line[f] = q;
+      } else if (isDateLineField(f)) {
+        if (raw && !isIsoDate(raw)) return 'BAD_QTY';
+        line[f] = orNull(raw);
       } else line[f] = orNull(raw);
     }
     lines.push(line as unknown as SwoLine);
   }
-  return { header, lines };
+  // Stamp province left blank: the customer's default (OCS → ON, SQDC/Teedy → QC).
+  return { header, lines: withDefaultExcise(lines, header.customer_name) };
 }
 
 // Shipping work orders: create, save, send to production, read the completed
@@ -209,6 +215,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     }
     const packingList = { filename: packingListFilename(cur), content: await buildPackingList(cur, shipment) };
     attachments.push(packingList);
+    // The OCS also needs its pallet placard before the order ships.
+    const shipDocs = [packingList];
+    if (isOcs(cur.customer_name)) {
+      const placard = { filename: palletPlacardFilename(cur), content: await buildPalletPlacard(cur, shipment) };
+      attachments.push(placard); shipDocs.push(placard);
+    }
     await sendSwoCompletedCopy({
       toEmails: to, swoNo: cur.swo_no, customer: cur.customer_name, customerPo: cur.customer_po,
       sentBy: staff.full_name, swoUrl: `${siteUrl()}/portail/production/expeditions/${id}`, attachments,
@@ -226,7 +238,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       await sendShipmentToBook({
         toEmails: who.map((b) => b.email), shipmentNo: shipment.shipment_no, customer: shipment.customer_name,
         customerPo: shipment.customer_po, shipTo: shipment.ship_to, summary: shipmentSummary(shipment), by: staff.full_name,
-        shipmentUrl: `${siteUrl()}/portail/envois/${shipment.id}`, attachments: [packingList],
+        shipmentUrl: `${siteUrl()}/portail/envois/${shipment.id}`, attachments: shipDocs,
       });
     }
     return page(id, 'ok=completed');

@@ -30,19 +30,22 @@ export async function buildPackingList(swo: Swo, shipment: Shipment | null): Pro
   const rowEnd = x.indexOf('<!--/ROW-->');
   const rowTpl = x.slice(rowStart + '<!--ROW-->'.length, rowEnd);
   const lines = swo.lines.filter((l) => l.product_name);
+  // OCS lines keep the OCS item description exactly as on the PO (no cultivar
+  // appended); case # is the box number or range written on the work order.
   const rows = lines.map((l) => rowTpl
-    .replace('{{PALLET}}', () => shipment?.mode === 'pallet' ? '1' : '')
+    .replace('{{PALLET}}', () => (ocs || shipment?.mode === 'pallet' ? '1' : ''))
     .replace('{{CASE}}', () => wtext(l.box_no))
-    .replace('{{ITEM}}', () => '')
+    .replace('{{ITEM}}', () => wtext(l.item_no))
     .replace('{{LOT}}', () => wtext(l.lot_no))
-    .replace('{{DESC}}', () => wtext(l.cultivar && !l.product_name.includes(l.cultivar) ? `${l.product_name} (${l.cultivar})` : l.product_name))
+    .replace('{{DESC}}', () => wtext(!ocs && l.cultivar && !l.product_name.includes(l.cultivar) ? `${l.product_name} (${l.cultivar})` : l.product_name))
     .replace('{{UNITS}}', () => wtext(fmtNum(l.final_quantity ?? l.po_quantity)))
-    .replace('{{CASES}}', () => '')).join('');
+    .replace('{{CASES}}', () => wtext(fmtNum(l.cases)))).join('');
   x = x.slice(0, rowStart) + rows + x.slice(rowEnd + '<!--/ROW-->'.length);
 
   const units = lines.reduce((s, l) => s + (l.final_quantity ?? l.po_quantity ?? 0), 0);
-  const boxCount = shipment?.boxes.length ?? new Set(lines.map((l) => l.box_no).filter(Boolean)).size;
-  const shipTo = [swo.customer_name, shipment?.ship_to ?? swo.po_extraction?.ship_to].filter(Boolean).join('\n');
+  const cases = lines.reduce((s, l) => s + (l.cases ?? 0), 0);
+  const boxCount = cases || (shipment?.boxes.length ?? new Set(lines.map((l) => l.box_no).filter(Boolean)).size);
+  const shipTo = [ocs ? 'OCS' : swo.customer_name, shipment?.ship_to ?? swo.po_extraction?.ship_to].filter(Boolean).join('\n');
   const date = new Date().toLocaleDateString('en-US', { timeZone: 'America/Toronto', year: 'numeric', month: 'long', day: 'numeric' });
   const fill: Record<string, string> = {
     DATE: wtext(date),

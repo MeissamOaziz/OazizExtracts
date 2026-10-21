@@ -21,17 +21,18 @@ export const DEFAULT_COPY_TO = ['stephane@oaziz.ca', 'jacobp@oaziz.ca', 'meissam
 
 export const SWO_HEADER_FIELDS = ['order_date', 'packaging_date', 'customer_name', 'customer_po', 'prepared_by', 'preparation_date', 'notes'] as const;
 export const SWO_LINE_FIELDS = [
-  'product_name', 'cultivar', 'product_type', 'lot_no', 'sku_size_g', 'packaging_run_id', 'excise_province',
-  'packaging_lot_no', 'po_quantity', 'final_quantity', 'box_no', 'box_size', 'box_weight',
+  'product_name', 'item_no', 'cultivar', 'product_type', 'lot_no', 'sku_size_g', 'packaging_run_id', 'packaging_date',
+  'excise_province', 'packaging_lot_no', 'po_quantity', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight',
 ] as const;
 export type SwoLineField = (typeof SWO_LINE_FIELDS)[number];
-const NUMERIC_LINE_FIELDS: readonly SwoLineField[] = ['sku_size_g', 'po_quantity', 'final_quantity'];
+const NUMERIC_LINE_FIELDS: readonly SwoLineField[] = ['sku_size_g', 'po_quantity', 'final_quantity', 'cases'];
 export const isNumericLineField = (f: string) => (NUMERIC_LINE_FIELDS as readonly string[]).includes(f);
+export const isDateLineField = (f: string) => f === 'packaging_date';
 
 export interface SwoLine {
-  product_name: string; cultivar: string | null; product_type: string | null; lot_no: string | null;
-  sku_size_g: number | null; packaging_run_id: string | null; excise_province: string | null;
-  packaging_lot_no: string | null; po_quantity: number | null; final_quantity: number | null;
+  product_name: string; item_no: string | null; cultivar: string | null; product_type: string | null; lot_no: string | null;
+  sku_size_g: number | null; packaging_run_id: string | null; packaging_date: string | null; excise_province: string | null;
+  packaging_lot_no: string | null; po_quantity: number | null; final_quantity: number | null; cases: number | null;
   box_no: string | null; box_size: string | null; box_weight: string | null;
 }
 export interface Swo {
@@ -52,12 +53,9 @@ const SWO_COLS = '*, lines:ps_swo_lines ( * )';
 function shape(row: any): Swo {
   return {
     ...row,
-    lines: [...(row.lines ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((l: any) => ({
-      product_name: l.product_name, cultivar: l.cultivar, product_type: l.product_type, lot_no: l.lot_no,
-      sku_size_g: num(l.sku_size_g), packaging_run_id: l.packaging_run_id, excise_province: l.excise_province,
-      packaging_lot_no: l.packaging_lot_no, po_quantity: num(l.po_quantity), final_quantity: num(l.final_quantity),
-      box_no: l.box_no, box_size: l.box_size, box_weight: l.box_weight,
-    })),
+    // Built in SWO_LINE_FIELDS order: saveSwo compares lines as JSON.
+    lines: [...(row.lines ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((l: any) =>
+      Object.fromEntries(SWO_LINE_FIELDS.map((f) => [f, isNumericLineField(f) ? num(l[f]) : (l[f] ?? null)])) as unknown as SwoLine),
   };
 }
 
@@ -105,10 +103,30 @@ async function nextSwoSeq(admin: SupabaseClient, year: number): Promise<number> 
   throw new Error('swo counter busy');
 }
 
+/** The Ontario Cannabis Store (also matched by its legal name and OCRC). */
+export const isOcs = (customer: string | null | undefined) => /ontario cannabis|\bOCS\b|\bOCRC\b/i.test(customer ?? '');
+
+/**
+ * Excise stamps by customer: everything for the OCS carries Ontario stamps,
+ * everything for the SQDC and Teedy Medical carries Québec stamps.
+ */
+export function defaultExciseProvince(customer: string | null | undefined): 'ON' | 'QC' | null {
+  if (isOcs(customer)) return 'ON';
+  if (/\bSQDC\b|soci[ée]t[ée] qu[ée]b[ée]coise du cannabis|\bteedy\b/i.test(customer ?? '')) return 'QC';
+  return null;
+}
+
+/** Fills the stamp province on lines left blank, from the customer. */
+export function withDefaultExcise(lines: SwoLine[], customer: string | null | undefined): SwoLine[] {
+  const prov = defaultExciseProvince(customer);
+  return prov ? lines.map((l) => (l.excise_province ? l : { ...l, excise_province: prov })) : lines;
+}
+
 /** A blank line. */
 export const emptyLine = (product_name = ''): SwoLine => ({
-  product_name, cultivar: null, product_type: null, lot_no: null, sku_size_g: null, packaging_run_id: null,
-  excise_province: null, packaging_lot_no: null, po_quantity: null, final_quantity: null, box_no: null, box_size: null, box_weight: null,
+  product_name, item_no: null, cultivar: null, product_type: null, lot_no: null, sku_size_g: null, packaging_run_id: null,
+  packaging_date: null, excise_province: null, packaging_lot_no: null, po_quantity: null, final_quantity: null, cases: null,
+  box_no: null, box_size: null, box_weight: null,
 });
 
 /**
@@ -119,12 +137,13 @@ export async function createSwo(admin: SupabaseClient, staffId: string, r: ProdR
   const year = Number(todayLocal().slice(0, 4));
   const seq = await nextSwoSeq(admin, year);
   const swo_no = `BTE-${String(year % 100).padStart(2, '0')}-${String(seq).padStart(4, '0')}`;
-  const lines: SwoLine[] = po && po.lines.length
+  const customer = po?.customer_name ?? r.customer_name;
+  const lines: SwoLine[] = withDefaultExcise(po && po.lines.length
     ? po.lines.map((l) => ({
-      ...emptyLine(l.product_name), cultivar: l.cultivar, product_type: l.product_type,
+      ...emptyLine(l.product_name), item_no: l.item_no ?? null, cultivar: l.cultivar, product_type: l.product_type,
       sku_size_g: l.sku_size_g, po_quantity: l.quantity,
     }))
-    : r.lines.map((l) => ({ ...emptyLine(l.description), po_quantity: l.quantity }));
+    : r.lines.map((l) => ({ ...emptyLine(l.description), po_quantity: l.quantity })), customer);
   const { data, error } = await admin.from('ps_swos').insert({
     swo_no, request_id: r.id,
     order_date: po?.order_date ?? localDay(r.created_at),
@@ -187,6 +206,7 @@ export const PoExtraction = z.object({
   ship_to: z.string().nullable().describe('Delivery address, one line'),
   lines: z.array(z.object({
     product_name: z.string().describe('Product as named on the PO'),
+    item_no: z.string().nullable().describe("The customer's item number / SKU code for the line exactly as printed (for the OCS e.g. 107510 or 107510_28g_)"),
     cultivar: z.string().nullable().describe('Strain / cultivar if stated'),
     product_type: z.string().nullable().describe('e.g. Rosin, Hash, Kief, Bubble hash, Vape, Pre-roll, Flower'),
     sku_size_g: z.number().nullable().describe('Unit size in grams, e.g. 1 for a 1 g jar'),
@@ -210,9 +230,11 @@ export const SheetExtraction = z.object({
     product_name: z.string().nullable(),
     lot_no: z.string().nullable(),
     packaging_run_id: z.string().nullable(),
+    packaging_date: z.string().nullable().describe('Packaging date written for this item, YYYY-MM-DD'),
     excise_province: z.string().nullable(),
     packaging_lot_no: z.string().nullable(),
     final_quantity: z.number().nullable(),
+    cases: z.number().nullable().describe('Number of cases written for this row'),
     box_no: z.string().nullable(),
     box_size: z.string().nullable(),
     box_weight: z.string().nullable(),
@@ -260,7 +282,7 @@ export function readCompletedSheet(files: Doc[], swo: Swo): Promise<SheetExtract
 The printed rows of the table are, in order:
 ${rows}
 Rows below these may have been added by hand: number them after the printed ones.
-Read the HANDWRITTEN values: Packaging Date, Prepared By, Order Preparation Date, and for each row the LOT #, PACKAGING RUN ID, EXCISE STAMP PROVINCE, Packaging LOT #, FINAL Quantity Prepared, BOX #, BOX SIZE (L x W x H) and BOX WEIGHT.
+Read the HANDWRITTEN values: Packaging Date, Prepared By, Order Preparation Date, and for each row the LOT #, PACKAGING RUN ID, PACKAGING DATE (of that item), EXCISE STAMP PROVINCE, Packaging LOT #, FINAL Quantity Prepared, CASES, BOX # (a single number or a range like 4-7), BOX SIZE (L x W x H) and BOX WEIGHT.
 Ignore what was already printed unless it was crossed out and corrected by hand (then return the correction). Dates as YYYY-MM-DD (the team writes DD/MM/YYYY or YYYY-MM-DD). Leave a cell null when it is empty. List in "unreadable" any filled cell you cannot read with confidence instead of guessing.`;
   return read(files, prompt, SheetExtraction);
 }
@@ -285,7 +307,9 @@ export function mergeSheet(swo: Swo, s: SheetExtraction): { header: SwoHeader; l
     for (const f of ['lot_no', 'packaging_run_id', 'excise_province', 'packaging_lot_no', 'box_no', 'box_size', 'box_weight'] as const) {
       if (r[f]) (l as any)[f] = r[f];
     }
+    if (r.packaging_date && /^\d{4}-\d{2}-\d{2}$/.test(r.packaging_date)) l.packaging_date = r.packaging_date;
     if (r.final_quantity !== null) l.final_quantity = r.final_quantity;
+    if (r.cases !== null && Number.isInteger(r.cases) && r.cases >= 0) l.cases = r.cases;
   }
   return { header, lines };
 }
@@ -350,19 +374,23 @@ export async function buildSwoPdf(swo: Swo, opts: { requestNo?: string } = {}): 
   field('Order Preparation Date:', swo.preparation_date, M + W / 2 + 14, 484, half);
 
   // Table
-  const cols: Array<{ h: string; w: number; v: (l: SwoLine) => string }> = [
-    { h: 'PRODUCT NAME', w: 92, v: (l) => l.product_name },
-    { h: 'Cultivar if Rotational (to add on label)', w: 70, v: (l) => l.cultivar ?? '' },
-    { h: 'PRODUCT TYPE', w: 54, v: (l) => l.product_type ?? '' },
-    { h: 'LOT #', w: 56, v: (l) => l.lot_no ?? '' },
-    { h: 'SKU SIZE (g)', w: 38, v: (l) => fmtNum(l.sku_size_g) },
-    { h: 'PACKAGING RUN ID', w: 56, v: (l) => l.packaging_run_id ?? '' },
-    { h: 'EXCISE STAMP PROVINCE', w: 46, v: (l) => l.excise_province ?? '' },
-    { h: 'Packaging LOT #', w: 56, v: (l) => l.packaging_lot_no ?? '' },
-    { h: 'PO Quantity', w: 40, v: (l) => fmtNum(l.po_quantity) },
-    { h: 'FINAL Quantity Prepared', w: 50, v: (l) => fmtNum(l.final_quantity) },
+  // The item # (customer SKU code) prints under the product name, to keep room
+  // for the columns production writes in by hand.
+  const cols: Array<{ h: string; w: number; v: (l: SwoLine) => string; sub?: (l: SwoLine) => string }> = [
+    { h: 'PRODUCT NAME', w: 100, v: (l) => l.product_name, sub: (l) => (l.item_no ? `Item # ${l.item_no}` : '') },
+    { h: 'Cultivar if Rotational (to add on label)', w: 58, v: (l) => l.cultivar ?? '' },
+    { h: 'PRODUCT TYPE', w: 44, v: (l) => l.product_type ?? '' },
+    { h: 'LOT #', w: 48, v: (l) => l.lot_no ?? '' },
+    { h: 'SKU SIZE (g)', w: 30, v: (l) => fmtNum(l.sku_size_g) },
+    { h: 'PACKAGING RUN ID', w: 46, v: (l) => l.packaging_run_id ?? '' },
+    { h: 'PACKAGING DATE', w: 50, v: (l) => l.packaging_date ?? '' },
+    { h: 'EXCISE STAMP PROVINCE', w: 40, v: (l) => l.excise_province ?? '' },
+    { h: 'Packaging LOT #', w: 46, v: (l) => l.packaging_lot_no ?? '' },
+    { h: 'PO Quantity', w: 34, v: (l) => fmtNum(l.po_quantity) },
+    { h: 'FINAL Quantity Prepared', w: 42, v: (l) => fmtNum(l.final_quantity) },
+    { h: 'CASES', w: 30, v: (l) => fmtNum(l.cases) },
     { h: 'BOX #', w: 32, v: (l) => l.box_no ?? '' },
-    { h: 'BOX SIZE L x W x H', w: 64, v: (l) => l.box_size ?? '' },
+    { h: 'BOX SIZE L x W x H', w: 52, v: (l) => l.box_size ?? '' },
     { h: 'BOX WEIGHT', w: 0, v: (l) => l.box_weight ?? '' },
   ];
   const used = cols.reduce((s, c) => s + c.w, 0);
@@ -397,7 +425,18 @@ export async function buildSwoPdf(swo: Swo, opts: { requestNo?: string } = {}): 
     const y = top - headH - i * rowH - 16;
     for (const c of cols) {
       const v = c.v(l);
-      if (v) text(fitText(pdfText(v), reg, 8, c.w - 4), cx + 2, y, 8);
+      const sub = c.sub?.(l);
+      if (c.sub && v) {
+        // Product name: up to two lines (OCS names are long), the item # under it.
+        const words = pdfText(v).split(' ');
+        let first = '';
+        while (words.length && reg.widthOfTextAtSize(first ? `${first} ${words[0]}` : words[0], 7) <= c.w - 4) first = first ? `${first} ${words.shift()}` : words.shift()!;
+        const rest = words.join(' ');
+        const top = sub ? y + 7 : y + 4;
+        text(fitText(first || pdfText(v), reg, 7, c.w - 4), cx + 2, rest || sub ? top : y, 7);
+        if (rest) text(fitText(rest, reg, 7, c.w - 4), cx + 2, top - 8, 7);
+        if (sub) text(fitText(pdfText(sub), reg, 6, c.w - 4), cx + 2, rest ? top - 15 : top - 8, 6, reg, grey);
+      } else if (v) text(fitText(pdfText(v), reg, 8, c.w - 4), cx + 2, y, 8);
       cx += c.w;
     }
   });

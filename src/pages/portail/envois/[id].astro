@@ -64,6 +64,7 @@ const qtyUnit = () => (locale === 'en' ? 'units' : 'unités');
     <div class="head-actions">
       {swo && <a class="btn btn-secondary" href={`/portail/production/expeditions/${swo.id}`}>{T('link.swo').replace('{no}', swo.swo_no)}</a>}
       {swo && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('link.packingList')}</a>}
+      {swo && isOcs(s.customer_name) && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pallet-placard`}>{T('link.palletPlacard')}</a>}
       {s.coc_signed_at && <a class="btn btn-secondary" href={`/api/portail/envois/${s.id}/coc`} target="_blank" rel="noopener">{T('link.coc')}</a>}
       {s.tracking_url && <a class="btn btn-secondary" href={s.tracking_url} target="_blank" rel="noopener noreferrer">{T('link.track')}</a>}
     </div>

@@ -12,7 +12,7 @@ import {
   DEFAULT_COPY_TO, PRODUCTION_TEAM, SWO_HEADER_FIELDS, SWO_LINE_FIELDS, emptyLine, loadSwo, loadSwoEvents,
   staffDirectory, type SwoLine,
 } from '../../../../lib/production-swo';
-import { loadShipmentForSwo } from '../../../../lib/shipments';
+import { isOcs, loadShipmentForSwo } from '../../../../lib/shipments';
 
 const staff = await currentStaff(createServerClient(Astro.request, Astro.cookies));
 if (!staff) return Astro.redirect('/portail/connexion');
@@ -36,8 +36,9 @@ const doneEv = events.find((e) => e.kind === 'completed');
 const step = swo.status === 'draft' ? 1 : swo.status === 'sent' ? (swo.sheet_paths.length ? 4 : 3) : swo.status === 'completed' ? 5 : 0;
 
 // Columns production writes by hand: shown greyed so the split is obvious.
-const HAND: readonly string[] = ['lot_no', 'packaging_run_id', 'excise_province', 'packaging_lot_no', 'final_quantity', 'box_no', 'box_size', 'box_weight'];
-const NUM: readonly string[] = ['sku_size_g', 'po_quantity', 'final_quantity'];
+const HAND: readonly string[] = ['lot_no', 'packaging_run_id', 'packaging_date', 'excise_province', 'packaging_lot_no', 'final_quantity', 'cases', 'box_no', 'box_size', 'box_weight'];
+const NUM: readonly string[] = ['sku_size_g', 'po_quantity', 'final_quantity', 'cases'];
+const inputType = (f: string) => (f === 'packaging_date' ? 'date' : 'text');
 const cell = (l: SwoLine, f: string) => {
   const v = (l as any)[f];
   if (v === null || v === undefined) return '';
@@ -75,6 +76,7 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
     <div class="head-actions">
       {shipment && <a class="btn btn-secondary" href={`/portail/envois/${shipment.id}`}>{T('sw.shipment').replace('{no}', shipment.shipment_no)}</a>}
       {swo.status === 'completed' && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/packing-list`}>{T('sw.packingList')}</a>}
+      {swo.status === 'completed' && isOcs(swo.customer_name) && <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pallet-placard`}>{T('sw.palletPlacard')}</a>}
       <a class="btn btn-secondary" href={`/api/portail/production/swo/${swo.id}/pdf`} target="_blank" rel="noopener">{T('sw.pdf')}</a>
     </div>
   </div>
@@ -117,7 +119,7 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
             <tr>
               {SWO_LINE_FIELDS.map((f) => (
                 <td class={HAND.includes(f) ? 'hand' : ''}>
-                  <input type="text" name={`l_${f}`} value={cell(l, f)} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} />
+                  <input type={inputType(f)} name={`l_${f}`} value={cell(l, f)} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} />
                 </td>
               ))}
               <td><button type="button" class="ln-remove" title={T('sw.removeLine')} aria-label={T('sw.removeLine')}>&times;</button></td>
@@ -129,7 +131,7 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
     <template class="ln-template">
       <tr>
         {SWO_LINE_FIELDS.map((f) => (
-          <td class={HAND.includes(f) ? 'hand' : ''}><input type="text" name={`l_${f}`} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} /></td>
+          <td class={HAND.includes(f) ? 'hand' : ''}><input type={inputType(f)} name={`l_${f}`} inputmode={NUM.includes(f) ? 'decimal' : undefined} aria-label={T(K(`sw.l.${f}`))} class={`f-${f}`} /></td>
         ))}
         <td><button type="button" class="ln-remove" title={T('sw.removeLine')} aria-label={T('sw.removeLine')}>&times;</button></td>
       </tr>
@@ -264,14 +266,16 @@ const sheetReadAt = events.find((e) => e.kind === 'sheet_uploaded')?.at;
   .hdr { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 16px; }
   h3 { font-size: .95rem; font-weight: 600; margin: 8px 0 8px; }
   .table-wrap { overflow-x: auto; }
-  table.sw-lines { border-collapse: collapse; min-width: 1500px; }
+  table.sw-lines { border-collapse: collapse; min-width: 1900px; }
   .sw-lines th { font-size: .7rem; font-weight: 600; color: var(--p-muted); text-align: left; padding: 4px 4px 6px; text-transform: uppercase; letter-spacing: .3px; }
   .sw-lines td { padding: 3px; }
   .sw-lines input { padding: 6px 7px; font-size: .86rem; }
   .sw-lines .hand input { background: #f6f7f9; }
   .sw-lines th.hand { color: #8a8f9c; }
   .f-product_name { min-width: 170px; }
-  .f-sku_size_g, .f-po_quantity, .f-final_quantity, .f-box_no, .f-excise_province { width: 80px; }
+  .f-sku_size_g, .f-po_quantity, .f-final_quantity, .f-cases, .f-box_no, .f-excise_province { width: 80px; }
+  .f-item_no { width: 120px; }
+  .f-packaging_date { width: 150px; }
   .ln-remove { border: 1px solid var(--p-border); background: #fff; border-radius: 6px; height: 34px; width: 34px; cursor: pointer; color: var(--p-muted); }
   .ln-remove:hover { color: var(--p-danger); border-color: #fecaca; }
   .btn-sm { padding: 6px 12px; font-size: .85rem; }

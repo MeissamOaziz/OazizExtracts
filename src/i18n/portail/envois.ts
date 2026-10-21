@@ -54,6 +54,7 @@ export const frEnvois = {
 
   'link.swo': 'Bon de travail {no}',
   'link.packingList': 'Liste d’emballage (Word)',
+  'link.palletPlacard': 'Pallet placard OCS (Word)',
   'link.track': 'Suivre le colis',
   'link.coc': 'Chain of Custody (PDF)',
   'labels.title': 'Étiquettes jointes',
@@ -217,6 +218,7 @@ export const enEnvois: Partial<Record<keyof EnvoisDict, string>> = {
 
   'link.swo': 'Work order {no}',
   'link.packingList': 'Packing list (Word)',
+  'link.palletPlacard': 'OCS pallet placard (Word)',
   'link.track': 'Track the package',
   'link.coc': 'Chain of Custody (PDF)',
   'labels.title': 'Attached labels',

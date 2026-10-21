@@ -7,7 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { effectivePermissions } from './access';
 import { todayLocal } from './production';
-import type { Swo } from './production-swo';
+import { isOcs, type Swo } from './production-swo';
 import { qboShipTo } from './qbo-customers';
 
 export const SHIPMENT_STATUSES = ['to_book', 'booked', 'label_ready', 'shipped', 'cancelled'] as const;
@@ -110,7 +110,7 @@ export function itemsFromSwo(swo: Swo): ShipmentItem[] {
 }
 
 /** The Ontario Cannabis Store ships on a pallet whatever the box count. */
-export const isOcs = (customer: string | null | undefined) => /ontario cannabis|\bOCS\b|\bOCRC\b/i.test(customer ?? '');
+export { isOcs };
 
 /** "3 boîtes" / "Palette (12 boîtes)" — for emails and lists. */
 export function shipmentSummary(s: Pick<Shipment, 'mode' | 'pallets' | 'boxes'>): string {

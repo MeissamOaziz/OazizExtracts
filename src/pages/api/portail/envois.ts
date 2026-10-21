@@ -9,6 +9,7 @@ import { qboShipTo } from '../../../lib/qbo-customers';
 import { loadSwo } from '../../../lib/production-swo';
 import { todayLocal } from '../../../lib/production';
 import { buildPackingList, packingListFilename } from '../../../lib/packing-list';
+import { buildPalletPlacard, palletPlacardFilename } from '../../../lib/ocs-documents';
 
 export const prerender = false;
 
@@ -158,6 +159,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect, locals }) => 
     const links: Array<{ label: string; url: string }> = [];
     if (swo) {
       attachments.push({ filename: packingListFilename(swo), content: await buildPackingList(swo, after) });
+      if (isOcs(cur.customer_name)) {
+        attachments.push({ filename: palletPlacardFilename(swo), content: await buildPalletPlacard(swo, after) });
+        links.push({ label: 'Pallet placard OCS (Word)', url: `${siteUrl()}/api/portail/production/swo/${swo.id}/pallet-placard` });
+      }
       links.push({ label: 'Liste d’emballage (Word)', url: `${siteUrl()}/api/portail/production/swo/${swo.id}/packing-list` });
     }
     if (cocNo && !cur.coc_signed_at) {
