@@ -1,7 +1,8 @@
 // Production requests (ps_requests): someone asks the production lead for work —
 // a customer PO, an internal restock or a packaging run — with lines and files.
 // The production lead plans it as one or more tasks (ps_tasks.request_id).
-// A request's status is read from its tasks; only cancelling is stored.
+// A request's status is read from its tasks and its shipping work order (a
+// confirmed work order means the order is done); only cancelling is stored.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { effectivePermissions } from './access';
@@ -49,6 +50,8 @@ export interface ProdRequest {
   cancelled_at: string | null; cancel_reason: string | null;
   lines: RequestLine[];
   files: RequestFile[];
+  /** Its shipping work order is confirmed: the order is prepared and leaves. */
+  order_completed: boolean;
 }
 export interface RequestEvent {
   id: number; at: string; staff_name: string | null; kind: string; note: string | null; changes: Record<string, any>;
@@ -58,6 +61,7 @@ const REQUEST_COLS = 'id, request_no, kind, title, customer_name, customer_po, n
   + 'production_type_id, notes, requested_by, created_at, updated_at, cancelled_at, cancel_reason, '
   + 'requester:staff!ps_requests_requested_by_fkey ( full_name ), '
   + 'lines:ps_request_lines ( description, quantity, unit, sort_order ), '
+  + 'swo:ps_swos ( status ), '
   + 'files:ps_request_files ( id, filename, content_type, size_bytes, uploaded_at, removed_at, uploader:staff!ps_request_files_uploaded_by_fkey ( full_name ) )';
 
 const one = (v: any) => (Array.isArray(v) ? v[0] : v);
@@ -65,6 +69,7 @@ function shape(row: any): ProdRequest {
   return {
     ...row,
     requested_by_name: one(row.requester)?.full_name ?? null,
+    order_completed: one(row.swo)?.status === 'completed',
     lines: [...(row.lines ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order)
       .map((l: any) => ({ description: l.description, quantity: l.quantity === null ? null : Number(l.quantity), unit: l.unit })),
     files: [...(row.files ?? [])].sort((a: any, b: any) => a.uploaded_at.localeCompare(b.uploaded_at))
@@ -103,8 +108,9 @@ export function tasksByRequest(tasks: Task[]): Map<string, Task[]> {
   return out;
 }
 
-export function requestState(r: Pick<ProdRequest, 'cancelled_at'>, tasks: Task[] | undefined): RequestState {
+export function requestState(r: Pick<ProdRequest, 'cancelled_at' | 'order_completed'>, tasks: Task[] | undefined): RequestState {
   if (r.cancelled_at) return 'cancelled';
+  if (r.order_completed) return 'done';
   if (!tasks || tasks.length === 0) return 'to_plan';
   if (tasks.every((t) => t.status === 'done')) return 'done';
   if (tasks.some((t) => t.status !== 'planned')) return 'in_production';
@@ -121,11 +127,11 @@ export const isSoon = (r: ProdRequest, state: RequestState) =>
 /** How many open requests have no task yet — for the hub tile and the board. */
 export async function countToPlan(admin: SupabaseClient): Promise<number> {
   const [{ data: reqs }, { data: tasks }] = await Promise.all([
-    admin.from('ps_requests').select('id').is('cancelled_at', null),
+    admin.from('ps_requests').select('id, swo:ps_swos ( status )').is('cancelled_at', null),
     admin.from('ps_tasks').select('request_id').not('request_id', 'is', null).neq('status', 'cancelled'),
   ]);
   const planned = new Set((tasks ?? []).map((t: any) => t.request_id));
-  return (reqs ?? []).filter((r: any) => !planned.has(r.id)).length;
+  return (reqs ?? []).filter((r: any) => !planned.has(r.id) && one(r.swo)?.status !== 'completed').length;
 }
 
 // ------------------------------------------------------------------ writing
