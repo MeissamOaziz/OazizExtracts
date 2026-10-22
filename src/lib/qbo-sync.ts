@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getQbo, qstr, QboError, type Qbo } from './qbo';
-import { bumpReference, getSetting, n, nextPaymentReference, round2 } from './payables';
+import { bumpReference, getSetting, n, nextPaymentReference, paymentWithReference, round2 } from './payables';
 import { docKey, queryVendorDocs } from './qbo-reconcile';
 import { nameScore } from './name-match';
 
@@ -28,7 +28,9 @@ async function log(admin: SupabaseClient, e: { direction: 'push' | 'pull' | 'sys
   await admin.from('qbo_sync_log').insert(e);
 }
 
-const errMsg = (e: unknown) => (e instanceof QboError || e instanceof Error ? e.message : String(e)).slice(0, 500);
+// Supabase errors are plain objects with a message (they used to log as "[object Object]").
+const errMsg = (e: unknown) => (e instanceof QboError || e instanceof Error ? e.message
+  : e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)).slice(0, 500);
 const norm = (s: string | null | undefined) => (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/\b(inc|ltd|ltee|limited|corp|enr|llc|co)\b\.?/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -847,6 +849,26 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
       continue;
     }
     const amount = n(bp.TotalAmt);
+    // A $0 bill payment only applies a vendor credit to a bill (LeafStar,
+    // 2026-10-19): no money moved. Apply the credit in the portal when both
+    // documents are there; otherwise say what is missing.
+    if (amount < 0.005) {
+      const links = (bp.Line ?? []).flatMap((l: any) => (l.LinkedTxn ?? []).map((t: any) => ({ type: t.TxnType as string, id: String(t.TxnId), amount: n(l.Amount) })));
+      const billLink = links.find((l: { type: string }) => l.type === 'Bill');
+      const creditLink = links.find((l: { type: string }) => l.type === 'VendorCredit');
+      const { data: inv } = billLink ? await admin.from('ap_invoices').select('id').eq('qbo_bill_id', billLink.id).is('voided_at', null).maybeSingle() : { data: null };
+      const { data: cr } = creditLink ? await admin.from('ap_invoices').select('id').eq('qbo_bill_id', creditLink.id).is('voided_at', null).maybeSingle() : { data: null };
+      if (inv && cr && billLink) {
+        const { data: had } = await admin.from('ap_credit_applications').select('id').eq('credit_invoice_id', cr.id).eq('invoice_id', inv.id).limit(1);
+        if (!had?.length) await admin.from('ap_credit_applications').insert({ credit_invoice_id: cr.id, invoice_id: inv.id, amount: billLink.amount });
+        await log(admin, { direction: 'pull', entity: 'billpayment', qbo_id: bp.Id, status: 'ok', message: `Crédit QB #${creditLink!.id} appliqué à la facture QB #${billLink.id} (${billLink.amount.toFixed(2)} $)` });
+      } else {
+        skipped++;
+        await log(admin, { direction: 'pull', entity: 'billpayment', qbo_id: bp.Id, status: 'warning',
+          message: `Crédit fournisseur QB #${creditLink?.id ?? '?'} appliqué à la facture QB #${billLink?.id ?? '?'} dans QB (${sup.name}) — ${cr ? 'facture' : 'crédit'} absent du portail : à reporter (page Écarts)` });
+      }
+      continue;
+    }
     // A payment already ticked in the portal (same supplier/amount, ±7 days): link it.
     const d = new Date(bp.TxnDate + 'T12:00:00');
     const from = new Date(d.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
@@ -855,13 +877,19 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
       .is('qbo_billpayment_id', null).is('voided_at', null).gte('paid_on', from).lte('paid_on', to).limit(1);
     if (same?.length) {
       await admin.from('ap_payments').update({ qbo_billpayment_id: bp.Id, qbo_synced_at: new Date().toISOString(), qbo_error: null }).eq('id', same[0].id);
+      await syncPaymentReference(admin, same[0].id);
       continue;
     }
+    // One number = one payment: a QB payment with no Ref no., or one the portal
+    // already gave to another payment, gets the next portal number (written back to QB below).
+    let reference: string = bp.DocNumber ?? '';
+    const renumber = !reference || !!(await paymentWithReference(admin, reference));
+    if (renumber) reference = (await nextFreeReference(admin, qbo)) ?? reference;
     const billIds = (bp.Line ?? []).flatMap((l: any) => (l.LinkedTxn ?? []).filter((t: any) => t.TxnType === 'Bill').map((t: any) => t.TxnId));
     const { data: invs } = billIds.length ? await admin.from('ap_invoices').select('id').in('qbo_bill_id', billIds) : { data: [] };
     const { data: pid, error } = await admin.rpc('ap_record_payment', {
       p_supplier_id: sup.id, p_amount: amount, p_paid_on: bp.TxnDate, p_method: null, p_bank_account_id: null,
-      p_reference: bp.DocNumber ?? '', p_notes: 'Importé de QuickBooks', p_staff_id: null, p_run_line_id: null,
+      p_reference: reference, p_notes: 'Importé de QuickBooks', p_staff_id: null, p_run_line_id: null,
       p_invoice_ids: (invs ?? []).map((i) => i.id),
     });
     if (error || !pid) {
@@ -869,6 +897,7 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
       continue;
     }
     await admin.from('ap_payments').update({ source: 'qbo', qbo_billpayment_id: bp.Id, qbo_synced_at: new Date().toISOString() }).eq('id', pid);
+    if (renumber && reference) await syncPaymentReference(admin, pid as string);
     // A payment to the funding supplier (MJLB) is the RBC → TD deposit: tag it for the TD report and the week.
     const fund = (fundedAccts ?? []).find((a) => a.funding_supplier_id === sup.id);
     if (fund) await tagDeposit(admin, pid as string, fund.id, fund.funded_by, bp.TxnDate);
