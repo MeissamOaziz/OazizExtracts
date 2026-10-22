@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, setSetting } from '../../../../../lib/payables';
 import { disconnect, getQbo } from '../../../../../lib/qbo';
-import { linkVendors, pushInvoice, pushPayment, qboDefaults, refreshQboPayment, syncAll } from '../../../../../lib/qbo-sync';
+import { linkVendors, pushInvoice, pushPayment, qboDefaults, refreshQboPayment, syncAll, syncAllPaymentReferences, syncPaymentReference } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
 
@@ -151,6 +151,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         await logEvent(admin, { supplier_id: inv.supplier_id, actor_staff_id: staff.id, action: 'qbo_bill_linked', details: { invoice: inv.invoice_number, qbo_bill_id: billId, qbo_number: bill.DocNumber ?? null, payment_id: paymentId } });
         const r = await pushPayment(admin, paymentId);
         return go(r.ok ? 'ok' : 'error', r.message);
+      }
+      case 'sync_reference': {
+        const id = String(form.get('payment_id') ?? '');
+        if (!isUuid(id)) return go('error', 'Paiement invalide');
+        const r = await syncPaymentReference(admin, id);
+        return go(r.ok ? 'ok' : 'error', r.message || 'Référence déjà synchronisée');
+      }
+      case 'sync_references': {
+        const r = await syncAllPaymentReferences(admin);
+        return new Response(JSON.stringify(r), { headers: { 'Content-Type': 'application/json' } });
       }
       case 'refresh_payment': {
         const id = String(form.get('payment_id') ?? '');

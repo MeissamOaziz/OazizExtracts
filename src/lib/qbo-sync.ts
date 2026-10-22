@@ -517,6 +517,7 @@ export async function pushPayment(admin: SupabaseClient, paymentId: string): Pro
       }).eq('id', paymentId);
       const msg = `Déjà saisi dans QB (${twin.type === 'BillPayment' ? 'paiement de facture' : 'dépense'} ${twin.doc ?? '#' + twin.id} du ${twin.date}, ${total.toFixed(2)} $) — lié, aucun doublon créé`;
       await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: twin.id, status: 'warning', message: msg });
+      if (twin.type === 'BillPayment') await syncPaymentReference(admin, paymentId);
       return { ok: true, message: msg };
     }
 
@@ -696,6 +697,62 @@ export async function updateQboPaymentDetails(admin: SupabaseClient, paymentId: 
   }
 }
 
+/**
+ * Ref no. of the linked QB bill payment = the portal reference (the portal
+ * numbers payments; one number = one payment in both). Only the Ref no. is
+ * touched — never the date, amount or bank account. Refused when another QB
+ * transaction already uses that number, so no duplicate is ever created.
+ */
+export async function syncPaymentReference(admin: SupabaseClient, paymentId: string): Promise<{ ok: boolean; message: string }> {
+  const { data: p } = await admin.from('ap_payments').select('reference, qbo_billpayment_id').eq('id', paymentId).maybeSingle();
+  if (!p?.qbo_billpayment_id || !p.reference) return { ok: true, message: '' };
+  const qbo = await getQbo(admin);
+  if (!qbo) return { ok: false, message: 'QuickBooks non connecté' };
+  const ref = String(p.reference).slice(0, 21);
+  try {
+    const cur = (await qbo.get(`/billpayment/${p.qbo_billpayment_id}`))?.BillPayment;
+    if (!cur) return { ok: false, message: 'Paiement introuvable ou annulé' };
+    if ((cur.DocNumber ?? '') === ref) return { ok: true, message: '' };
+    for (const entity of ['BillPayment', 'Purchase']) {
+      const others = (await qbo.query(entity, `DocNumber = ${qstr(ref)}`)).filter((t) => !(entity === 'BillPayment' && String(t.Id) === String(cur.Id)));
+      if (others.length) {
+        const msg = `Référence ${ref} déjà utilisée dans QB (${entity} #${others[0].Id}) — non synchronisée`;
+        await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'warning', message: msg });
+        return { ok: false, message: msg };
+      }
+    }
+    await qbo.post('/billpayment', {
+      Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, PayType: cur.PayType, TotalAmt: cur.TotalAmt,
+      DocNumber: ref,
+      ...(cur.PayType === 'Check' ? { CheckPayment: { ...cur.CheckPayment, PrintStatus: 'NotSet' } } : {}),
+    });
+    const msg = `Référence QB ${cur.DocNumber ?? '(vide)'} → ${ref}`;
+    await log(admin, { direction: 'push', entity: 'billpayment', portal_id: paymentId, qbo_id: cur.Id, status: 'ok', message: msg });
+    return { ok: true, message: msg };
+  } catch (e) {
+    return { ok: false, message: errMsg(e) };
+  }
+}
+
+/** Every linked payment of the last 90 days: fix any QB Ref no. that differs from the portal reference. */
+export async function syncAllPaymentReferences(admin: SupabaseClient): Promise<{ fixed: number; refused: number }> {
+  const qbo = await getQbo(admin);
+  if (!qbo) return { fixed: 0, refused: 0 };
+  const since = new Date(Date.now() - 90 * 86400_000).toISOString().slice(0, 10);
+  const { data: pays } = await admin.from('ap_payments').select('id, reference, qbo_billpayment_id')
+    .is('voided_at', null).not('qbo_billpayment_id', 'is', null).not('reference', 'is', null).gte('paid_on', since);
+  if (!pays?.length) return { fixed: 0, refused: 0 };
+  const qb = new Map((await qbo.query('BillPayment', `TxnDate >= ${qstr(new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10))}`))
+    .map((t) => [String(t.Id), String(t.DocNumber ?? '')]));
+  let fixed = 0, refused = 0;
+  for (const p of pays) {
+    const doc = qb.get(String(p.qbo_billpayment_id));
+    if (doc === undefined || doc === String(p.reference).slice(0, 21)) continue;
+    (await syncPaymentReference(admin, p.id)).ok ? fixed++ : refused++;
+  }
+  return { fixed, refused };
+}
+
 export async function deleteQboPayment(admin: SupabaseClient, paymentId: string) {
   const { data: p } = await admin.from('ap_payments').select('qbo_billpayment_id').eq('id', paymentId).maybeSingle();
   if (!p?.qbo_billpayment_id) return;
@@ -873,6 +930,7 @@ export async function syncAll(admin: SupabaseClient) {
     for (const p of data ?? []) (await pushPayment(admin, p.id)).ok ? summary.payments++ : summary.paymentErrors++;
   }
   if (defaults.pull) summary.pulled = await pullFromQbo(admin);
+  try { await syncAllPaymentReferences(admin); } catch (e) { console.error('[qbo] reference sync failed:', e); }
 
   const status = `${summary.bills} facture(s) et ${summary.payments} paiement(s) envoyés, ${summary.pulled.bills} facture(s) et ${summary.pulled.payments} paiement(s) importés`
     + (summary.billErrors + summary.paymentErrors ? `, ${summary.billErrors + summary.paymentErrors} à corriger` : '');
