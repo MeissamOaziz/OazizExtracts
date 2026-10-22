@@ -83,6 +83,8 @@ const RULES: Rule[] = [
   [/^Déjà concordant\.$/, 'Already matching.'],
   [/^Indiquez la raison de l’ajustement\.$/, 'Enter the reason for the adjustment.'],
   [/^Indiquez la raison\.$/, 'Enter the reason.'],
+  [/^Montant inférieur à ce qui est déjà payé \(([\d.]+) \$\)\.$/, (_, a) => `Amount lower than what is already paid ($${a}).`],
+  [/^Facture modifiée\. Elle est liée à la facture QB #(\d+) : ajustez-la aussi dans QuickBooks\.$/, (_, id) => `Invoice updated. It is linked to QB bill #${id}: adjust it in QuickBooks too.`],
   [/^Solde du portail ajusté de (-?[\d.]+) \$ pour concorder avec QuickBooks\.$/, (_, a) => `Portal balance adjusted by $${a} to match QuickBooks.`],
   [/^Facture (.*) ajustée à ([\d.]+) \$\.$/, (_, num, a) => `Invoice ${num} adjusted to $${a}.`],
   [/^Facture (.*) soldée dans le portail\.$/, (_, num) => `Invoice ${num} closed in the portal.`],

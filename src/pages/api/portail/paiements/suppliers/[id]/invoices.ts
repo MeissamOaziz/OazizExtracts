@@ -29,6 +29,50 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(back, 303);
   }
 
+  // Edit an invoice (imported ones included): number, PO, dates, amount,
+  // description. Every change needs a comment, kept on the invoice (edit_note)
+  // and in the history with the before/after values.
+  if (action === 'edit') {
+    const invoiceId = String(form.get('invoice_id') ?? '');
+    if (!isUuid(invoiceId)) return redirect(back, 303);
+    const { data: inv } = await admin.from('ap_invoices').select('*').eq('id', invoiceId).eq('supplier_id', supplierId).is('voided_at', null).maybeSingle();
+    if (!inv) return redirect(`${back}?error=${encodeURIComponent('Facture introuvable')}`, 303);
+    const reason = String(form.get('edit_reason') ?? '').trim();
+    if (!reason) return redirect(`${back}?error=${encodeURIComponent('Indiquez la raison de la modification.')}`, 303);
+    let amount = parseAmount(form.get('amount'));
+    if (amount === null || amount === 0) return redirect(`${back}?error=missing`, 303);
+    if (inv.kind === 'credit') amount = -Math.abs(amount);
+    // Never below what is already paid on it (the balance would go negative).
+    const { data: bal } = await admin.from('ap_invoice_balances').select('allocated').eq('id', invoiceId).maybeSingle();
+    const paid = Number(bal?.allocated ?? 0);
+    if (amount > 0 && amount + 0.004 < paid) {
+      return redirect(`${back}?error=${encodeURIComponent(`Montant inférieur à ce qui est déjà payé (${paid.toFixed(2)} $).`)}`, 303);
+    }
+    const str = (k: string) => String(form.get(k) ?? '').trim() || null;
+    const patch = {
+      invoice_number: str('invoice_number'), po_number: str('po_number'),
+      invoice_date: isDate(form.get('invoice_date')) ? String(form.get('invoice_date')) : inv.invoice_date,
+      due_date: isDate(form.get('due_date')) ? String(form.get('due_date')) : null,
+      amount, description: str('description'),
+    };
+    const changed = Object.fromEntries(Object.entries(patch)
+      .filter(([k, v]) => String((inv as Record<string, unknown>)[k] ?? '') !== String(v ?? '') && !(k === 'amount' && Math.abs(Number(inv.amount) - Number(v)) < 0.005))
+      .map(([k, v]) => [k, { from: (inv as Record<string, unknown>)[k] ?? null, to: v }]));
+    if (!Object.keys(changed).length) return redirect(back, 303);
+    const who = staff.full_name ?? staff.email;
+    const amountTxt = changed.amount ? ` (montant ${Number(inv.amount).toFixed(2)} $ → ${amount.toFixed(2)} $)` : '';
+    const line = `${new Date().toISOString().slice(0, 10)} — ${who} : ${reason}${amountTxt}`;
+    await admin.from('ap_invoices').update({
+      ...patch, edit_note: inv.edit_note ? `${inv.edit_note}\n${line}` : line, updated_at: new Date().toISOString(),
+    }).eq('id', invoiceId);
+    await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_edited', details: { invoice_id: invoiceId, reason, changes: changed } });
+    // QuickBooks keeps its own bill: say so when the amount changed on a linked one.
+    if (changed.amount && inv.qbo_bill_id) {
+      return redirect(`${back}?ok=${encodeURIComponent(`Facture modifiée. Elle est liée à la facture QB #${inv.qbo_bill_id} : ajustez-la aussi dans QuickBooks.`)}`, 303);
+    }
+    return redirect(`${back}?ok=invedit`, 303);
+  }
+
   if (action === 'void') {
     const invoiceId = String(form.get('invoice_id') ?? '');
     if (!isUuid(invoiceId)) return redirect(back, 303);

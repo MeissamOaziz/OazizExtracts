@@ -80,7 +80,7 @@ const openBills = qboOn && needsBill.length > 0 ? await openBillsForSupplier(adm
 const nextRef = await nextPaymentReference(admin);
 const here = `/portail/paiements/fournisseurs/${id}`;
 const okText: Record<string, string> = {
-  created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'), payedit: T('pay.edited'),
+  created: T('sup.created'), saved: T('sup.saved'), inv: T('inv.saved'), invvoid: T('inv.voided'), pay: T('pay.saved'), payvoid: T('pay.voided'), payedit: T('pay.edited'), invedit: T('inv.edited'),
 };
 ---
 <PortailLayout title={s.name} staffName={staff.full_name} wide>
@@ -223,7 +223,10 @@ const okText: Record<string, string> = {
               <td class="num">{money(i.amount, locale)}</td>
               <td class="num muted">{i.allocated ? money(i.allocated, locale) : ''}</td>
               <td class="num"><strong>{isOpen ? money(i.open_amount, locale) : '✓'}</strong></td>
-              <td class="small">{i.description ?? ''}</td>
+              <td class="small">
+                {i.description ?? ''}
+                {(i as { edit_note?: string | null }).edit_note && <div class="edit-note">✎ {(i as { edit_note?: string | null }).edit_note}</div>}
+              </td>
               <td class="center">
                 <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} class="inline">
                   <input type="hidden" name="_action" value="qbo" /><input type="hidden" name="invoice_id" value={i.id} />
@@ -241,6 +244,11 @@ const okText: Record<string, string> = {
               </td>
               <td class="actions">
                 {i.file_path && <a href={`/api/portail/paiements/suppliers/${s.id}/file?invoice=${i.id}`} target="_blank" rel="noopener">PDF</a>}
+                {!i.origin_payment_id && i.kind !== 'opening_balance' && (
+                  <button type="button" class="link-btn inv-edit" data-id={i.id} data-number={i.invoice_number ?? ''} data-po={i.po_number ?? ''}
+                    data-date={i.invoice_date ?? ''} data-due={i.due_date ?? ''} data-amount={Math.abs(i.amount).toFixed(2)} data-description={i.description ?? ''}
+                    data-paid={i.allocated.toFixed(2)} data-qb={i.qbo_bill_id ?? ''}>{T('pay.edit')}</button>
+                )}
                 {!i.origin_payment_id && (
                   <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} class="inline void-form" data-confirm={T('inv.void.confirm')}>
                     <input type="hidden" name="_action" value="void" /><input type="hidden" name="invoice_id" value={i.id} />
@@ -345,6 +353,29 @@ const okText: Record<string, string> = {
     </table>
   </div>
 
+  <dialog id="inv-edit-dialog" class="edit-dialog">
+    <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`}>
+      <input type="hidden" name="_action" value="edit" />
+      <input type="hidden" name="invoice_id" />
+      <h2>{T('inv.edit.title')}</h2>
+      <div class="grid3">
+        <div class="form-row"><label>{T('inv.number')}</label><input type="text" name="invoice_number" /></div>
+        <div class="form-row"><label>{T('inv.po')}</label><input type="text" name="po_number" /></div>
+        <div class="form-row"><label>{T('inv.amount')} *</label><input type="text" inputmode="decimal" name="amount" required /></div>
+        <div class="form-row"><label>{T('inv.date')}</label><input type="date" name="invoice_date" /></div>
+        <div class="form-row"><label>{T('inv.due')}</label><input type="date" name="due_date" /></div>
+      </div>
+      <div class="form-row"><label>{T('inv.description')}</label><input type="text" name="description" /></div>
+      <div class="form-row"><label>{T('inv.edit.reason')} *</label><textarea name="edit_reason" rows="2" required placeholder={T('inv.edit.reasonPh')}></textarea></div>
+      <p class="hint inv-edit-paid" hidden data-tpl={T('inv.edit.paid')}></p>
+      <p class="hint inv-edit-qb" hidden>{T('inv.edit.qb')}</p>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" id="inv-edit-cancel">{T('qbo.cancel')}</button>
+        <button type="submit" class="btn btn-primary">{T('qbo.save')}</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="pay-edit-dialog" class="edit-dialog">
     <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/payments`}>
       <input type="hidden" name="_action" value="edit" />
@@ -412,6 +443,24 @@ const okText: Record<string, string> = {
     ed.showModal();
   }));
   document.getElementById('pay-edit-cancel')?.addEventListener('click', () => ed?.close());
+  // Edit an invoice: same pattern, with a required comment.
+  const ied = document.getElementById('inv-edit-dialog') as HTMLDialogElement | null;
+  document.querySelectorAll<HTMLButtonElement>('.inv-edit').forEach((b) => b.addEventListener('click', () => {
+    if (!ied) return;
+    const f = ied.querySelector('form')!;
+    const d = b.dataset;
+    const set = (name: string, v: string) => { (f.elements.namedItem(name) as HTMLInputElement).value = v; };
+    set('invoice_id', d.id!); set('invoice_number', d.number ?? ''); set('po_number', d.po ?? ''); set('invoice_date', d.date ?? '');
+    set('due_date', d.due ?? ''); set('amount', d.amount!); set('description', d.description ?? ''); set('edit_reason', '');
+    const paid = f.querySelector<HTMLElement>('.inv-edit-paid')!;
+    paid.hidden = !(Number(d.paid) > 0);
+    paid.textContent = (paid.dataset.tpl ?? '').replace('{paid}', d.paid ?? '');
+    f.querySelector<HTMLElement>('.inv-edit-qb')!.hidden = !d.qb;
+    delete f.dataset.sent;
+    f.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { x.disabled = false; });
+    ied.showModal();
+  }));
+  document.getElementById('inv-edit-cancel')?.addEventListener('click', () => ied?.close());
   document.querySelectorAll<HTMLInputElement>('input.autosubmit').forEach((cb) => cb.addEventListener('change', () => cb.form!.submit()));
   document.querySelectorAll<HTMLFormElement>('form.void-form').forEach((f) => f.addEventListener('submit', (ev) => {
     if (!confirm(f.dataset.confirm!)) ev.preventDefault();
@@ -450,6 +499,7 @@ const okText: Record<string, string> = {
   .mode-opt small { color: var(--p-muted); font-size: .78rem; }
   .apply-row[hidden] { display: none; }
   .edit-dialog { margin: auto; border: none; border-radius: 12px; padding: 24px; width: min(760px, 94vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  .edit-note { color: var(--p-muted); font-size: .74rem; white-space: pre-line; margin-top: 3px; font-style: italic; }
   .edit-dialog::backdrop { background: rgba(16, 24, 40, .4); }
   .edit-dialog .pay-mode[hidden], .edit-dialog .hint[hidden] { display: none; }
   .apply-list { display: grid; gap: 4px; max-height: 180px; overflow-y: auto; border: 1px solid var(--p-border); border-radius: 6px; padding: 8px 12px; }
