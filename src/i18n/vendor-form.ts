@@ -55,6 +55,7 @@ export const frVendorForm = {
   'label.ext': 'Poste',
   'label.optional': '(facultatif)',
   'btn.busy': 'Envoi en cours…',
+  'error.upload': 'Le téléversement d\'un fichier a échoué. Vérifiez votre connexion et réessayez.',
 
   'section.company.title': 'A) Renseignements sur l\'entreprise',
   'label.companyName': "Nom de l'entreprise",
@@ -206,6 +207,7 @@ export const enVendorForm: Partial<Record<keyof VendorFormDict, string>> = {
   'label.ext': 'Ext.',
   'label.optional': '(optional)',
   'btn.busy': 'Sending…',
+  'error.upload': 'A file could not be uploaded. Check your connection and try again.',
 
   'section.company.title': 'A) Company information',
   'label.companyName': 'Company name',

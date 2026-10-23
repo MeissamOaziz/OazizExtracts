@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { getAdminClient } from '../../../lib/supabase';
 import { validateUploadedFile } from '../../../lib/vendor-storage';
 import { sendVendorDraftLink } from '../../../lib/email';
-import { readVendorFields, reminderResets, sendForApproval, uploadAnyProvidedFiles } from '../../../lib/vendor-form-parse';
+import { readVendorFields, reminderResets, sendForApproval, stagedFile, uploadAnyProvidedFiles } from '../../../lib/vendor-form-parse';
 import { mintToken, sha256Hex } from '../../../lib/tokens';
 import { findInviteByToken, inviteRecipients } from '../../../lib/vendor-invites';
 
@@ -180,7 +180,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const hasExistingFile = (col: string) => !!(existing && existing[col]);
 
-  if (!hasExistingFile('file_bank_void_cheque_path') || (fileBankProof && fileBankProof.size > 0)) {
+  if (!stagedFile(form, 'file_bank_proof') && (!hasExistingFile('file_bank_void_cheque_path') || (fileBankProof && fileBankProof.size > 0))) {
     const err = validateUploadedFile(fileBankProof);
     if (err === 'missing' && !hasExistingFile('file_bank_void_cheque_path')) {
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, 'file_bank'), 303);
@@ -189,7 +189,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, err === 'too_large' ? 'file_size' : 'file_type'), 303);
     }
   }
-  if (!hasExistingFile('file_cra_license_path') || (fileCra && fileCra.size > 0)) {
+  if (!stagedFile(form, 'file_cra_license') && (!hasExistingFile('file_cra_license_path') || (fileCra && fileCra.size > 0))) {
     const err = validateUploadedFile(fileCra);
     if (err === 'missing' && !hasExistingFile('file_cra_license_path')) {
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, 'file_cra'), 303);
@@ -198,7 +198,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, err === 'too_large' ? 'file_size' : 'file_type'), 303);
     }
   }
-  if (!hasExistingFile('file_health_canada_license_path') || (fileHc && fileHc.size > 0)) {
+  if (!stagedFile(form, 'file_health_canada_license') && (!hasExistingFile('file_health_canada_license_path') || (fileHc && fileHc.size > 0))) {
     const err = validateUploadedFile(fileHc);
     if (err === 'missing' && !hasExistingFile('file_health_canada_license_path')) {
       return redirect(backTo(existingSubmissionId, resumeToken, inviteToken, 'file_hc'), 303);

@@ -4,7 +4,7 @@
 // the same way.
 
 import type { getAdminClient } from './supabase';
-import { validateUploadedFile, uploadVendorFile } from './vendor-storage';
+import { moveStagedVendorFile, stagedPathFor, validateUploadedFile, uploadVendorFile, type VendorFileKind } from './vendor-storage';
 import { REQUIRED_APPROVER_EMAILS } from './vendor-approvals';
 import { sendVendorSubmissionNotice } from './email';
 
@@ -100,15 +100,22 @@ export function reminderResets(fields: VendorFields, existing: Record<string, an
   return out;
 }
 
-const FILE_JOBS: Array<{ field: string; kind: 'cra-license' | 'health-canada-license' | 'bank-proof'; column: string }> = [
+const FILE_JOBS: Array<{ field: string; kind: VendorFileKind; column: string }> = [
   { field: 'file_cra_license', kind: 'cra-license', column: 'file_cra_license_path' },
   { field: 'file_health_canada_license', kind: 'health-canada-license', column: 'file_health_canada_license_path' },
   { field: 'file_bank_proof', kind: 'bank-proof', column: 'file_bank_void_cheque_path' },
 ];
 
+/** The file the browser already put in storage for this field (see /api/vendor/upload-url), or null. */
+export function stagedFile(form: FormData, field: string): string | null {
+  const job = FILE_JOBS.find((j) => j.field === field);
+  return job ? stagedPathFor(form.get(`${field}_staged`), job.kind) : null;
+}
+
 /** First uploaded file that is not acceptable, as an error code, or null. */
 export function invalidUpload(form: FormData): 'file_type' | 'file_size' | null {
   for (const job of FILE_JOBS) {
+    if (stagedFile(form, job.field)) continue; // checked when its upload URL was issued, and by the bucket
     const file = form.get(job.field) as File | null;
     if (!file || file.size === 0) continue;
     const err = validateUploadedFile(file);
@@ -122,6 +129,15 @@ export function invalidUpload(form: FormData): 'file_type' | 'file_size' | null 
 export async function uploadAnyProvidedFiles(admin: Admin, submissionId: string, form: FormData): Promise<string[]> {
   const updates: Record<string, string> = {};
   for (const job of FILE_JOBS) {
+    const staged = stagedFile(form, job.field);
+    if (staged) {
+      try {
+        updates[job.column] = await moveStagedVendorFile(submissionId, job.kind, staged);
+      } catch (e) {
+        console.error('[vendor-submit] staged file not found:', staged, e);
+      }
+      continue;
+    }
     const file = form.get(job.field) as File | null;
     if (!file || file.size === 0) continue;
     if (validateUploadedFile(file)) continue; // invalid files are rejected earlier for the required-file cases; silently skip here for optional re-uploads on draft saves

@@ -596,7 +596,11 @@ export interface VendorDraftLinkEmail {
 
 export async function sendVendorDraftLink(
   n: VendorDraftLinkEmail,
-): Promise<{ status: 'sent' | 'skipped_no_key' | 'error'; detail?: string }> {
+): Promise<{ status: 'sent' | 'skipped_no_key' | 'skipped_dev' | 'error'; detail?: string }> {
+  if (import.meta.env.DEV) {
+    console.warn(`[vendor-draft-email] dev server: not sending the draft link to ${n.toEmail}: ${n.resumeUrl}`);
+    return { status: 'skipped_dev' };
+  }
   const apiKey = import.meta.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn(`[vendor-draft-email] RESEND_API_KEY not set; would-have-sent draft link to ${n.toEmail}: ${n.resumeUrl}`);

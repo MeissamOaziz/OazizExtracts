@@ -51,7 +51,8 @@ const contactValues: Record<ContactRole, Record<ContactField, string>> = {
 const cv = (role: ContactRole, field: ContactField): string => contactValues[role][field] ?? '';
 const hasMaterial = (code: string) => v.starting_material.includes(code);
 ---
-<form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form" novalidate={!!staff} data-staff={staff ? '1' : undefined}>
+<form method="POST" action={action} enctype="multipart/form-data" class="card" id="vendor-form" novalidate={!!staff} data-staff={staff ? '1' : undefined}
+  data-msg-type={T('error.file_type')} data-msg-size={T('error.file_size')} data-msg-upload={T('error.upload')}>
   {Object.entries(hiddenFields).map(([k, val]) => <input type="hidden" name={k} value={val} />)}
 
   <div class="section-hdr"><h2>{T('section.vendorType.title')}</h2></div>
@@ -314,6 +315,7 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
   </div>
   </>}
 
+  <div id="upload-error" class="hint" role="alert" style="color: var(--p-danger); display: none; margin-top: 20px;"></div>
   {staff ? (
     <div style="display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap;">
       <button type="submit" name="action" value="save" class="btn btn-secondary" style="flex: 1;" data-busy={T('btn.busy')}>{staff.saveLabel}</button>
@@ -381,6 +383,73 @@ const hasMaterial = (code: string) => v.starting_material.includes(code);
         const firstVisible = phoneError?.style.display === 'block' ? phoneError : shippingError;
         firstVisible?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+    });
+
+    // The chosen files go straight to storage first, then the form is posted
+    // with only where each one landed: Vercel refuses a request over 4.5 MB,
+    // which a few scanned licences easily exceed (Chroniqc, 2026-10-23).
+    // Registered after the checks above, so it only runs once they pass; it
+    // locks the buttons itself while the files upload.
+    const uploadError = document.getElementById('upload-error');
+    const fileInputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="file"]'));
+    fileInputs.forEach((input) => input.addEventListener('change', () => {
+      // A file picked again after an upload replaces the staged one.
+      delete input.dataset.staged;
+      form.querySelector(`input[name="${input.name}_staged"]`)?.remove();
+    }));
+    let uploading = false;
+    form.addEventListener('submit', async (e: SubmitEvent) => {
+      if (e.defaultPrevented) return;
+      if (uploading) { e.preventDefault(); return; }
+      const pending = fileInputs.filter((i) => i.files && i.files.length > 0 && !i.dataset.staged);
+      if (!pending.length) {
+        fileInputs.forEach((i) => { if (i.dataset.staged) i.disabled = true; });
+        return;
+      }
+      e.preventDefault();
+      uploading = true;
+      if (uploadError) uploadError.style.display = 'none';
+      const submitter = e.submitter as HTMLButtonElement | null;
+      const buttons = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
+      buttons.forEach((b) => { b.dataset.label = b.textContent ?? ''; b.disabled = true; });
+      if (submitter?.dataset.busy) submitter.textContent = submitter.dataset.busy;
+      try {
+        for (const input of pending) {
+          const file = input.files![0];
+          if (file.size > 10 * 1024 * 1024) throw new Error('too_large');
+          const r = await fetch('/api/vendor/upload-url', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ field: input.name, type: file.type, size: file.size }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.signedUrl) throw new Error(j.error ?? 'upload');
+          const body = new FormData();
+          body.append('cacheControl', '3600');
+          body.append('', file);
+          const up = await fetch(j.signedUrl, { method: 'PUT', body });
+          if (!up.ok) throw new Error(up.status === 413 ? 'too_large' : 'upload');
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden'; hidden.name = `${input.name}_staged`; hidden.value = j.path;
+          form.appendChild(hidden);
+          input.dataset.staged = '1';
+        }
+      } catch (err) {
+        const code = (err as Error).message;
+        const msg = code === 'too_large' ? form.dataset.msgSize : code === 'invalid_type' ? form.dataset.msgType : form.dataset.msgUpload;
+        if (uploadError) { uploadError.textContent = msg ?? ''; uploadError.style.display = 'block'; uploadError.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        buttons.forEach((b) => { b.disabled = false; if (b.dataset.label) b.textContent = b.dataset.label; });
+        uploading = false;
+        return;
+      }
+      // form.submit() sends neither the clicked button nor a submit event:
+      // carry the button's action, and leave the uploaded files out.
+      if (submitter?.name) {
+        const act = document.createElement('input');
+        act.type = 'hidden'; act.name = submitter.name; act.value = submitter.value;
+        form.appendChild(act);
+      }
+      fileInputs.forEach((i) => { if (i.dataset.staged) i.disabled = true; });
+      form.submit();
     });
 
     // One submission per click. The uploaded files make the request slow enough
