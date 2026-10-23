@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../lib/supabase';
 import { isUuid, logEvent, setSetting } from '../../../../../lib/payables';
-import { disconnect, getQbo } from '../../../../../lib/qbo';
+import { disconnect, getQbo, qstr } from '../../../../../lib/qbo';
 import { linkVendors, pushInvoice, pushPayment, qboDefaults, refreshQboPayment, syncAll, syncAllPaymentReferences, syncPaymentReference } from '../../../../../lib/qbo-sync';
 
 export const prerender = false;
@@ -151,6 +151,28 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         await logEvent(admin, { supplier_id: inv.supplier_id, actor_staff_id: staff.id, action: 'qbo_bill_linked', details: { invoice: inv.invoice_number, qbo_bill_id: billId, qbo_number: bill.DocNumber ?? null, payment_id: paymentId } });
         const r = await pushPayment(admin, paymentId);
         return go(r.ok ? 'ok' : 'error', r.message);
+      }
+      // Rename the Ref no. of a QB bill payment that has no portal payment (e.g. a $0
+      // vendor-credit application numbered like a portal payment). Ref no. only; refused if used.
+      case 'rename_qbo_payment_ref': {
+        const qid = String(form.get('qbo_id') ?? '');
+        const doc = String(form.get('doc') ?? '').trim().slice(0, 21);
+        if (!/^\d+$/.test(qid) || !doc) return go('error', 'Requête invalide.');
+        const { data: mine } = await admin.from('ap_payments').select('id').eq('qbo_billpayment_id', qid).limit(1);
+        if (mine?.length) return go('error', 'Ce paiement QB est lié au portail — modifiez sa référence dans le portail.');
+        const qbo = await getQbo(admin);
+        if (!qbo) return go('error', 'QuickBooks non connecté');
+        for (const entity of ['BillPayment', 'Purchase']) {
+          if ((await qbo.query(entity, `DocNumber = ${qstr(doc)}`)).some((t) => String(t.Id) !== qid)) return go('error', `Référence ${doc} déjà utilisée dans QB`);
+        }
+        const cur = (await qbo.get(`/billpayment/${qid}`))?.BillPayment;
+        if (!cur) return go('error', 'Paiement introuvable ou annulé');
+        await qbo.post('/billpayment', {
+          Id: cur.Id, SyncToken: cur.SyncToken, sparse: true, VendorRef: cur.VendorRef, PayType: cur.PayType, TotalAmt: cur.TotalAmt, DocNumber: doc,
+          ...(cur.PayType === 'Check' ? { CheckPayment: { ...cur.CheckPayment, PrintStatus: 'NotSet' } } : {}),
+        });
+        await logEvent(admin, { actor_staff_id: staff.id, action: 'qbo_payment_ref_renamed', details: { qbo_id: qid, from: cur.DocNumber ?? null, to: doc } });
+        return go('ok', `Référence QB ${cur.DocNumber ?? '(vide)'} → ${doc}`);
       }
       case 'sync_reference': {
         const id = String(form.get('payment_id') ?? '');
