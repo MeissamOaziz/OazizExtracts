@@ -128,6 +128,24 @@ export async function nextRunDate(admin: SupabaseClient, from = new Date()): Pro
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * After a credit's amount changed: trim its applications if it now covers less
+ * (newest first), or apply what is left to open invoices if it covers more.
+ */
+export async function reapplyCredit(admin: SupabaseClient, creditId: string, supplierId: string) {
+  const { data: cr } = await admin.from('ap_invoices').select('amount').eq('id', creditId).maybeSingle();
+  if (!cr) return;
+  let room = Math.abs(n(cr.amount));
+  const { data: apps } = await admin.from('ap_credit_applications').select('id, amount').eq('credit_invoice_id', creditId).order('created_at', { ascending: true });
+  for (const a of apps ?? []) {
+    const amt = n(a.amount);
+    if (room <= 0.004) await admin.from('ap_credit_applications').delete().eq('id', a.id);
+    else if (amt > room + 0.004) await admin.from('ap_credit_applications').update({ amount: round2(room) }).eq('id', a.id);
+    room = round2(room - Math.min(amt, room));
+  }
+  if (room > 0.004) await admin.rpc('ap_apply_credits', { p_supplier_id: supplierId });
+}
+
 export async function getSetting<T>(admin: SupabaseClient, key: string, fallback: T): Promise<T> {
   const { data } = await admin.from('ap_settings').select('value').eq('key', key).maybeSingle();
   return (data?.value as T) ?? fallback;

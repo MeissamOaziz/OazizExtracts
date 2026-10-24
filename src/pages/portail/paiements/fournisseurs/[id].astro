@@ -76,6 +76,17 @@ for (const a of allocs ?? []) {
 }
 // Payments recorded "without a bill" (they own the invoice they paid).
 const expenseIds = new Set(invoices.filter((i) => i.origin_payment_id && i.kind === 'invoice').map((i) => i.origin_payment_id as string));
+// Credit notes (always listed, even fully used) and where each one went.
+const credits = invoices.filter((i) => i.kind === 'credit' && !i.origin_payment_id);
+const { data: creditApps } = credits.length
+  ? await admin.from('ap_credit_applications').select('credit_invoice_id, invoice_id, amount').in('credit_invoice_id', credits.map((c) => c.id))
+  : { data: [] };
+const appliedTo = new Map<string, string[]>();
+for (const a of creditApps ?? []) {
+  const list = appliedTo.get(a.credit_invoice_id) ?? [];
+  list.push(`${invNumber.get(a.invoice_id) ?? '?'} (${money(n(a.amount), locale)})`);
+  appliedTo.set(a.credit_invoice_id, list);
+}
 const openBills = qboOn && needsBill.length > 0 ? await openBillsForSupplier(admin, id).catch(() => []) : [];
 const nextRef = await nextPaymentReference(admin);
 const here = `/portail/paiements/fournisseurs/${id}`;
@@ -207,7 +218,7 @@ const okText: Record<string, string> = {
         <th>{T('inv.description')}</th><th class="center" title={T('inv.qbo.title')}>{T('inv.qbo')}</th><th></th>
       </tr></thead>
       <tbody>
-        {invoices.map((i) => {
+        {invoices.filter((i) => !(i.kind === 'credit' && !i.origin_payment_id)).map((i) => {
           const isOpen = Math.abs(i.open_amount) > 0.004;
           const late = isOpen && i.open_amount > 0 && i.due_date && i.due_date < today;
           return (
@@ -270,6 +281,46 @@ const okText: Record<string, string> = {
       <tfoot><tr><th colspan="6">{T('totals.row')}</th><th class="num">{money(owed, locale)}</th><th colspan="3"></th></tr></tfoot>
     </table>
   </div>
+
+  {credits.length > 0 && (
+    <>
+      <h2 style="margin-top: 24px;">{T('det.credits')}</h2>
+      <div class="card tbl">
+        <table class="data">
+          <thead><tr>
+            <th>{T('inv.number')}</th><th>{T('inv.date')}</th><th class="num">{T('inv.amount')}</th><th>{T('det.appliedTo')}</th>
+            <th class="num">{T('det.creditLeft')}</th><th>{T('inv.description')}</th><th class="center">{T('inv.qbo')}</th><th></th>
+          </tr></thead>
+          <tbody>
+            {credits.map((c) => (
+              <tr>
+                <td>{c.invoice_number ?? <em>{T('inv.kind.credit')}</em>}{c.source === 'qbo' && <span class="muted small"> · QuickBooks</span>}{c.source === 'import' && <span class="muted small"> · {T('inv.import')}</span>}</td>
+                <td>{c.invoice_date ?? ''}</td>
+                <td class="num">{money(Math.abs(c.amount), locale)}</td>
+                <td class="small muted">{(appliedTo.get(c.id) ?? []).join(', ') || '—'}</td>
+                <td class="num">{Math.abs(c.open_amount) > 0.004 ? <strong>{money(Math.abs(c.open_amount), locale)}</strong> : '✓'}</td>
+                <td class="small">
+                  {c.description ?? ''}
+                  {(c as { edit_note?: string | null }).edit_note && <div class="edit-note">✎ {(c as { edit_note?: string | null }).edit_note}</div>}
+                </td>
+                <td class="center">{c.qbo_bill_id ? <span class="small ok-txt" title={`QuickBooks #${c.qbo_bill_id}`}>{T('inv.qbo.linked')}</span> : c.qbo_error ? <span class="small err-txt" title={localizeMsg(c.qbo_error, locale)}>⚠</span> : <span class="muted small">—</span>}</td>
+                <td class="actions">
+                  <button type="button" class="link-btn inv-edit" data-id={c.id} data-number={c.invoice_number ?? ''} data-po={c.po_number ?? ''}
+                    data-date={c.invoice_date ?? ''} data-due={c.due_date ?? ''} data-amount={Math.abs(c.amount).toFixed(2)} data-description={c.description ?? ''}
+                    data-paid="0" data-qb={c.qbo_bill_id ?? ''}>{T('pay.edit')}</button>
+                  <form method="POST" action={`/api/portail/paiements/suppliers/${s.id}/invoices`} class="inline void-form" data-confirm={T('inv.void.confirm')}>
+                    <input type="hidden" name="_action" value="void" /><input type="hidden" name="invoice_id" value={c.id} />
+                    <button type="submit" class="link-btn danger">{T('inv.void')}</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin: 6px 0 0;">{T('det.creditsHint')}</p>
+    </>
+  )}
 
   <h2 style="margin-top: 24px;">{T('det.payments')}</h2>
   <div class="card tbl">

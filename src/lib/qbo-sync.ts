@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getQbo, qstr, QboError, type Qbo } from './qbo';
-import { bumpReference, getSetting, n, nextPaymentReference, paymentWithReference, round2 } from './payables';
+import { bumpReference, getSetting, n, nextPaymentReference, paymentWithReference, reapplyCredit, round2 } from './payables';
 import { docKey, queryVendorDocs } from './qbo-reconcile';
 import { nameScore } from './name-match';
 
@@ -783,6 +783,17 @@ export async function pullFromQbo(admin: SupabaseClient): Promise<{ bills: numbe
   const startedAt = new Date();
   const since = new Date(new Date(conn?.last_pull_cursor ?? startedAt).getTime() - 5 * 60_000).toISOString();
   let bills = 0, payments = 0, skipped = 0;
+
+  // Vendor credits linked to a portal credit and changed in QB (e.g. Cannabiomedic
+  // INV-000448 corrected from 19 838,00 $ to 22 539,74 $ in QB): QB's amount wins.
+  for (const vc of await qbo.query('VendorCredit', `MetaData.LastUpdatedTime > ${qstr(since)}`).catch(() => [] as any[])) {
+    const { data: cr } = await admin.from('ap_invoices').select('id, supplier_id, amount, invoice_number, edit_note').eq('qbo_bill_id', vc.Id).eq('kind', 'credit').is('voided_at', null).maybeSingle();
+    if (!cr || Math.abs(Math.abs(n(cr.amount)) - n(vc.TotalAmt)) < 0.005) continue;
+    const line = `${new Date().toISOString().slice(0, 10)} — QuickBooks : montant modifié dans QB (${Math.abs(n(cr.amount)).toFixed(2)} $ → ${n(vc.TotalAmt).toFixed(2)} $)`;
+    await admin.from('ap_invoices').update({ amount: -n(vc.TotalAmt), edit_note: cr.edit_note ? `${cr.edit_note}\n${line}` : line, updated_at: new Date().toISOString() }).eq('id', cr.id);
+    await reapplyCredit(admin, cr.id, cr.supplier_id);
+    await log(admin, { direction: 'pull', entity: 'vendorcredit', portal_id: cr.id, qbo_id: vc.Id, status: 'ok', message: `Crédit ${cr.invoice_number ?? ''} mis à jour depuis QB : ${n(vc.TotalAmt).toFixed(2)} $` });
+  }
 
   for (const b of await qbo.query('Bill', `MetaData.LastUpdatedTime > ${qstr(since)}`)) {
     const { data: linked } = await admin.from('ap_invoices').select('id, amount').eq('qbo_bill_id', b.Id).maybeSingle();

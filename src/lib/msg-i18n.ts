@@ -69,6 +69,7 @@ const RULES: Rule[] = [
   [/^Référence (\S+) déjà utilisée dans QB \((\w+) #(\d+)\) — non synchronisée$/, (_, r, t, id) => `Reference ${r} already used in QB (${t} #${id}) — not synced`],
   [/^Crédit QB #(\S+) appliqué à la facture QB #(\S+) \(([\d.]+) \$\)$/, (_, c, b, a) => `QB credit #${c} applied to QB bill #${b} ($${a})`],
   [/^Crédit fournisseur QB #(\S+) appliqué à la facture QB #(\S+) dans QB \((.*)\) — (facture|crédit) absent du portail : à reporter \(page Écarts\)$/, (_, c, b, s, k) => `QB vendor credit #${c} applied to QB bill #${b} in QB (${s}) — ${k === 'facture' ? 'bill' : 'credit'} missing in the portal: carry it over (Differences page)`],
+  [/^Crédit (.*) mis à jour depuis QB : ([\d.]+) \$$/, (_, num, a) => `Credit ${num} updated from QB: $${a}`],
   [/^Référence QB (.*) → (.*)$/, (_, a, b) => `QB reference ${a === '(vide)' ? '(empty)' : a} → ${b}`],
   [/^Référence déjà synchronisée$/, 'Reference already in sync'],
   [/^Paiement (.*) mis à jour dans QB$/, (_, r) => `Payment ${r} updated in QB`],

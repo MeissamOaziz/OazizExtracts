@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createServerClient, currentStaff, getAdminClient } from '../../../../../../lib/supabase';
-import { isUuid, logEvent, parseAmount, uploadInvoiceFile } from '../../../../../../lib/payables';
+import { isUuid, logEvent, parseAmount, reapplyCredit, uploadInvoiceFile } from '../../../../../../lib/payables';
 import { autoPushInvoice, deleteQboBill } from '../../../../../../lib/qbo-sync';
 import { numKey } from '../../../../../../lib/payables-duplicates';
 
@@ -65,6 +65,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     await admin.from('ap_invoices').update({
       ...patch, edit_note: inv.edit_note ? `${inv.edit_note}\n${line}` : line, updated_at: new Date().toISOString(),
     }).eq('id', invoiceId);
+    if (changed.amount && inv.kind === 'credit') await reapplyCredit(admin, invoiceId, supplierId);
     await logEvent(admin, { supplier_id: supplierId, actor_staff_id: staff.id, action: 'invoice_edited', details: { invoice_id: invoiceId, reason, changes: changed } });
     // QuickBooks keeps its own bill: say so when the amount changed on a linked one.
     if (changed.amount && inv.qbo_bill_id) {
